@@ -1,0 +1,44 @@
+# Local databases — never commit a personal archive
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Real chat exports and drop folders
+exports/
+*.zip
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Synthetic fixtures are committed on purpose — re-include them after the
+# broad ignores above.
+!tests/fixtures/
+!tests/fixtures/**

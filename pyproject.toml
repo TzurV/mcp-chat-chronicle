@@ -1,0 +1,55 @@
+[project]
+name = "chat-chronicle"
+version = "0.1.0"
+description = "A local-first, searchable archive of your AI conversations."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11,<4.0"
+authors = [{ name = "Tzur Vaich" }]
+keywords = ["chatgpt", "claude", "archive", "sqlite", "fts5", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pydantic (>=2.7,<3.0)",
+    "typer (>=0.12,<1.0)",
+    "rich (>=13.7,<15.0)",
+]
+
+[project.optional-dependencies]
+enrich = ["openai (>=1.30,<2.0)"]
+mcp = ["fastmcp (>=2.0,<4.0)"]
+
+[project.urls]
+Repository = "https://github.com/tzurv/mcp-chat-chronicle"
+
+[project.scripts]
+chronicle = "chat_chronicle.cli:app"
+
+[tool.poetry]
+packages = [{ include = "chat_chronicle", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2"
+ruff = "^0.6"
+pre-commit = "^3.7"
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
