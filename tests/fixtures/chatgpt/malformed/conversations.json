@@ -1,0 +1,68 @@
+[
+  "not-a-conversation-object",
+  {
+    "title": "No id",
+    "mapping": {}
+  },
+  {
+    "title": "Mapping is not an object",
+    "id": "conv-bad-mapping",
+    "mapping": "oops"
+  },
+  {
+    "title": "Bad timestamps and broken parent",
+    "id": "conv-degraded",
+    "create_time": "not-a-number",
+    "update_time": 1767229200,
+    "current_node": "node-orphan",
+    "mapping": {
+      "node-orphan": {
+        "id": "node-orphan",
+        "message": {
+          "id": "msg-orphan",
+          "author": { "role": "assistant" },
+          "create_time": "also-not-a-number",
+          "content": { "content_type": "text", "parts": ["Orphan reply with a missing parent."] }
+        },
+        "parent": "node-missing-from-mapping",
+        "children": []
+      }
+    }
+  },
+  {
+    "title": "Healthy conversation",
+    "create_time": 1767225600,
+    "update_time": 1767229200,
+    "id": "conv-healthy",
+    "current_node": "node-assistant",
+    "mapping": {
+      "node-root": {
+        "id": "node-root",
+        "message": null,
+        "parent": null,
+        "children": ["node-user"]
+      },
+      "node-user": {
+        "id": "node-user",
+        "message": {
+          "id": "msg-user",
+          "author": { "role": "user" },
+          "create_time": 1767225600,
+          "content": { "content_type": "text", "parts": ["Does this still parse?"] }
+        },
+        "parent": "node-root",
+        "children": ["node-assistant"]
+      },
+      "node-assistant": {
+        "id": "node-assistant",
+        "message": {
+          "author": { "role": "assistant" },
+          "create_time": 1767225660,
+          "content": { "content_type": "text", "parts": ["Yes, malformed records are skipped."] }
+        },
+        "parent": "node-user",
+        "children": []
+      }
+    }
+  }
+]

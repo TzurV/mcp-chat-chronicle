@@ -1,0 +1,56 @@
+[
+  {
+    "title": "Regenerated answer",
+    "create_time": 1767225600,
+    "update_time": 1767229200,
+    "id": "conv-branched-1",
+    "current_node": "node-assistant-b",
+    "mapping": {
+      "node-root": {
+        "id": "node-root",
+        "message": null,
+        "parent": null,
+        "children": ["node-user"]
+      },
+      "node-user": {
+        "id": "node-user",
+        "message": {
+          "id": "msg-user",
+          "author": { "role": "user" },
+          "create_time": 1767225600,
+          "content": { "content_type": "text", "parts": ["Explain FTS5 tokenizers."] }
+        },
+        "parent": "node-root",
+        "children": ["node-assistant-a", "node-assistant-b"]
+      },
+      "node-assistant-a": {
+        "id": "node-assistant-a",
+        "message": {
+          "id": "msg-assistant-a",
+          "author": { "role": "assistant" },
+          "create_time": 1767225660,
+          "content": {
+            "content_type": "text",
+            "parts": ["ABANDONED first draft about tokenizers."]
+          }
+        },
+        "parent": "node-user",
+        "children": []
+      },
+      "node-assistant-b": {
+        "id": "node-assistant-b",
+        "message": {
+          "id": "msg-assistant-b",
+          "author": { "role": "assistant" },
+          "create_time": 1767225720,
+          "content": {
+            "content_type": "text",
+            "parts": ["KEPT regenerated answer: unicode61 is the default tokenizer."]
+          }
+        },
+        "parent": "node-user",
+        "children": []
+      }
+    }
+  }
+]

@@ -35,6 +35,9 @@ venv/
 .coverage
 htmlcov/
 
+# Local agent/tool settings
+.claude/
+
 # Editors / OS
 .idea/
 .vscode/

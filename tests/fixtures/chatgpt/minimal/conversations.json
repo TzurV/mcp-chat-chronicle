@@ -1,0 +1,45 @@
+[
+  {
+    "title": "Docker networking notes",
+    "create_time": 1767225600.0,
+    "update_time": 1767229200.5,
+    "id": "conv-minimal-1",
+    "current_node": "node-assistant",
+    "mapping": {
+      "node-root": {
+        "id": "node-root",
+        "message": null,
+        "parent": null,
+        "children": ["node-user"]
+      },
+      "node-user": {
+        "id": "node-user",
+        "message": {
+          "id": "msg-user",
+          "author": { "role": "user" },
+          "create_time": 1767225600.0,
+          "content": {
+            "content_type": "text",
+            "parts": ["How do I inspect a docker bridge network?"]
+          }
+        },
+        "parent": "node-root",
+        "children": ["node-assistant"]
+      },
+      "node-assistant": {
+        "id": "node-assistant",
+        "message": {
+          "id": "msg-assistant",
+          "author": { "role": "assistant" },
+          "create_time": 1767225660.0,
+          "content": {
+            "content_type": "text",
+            "parts": ["Run `docker network inspect bridge`.", "It prints the subnet and gateway."]
+          }
+        },
+        "parent": "node-user",
+        "children": []
+      }
+    }
+  }
+]

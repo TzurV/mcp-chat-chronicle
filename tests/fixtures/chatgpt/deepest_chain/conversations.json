@@ -1,0 +1,72 @@
+[
+  {
+    "title": "Broken current_node",
+    "create_time": 1767225600,
+    "update_time": 1767229200,
+    "id": "conv-deepest-1",
+    "current_node": "node-does-not-exist",
+    "mapping": {
+      "node-root": {
+        "id": "node-root",
+        "message": null,
+        "parent": null,
+        "children": ["node-user"]
+      },
+      "node-user": {
+        "id": "node-user",
+        "message": {
+          "id": "msg-user",
+          "author": { "role": "user" },
+          "create_time": 1767225600,
+          "content": { "content_type": "text", "parts": ["Start of the thread."] }
+        },
+        "parent": "node-root",
+        "children": ["node-short", "node-deep-1"]
+      },
+      "node-short": {
+        "id": "node-short",
+        "message": {
+          "id": "msg-short",
+          "author": { "role": "assistant" },
+          "create_time": 1767225660,
+          "content": { "content_type": "text", "parts": ["ABANDONED shallow reply."] }
+        },
+        "parent": "node-user",
+        "children": []
+      },
+      "node-deep-1": {
+        "id": "node-deep-1",
+        "message": {
+          "id": "msg-deep-1",
+          "author": { "role": "assistant" },
+          "create_time": 1767225720,
+          "content": { "content_type": "text", "parts": ["KEPT first deep reply."] }
+        },
+        "parent": "node-user",
+        "children": ["node-deep-2"]
+      },
+      "node-deep-2": {
+        "id": "node-deep-2",
+        "message": {
+          "id": "msg-deep-2",
+          "author": { "role": "user" },
+          "create_time": 1767225780,
+          "content": { "content_type": "text", "parts": ["KEPT follow-up question."] }
+        },
+        "parent": "node-deep-1",
+        "children": ["node-deep-3"]
+      },
+      "node-deep-3": {
+        "id": "node-deep-3",
+        "message": {
+          "id": "msg-deep-3",
+          "author": { "role": "assistant" },
+          "create_time": 1767225840,
+          "content": { "content_type": "text", "parts": ["KEPT final deep reply."] }
+        },
+        "parent": "node-deep-2",
+        "children": []
+      }
+    }
+  }
+]
