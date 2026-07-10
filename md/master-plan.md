@@ -2,7 +2,7 @@
 
 **Repo:** `mcp-chat-chronicle` · **One-liner:** *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** Planning · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)** adopted after two architecture reversals and an AI-enrichment review; the full reasoning chain is preserved in Appendix A. · **Last updated:** 2026-07-09
+**Status:** In development · M0/WP-0.1 and M1/WP-1.1 accepted; M1/WP-1.2 is next · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)** adopted after two architecture reversals and an AI-enrichment review; the full reasoning chain is preserved in Appendix A. · **Last updated:** 2026-07-10
 **This document is the single source of truth.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Guiding principle:** *Build the boring useful archive first. Clever live capture, marker joins, and cache forensics are optional later experiments.*

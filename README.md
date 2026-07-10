@@ -2,7 +2,7 @@
 
 *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-> **Status: scaffold.** The CLI surface exists; every command is a stub. See [`md/master-plan.md`](md/master-plan.md) for the full plan and work packages.
+> **Status: M1 in progress.** The DB/model layer is implemented; importer and search commands are still stubs. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
 
 ## Why
 
@@ -23,6 +23,30 @@ A **source-agnostic core** is fed by **pluggable, source-specific adapters**. Ad
 ```bash
 poetry install
 poetry run chronicle --help
+```
+
+## Local development database
+
+The database is a local SQLite file. For this repo, keep development databases under the project directory and out of git:
+
+```powershell
+poetry run python -m chat_chronicle.db init --db-path .\.chronicle\chronicle.db
+poetry run python -m chat_chronicle.db init --db-path .\.chronicle\chronicle.db
+```
+
+The second run should be safe and should report the same schema version. The `.db` file is ignored by git.
+
+To point commands at this project-local DB for the current PowerShell session:
+
+```powershell
+$env:CHAT_CHRONICLE_DB = "C:\work\Github\mcp-chat-chronicle\.chronicle\chronicle.db"
+poetry run python -m chat_chronicle.db path
+```
+
+Expected path:
+
+```text
+C:\work\Github\mcp-chat-chronicle\.chronicle\chronicle.db
 ```
 
 ## CLI surface (v1 target)

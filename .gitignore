@@ -9,6 +9,9 @@
 exports/
 *.zip
 
+# Project-local development database directory
+.chronicle/
+
 # Secrets / local environment
 .env
 .env.*
