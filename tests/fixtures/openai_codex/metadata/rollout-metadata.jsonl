@@ -1,0 +1,13 @@
+{"timestamp":"2026-06-02T09:00:00Z","type":"session_meta","payload":{"id":"codex-metadata-1","timestamp":"2026-06-02T09:00:00Z","cwd":"C:\\synthetic\\repo","originator":"codex_cli","cli_version":"0.0.0-test","instructions":"synthetic fixture","source":"test","model_provider":"openai"}}
+{"timestamp":"2026-06-02T09:00:10Z","type":"turn_context","payload":{"cwd":"C:\\synthetic\\repo","approval_policy":"never","sandbox_policy":"workspace-write","model":"gpt-test","effort":"low","summary":"metadata only"}}
+{"timestamp":"2026-06-02T09:00:20Z","type":"response_item","payload":{"type":"reasoning","summary":[{"text":"internal reasoning omitted"}]}}
+{"timestamp":"2026-06-02T09:00:30Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"private args omitted","call_id":"call-1","status":"completed"}}
+{"timestamp":"2026-06-02T09:00:40Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"tool output omitted"}}
+{"timestamp":"2026-06-02T09:00:50Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","input":"patch omitted","call_id":"call-2"}}
+{"timestamp":"2026-06-02T09:01:00Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call-2","output":"result omitted"}}
+{"timestamp":"2026-06-02T09:01:10Z","type":"response_item","payload":{"type":"ghost_snapshot","ghost_commit":"abc123"}}
+{"timestamp":"2026-06-02T09:01:20Z","type":"response_item","payload":{"id":"encrypted-message","type":"message","role":"assistant","encrypted_content":"ciphertext omitted"}}
+{"timestamp":"2026-06-02T09:01:25Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"internal reasoning omitted"}}
+{"timestamp":"2026-06-02T09:01:30Z","type":"event_msg","payload":{"type":"rate_limits","rate_limits":{"primary":100}}}
+{"timestamp":"2026-06-02T09:01:40Z","type":"event_msg","payload":{"type":"token_count","info":{"input":10,"output":20}}}
+{"timestamp":"2026-06-02T09:02:00Z","type":"response_item","payload":{"id":"msg-visible","type":"message","role":"developer","content":[{"type":"input_text","text":"Keep this fixture synthetic."}]}}

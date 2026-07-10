@@ -8,11 +8,11 @@ This ledger records PM-level progress against `md/master-plan.md`. The master pl
 | --- | --- |
 | Date | 2026-07-10 |
 | Phase | M1 in progress |
-| Last accepted work package | WP-1.3.1 Claude real export content-block correction |
-| Current milestone state | M0 complete; WP-1.1, WP-1.2, WP-1.3, and WP-1.3.1 accepted; M1 CLI ingest next |
+| Last accepted work package | WP-1.3.2 OpenAI Codex local extractor |
+| Current milestone state | M0 complete; WP-1.1, WP-1.2, WP-1.3, WP-1.3.1, and WP-1.3.2 accepted; M1 CLI ingest next |
 | Next action | Execute WP-1.4 CLI ingest + stats |
 | Current branch | `main` |
-| Last known commit | `82e18f1 Implement Claude export importer` |
+| Last known commit | `0c8b8df Handle Claude export metadata blocks` |
 
 ## Work Package Ledger
 
@@ -23,7 +23,8 @@ This ledger records PM-level progress against `md/master-plan.md`. The master pl
 | WP-1.2 | ChatGPT export importer | Accepted | `md/handoffs/WP-1.2-chatgpt-export-importer.md` | `md/handoffs/reports/WP-1.2-completion-report.md` | `md/handoffs/reports/WP-1.2-validation-review.md` | Concrete importer accepted with synthetic fixtures; no adapter base introduced. |
 | WP-1.3 | Claude export importer | Accepted | `md/handoffs/WP-1.3-claude-export-importer.md` | `md/handoffs/reports/WP-1.3-completion-report.md` | `md/handoffs/reports/WP-1.3-validation-review.md` | Concrete importer accepted with synthetic fixtures; no adapter base introduced. Real export verification remains a follow-up. |
 | WP-1.3.1 | Claude real export content-block correction | Accepted | `md/handoffs/WP-1.3.1-claude-real-export-content-blocks.md` | `md/handoffs/reports/WP-1.3.1-completion-report.md` | `md/handoffs/reports/WP-1.3.1-validation-review.md` | Known Claude metadata blocks (`thinking`, `tool_use`, `tool_result`) now skip without noisy parse errors. |
-| WP-1.4 | CLI ingest + stats | Handoff ready | `md/handoffs/WP-1.4-cli-ingest-stats.md` | `md/handoffs/reports/WP-1.4-completion-report.md` | Pending | Depends on accepted WP-1.2, WP-1.3, and WP-1.3.1. |
+| WP-1.3.2 | OpenAI Codex local extractor | Accepted | `md/handoffs/WP-1.3.2-openai-codex-local-extractor.md` | `md/handoffs/reports/WP-1.3.2-completion-report.md` | `md/handoffs/reports/WP-1.3.2-validation-review.md` | Concrete Class B extractor accepted for local Codex JSONL sessions. |
+| WP-1.4 | CLI ingest + stats | Handoff ready | `md/handoffs/WP-1.4-cli-ingest-stats.md` | `md/handoffs/reports/WP-1.4-completion-report.md` | Pending | Depends on accepted WP-1.2, WP-1.3, WP-1.3.1, and WP-1.3.2. |
 | WP-1.5 | scan-local read-only discovery | Not started | Pending | Pending | Pending | Can be planned independently, but should not import or parse source contents. |
 | WP-1.6 | collect + folder workflow + scheduling docs | Blocked by dependencies | Pending | Pending | Pending | Depends on source and ingest flow. |
 
@@ -61,6 +62,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 | Poetry `VIRTUAL_ENV` hazard | All executor chats | Mitigated procedurally | Documented in `md/agent-operating-notes.md`; add the preflight to each future handoff. |
 | Sandbox launcher failures | PM validation chats | Mitigated procedurally | Use direct `rg`/`Get-Content -Raw`; retry key validation commands with escalation only when the sandbox launcher fails. |
 | Claude real export metadata blocks | WP-1.3.1 executor | Mitigated | Known `thinking`, `tool_use`, and `tool_result` blocks now skip without noisy parser errors. Future benign block types should be added with evidence and synthetic tests. |
+| OpenAI Codex local format drift | WP-1.3.2 executor | Mitigated procedurally | Codex local JSONL is undocumented Class B storage. Accepted extractor is tolerant, synthetic-fixture covered, and fail-visible on malformed/unknown records. |
 
 ## Next Action
 
@@ -72,9 +74,9 @@ md/handoffs/reports/WP-1.4-completion-report.md
 
 The implementation must preserve these constraints:
 
-- wire accepted ChatGPT and Claude importers into `chronicle ingest`;
+- wire accepted ChatGPT, Claude, and OpenAI Codex adapters into `chronicle ingest`;
 - record source rows and `ingest_runs`;
 - preserve idempotent `upsert_conversation()` behavior;
-- store importer parse errors in `errors_json` without aborting valid conversations;
+- store adapter parse errors in `errors_json` without aborting valid conversations;
 - do not introduce `adapters/base.py` or `AdapterProtocol`;
 - use only synthetic fixtures.

@@ -2,7 +2,7 @@
 
 **Repo:** `mcp-chat-chronicle` · **One-liner:** *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** In development · M0/WP-0.1 and M1/WP-1.1 through WP-1.3.1 accepted; M1/WP-1.4 CLI ingest + stats is next · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)** adopted after two architecture reversals and an AI-enrichment review; the full reasoning chain is preserved in Appendix A. · **Last updated:** 2026-07-10
+**Status:** In development · M0/WP-0.1 and M1/WP-1.1 through WP-1.3.2 accepted; M1/WP-1.4 CLI ingest + stats is next · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)** adopted after two architecture reversals and an AI-enrichment review; the full reasoning chain is preserved in Appendix A. · **Last updated:** 2026-07-10
 **This document is the single source of truth.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Guiding principle:** *Build the boring useful archive first. Clever live capture, marker joins, and cache forensics are optional later experiments.*
@@ -12,7 +12,7 @@
 ## 1. Project Charter
 
 ### 1.1 Problem
-AI work is scattered across ChatGPT, Claude, Gemini, **and coding agents** (Claude Code, Cursor, Copilot Chat). Each stores history in an isolated, poorly-searchable silo. There is no way to ask "where did I debug that docker networking issue, in which tool, and how do I get back to it?"
+AI work is scattered across ChatGPT, Claude, Gemini, **and coding agents** (OpenAI Codex, Claude Code, Cursor, Copilot Chat). Each stores history in an isolated, poorly-searchable silo. There is no way to ask "where did I debug that docker networking issue, in which tool, and how do I get back to it?"
 
 ### 1.2 Solution
 A **source-agnostic core** fed by **pluggable, source-specific adapters**:
@@ -46,7 +46,7 @@ Each chat engine gets its own collection method; everything downstream — schem
 | Class | What | Reliability | Examples | Scheduled for |
 | --- | --- | --- | --- | --- |
 | **A — Official exports** | User-requested export files | High (implicit provider contract) | ChatGPT export, Claude export, Gemini Takeout | **v1** |
-| **B — Local durable stores** | Coding-agent/IDE tool storage on disk | Medium — complete and passive, but **undocumented internals that can change any release** | Claude Code (`~/.claude/projects` JSONL), Cursor (`%APPDATA%\Cursor\...\workspaceStorage` SQLite), VS Code/Copilot Chat if practical | **v1.1** |
+| **B — Local durable stores** | Coding-agent/IDE tool storage on disk | Medium — complete and passive, but **undocumented internals that can change any release** | OpenAI Codex (`~/.codex/sessions` JSONL), Claude Code (`~/.claude/projects` JSONL), Cursor (`%APPDATA%\Cursor\...\workspaceStorage` SQLite), VS Code/Copilot Chat if practical | **v1.1** |
 | **C — Local caches / forensic stores** | App/browser IndexedDB, LevelDB, cache | Low — partial, wiped on logout/update, per-product reverse engineering | ChatGPT Desktop cache, Claude Desktop cache, browser storage | **Post-v1 experimental only. Never build the product around Class C.** |
 
 Class B is what makes batch-first viable as a *daily* tool: extractors are **passive** — no export button, no model cooperation — and coding-agent history is most of a developer's valuable history. `chronicle collect` picks up fresh Claude Code/Cursor sessions automatically; only web-chat history waits for export cadence.
@@ -79,7 +79,7 @@ Distinctive angles to lead with: the **adapter/source-class architecture**, the 
 ## 2. Core Design Rules
 
 1. **One question per adapter.** *Given this messy source, can I produce normalized conversations and messages?* Everything else is shared code.
-2. **The abstraction is discovered, not designed** *(amendment to the original A+ proposal)*: write the ChatGPT and Claude importers as plain concrete code first; extract `AdapterProtocol`/`base.py` only when the third source (Claude Code, WP-3.3) forces it. No framework-building before there are three working parsers.
+2. **The abstraction is discovered, not designed** *(amendment to the original A+ proposal)*: write adapters as plain concrete code first; do not add `AdapterProtocol`/`base.py` inside parser/extractor work packages. Re-evaluate the abstraction only in a dedicated refactor WP after multiple accepted adapters make the repeated CLI/collector integration shape obvious. No framework-building inside source-specific parser work.
 3. **No configuration state may be broken — only leaner.** No LM Studio → enrichment/`--smart` silently off. No MCP client → CLI fully functional. A source missing → skipped with a note in `ingest_runs`, never a crash.
 4. **Read-only before write.** `scan-local` reports what exists without importing; experimental sources are surfaced as "found, not imported" long before any parser is written for them.
 5. **Everything idempotent.** Re-running any collect/ingest against unchanged sources changes zero rows (`provider + provider_conv_id` identity, `content_hash` change detection).
@@ -117,9 +117,10 @@ mcp-chat-chronicle/
 │   │   ├── chatgpt_export.py    # v1  — Class A importer (tree-walk mapping)
 │   │   ├── claude_export.py     # v1  — Class A importer
 │   │   ├── gemini_takeout.py    # v1 optional — Class A importer [experimental]
+│   │   ├── openai_codex.py      # v1  — Class B extractor (JSONL)
 │   │   ├── claude_code.py       # v1.1 — Class B extractor (JSONL)
 │   │   ├── cursor.py            # v1.1 — Class B extractor (workspace SQLite)
-│   │   └── base.py              # created in WP-3.3, NOT before (design rule 2)
+│   │   └── base.py              # created only by a dedicated refactor WP, NOT inside parser work
 │   ├── collect.py               # collector: reads sources table, runs adapters, logs ingest_runs
 │   ├── scan.py                  # scan-local: read-only source discovery on Windows
 │   ├── search.py                # FTS5 queries, snippets, ranking
@@ -257,8 +258,12 @@ Same contract; Claude's export `conversations.json` is a flat array (`uuid`, `na
 *Objective:* Align the Claude importer with real export content blocks discovered during manual verification. Real exports contain expected non-text metadata blocks such as `thinking`, `tool_use`, and `tool_result`; these must be skipped without polluting parser errors, while malformed or unknown blocks still produce serializable parse errors.
 *AC:* Synthetic fixture covers `text` plus known metadata blocks; metadata-only messages skip without noisy errors; unknown/malformed blocks still log errors; no DB writes, CLI ingest behavior, adapter base/protocol, or real export data introduced.
 
-**WP-1.4 CLI ingest + stats.** *(depends 1.2/1.3/1.3.1)*
-*AC:* `chronicle ingest <zip> --provider auto` detects provider by file signature; `chronicle stats` shows per-source counts + last `ingest_runs` summary; 1k conversations ingest < 30 s.
+**WP-1.3.2 OpenAI Codex local extractor.** *(depends WP-1.1 — must complete before WP-1.4)*
+*Objective:* Parse local OpenAI Codex JSONL sessions from `~/.codex/sessions` into normalized conversations/messages before CLI ingest wiring. Treat this as Class B storage: undocumented, local, version-sensitive, and covered by synthetic fixtures only.
+*AC:* Concrete `openai_codex.py` extractor accepts one session JSONL file and Codex session/home directories; extracts visible user/assistant/developer messages from `response_item`/visible event fallbacks; skips known metadata/tool/reasoning rows without noisy errors; malformed/unknown records log serializable errors; no DB writes, CLI behavior, adapter base/protocol, or real Codex data introduced.
+
+**WP-1.4 CLI ingest + stats.** *(depends 1.2/1.3/1.3.1/1.3.2)*
+*AC:* `chronicle ingest <path> --provider auto` detects ChatGPT/Claude official exports and OpenAI Codex local sessions by file signature; `chronicle stats` shows per-source counts + last `ingest_runs` summary; 1k conversations ingest < 30 s.
 
 **WP-1.5 scan-local (read-only discovery).**
 *Objective:* Report what AI-tool data exists on this Windows machine — import nothing.
@@ -289,8 +294,8 @@ Class B ground rules (all WPs): pinned per-tool-version fixtures; parse-don't-va
 *Tasks:* Same spike-first approach (inventory `state.vscdb` keys, freeze fixture + memo); copy DB to temp before opening (lock avoidance); map workspace → conversation grouping.
 *AC:* Extraction works while Cursor is running (via the copy); fixture-pinned; graceful skip on schema drift.
 
-**WP-3.3 Extract the adapter abstraction.** *(only now — design rule 2)*
-*Objective:* With three concrete adapters existing, factor `adapters/base.py` (`AdapterProtocol`: `discover(source) -> iter[Conversation]`), refactor the three onto it, document "how to add a source" in `CONTRIBUTING.md`.
+**WP-3.3 Evaluate/extract the adapter abstraction.** *(dedicated refactor only — design rule 2)*
+*Objective:* After multiple concrete adapters and CLI/collector wiring have exposed real repetition, decide whether to factor `adapters/base.py` (`AdapterProtocol`: `discover(source) -> iter[Conversation]`). If the shape is still not obvious, document why no abstraction was extracted. If extracted, refactor only the repeated integration surface and document "how to add a source" in `CONTRIBUTING.md`.
 *AC:* All adapters pass the same contract test suite; adding a mock adapter requires touching only `adapters/` + `sources` row.
 
 ### M4 — v1.3: MCP recall ⏰ **time-fenced: land within 2 weeks of M2 completing, may run parallel to M3**
@@ -384,7 +389,7 @@ The MCP demo: 30–45 s video, question in Claude Desktop → `search_chats` →
 | --- | --- |
 | Class B format drift (Claude Code/Cursor internals change any release) | Spike-first format memos; pinned per-version fixtures; parse-don't-validate; degrade to "source skipped + warning" |
 | Cursor SQLite locked while running | Copy-before-read pattern (WP-3.2) |
-| Adapter framework over-engineering | Design rule 2: abstraction extracted at the third adapter, never designed first |
+| Adapter framework over-engineering | Design rule 2: abstraction extracted only in a dedicated refactor after repeated integration shape is proven, never inside source-specific parser work |
 | Export formats change silently | Fixtures pinned; per-record `errors_json`; `ingest_runs` makes breakage visible |
 | MCP recall slips behind "more important" work | Time fence: within 2 weeks of M2 (§6 M4) |
 | Privacy: chat archives are sensitive | Local-only; `.gitignore` DBs/exports; synthetic fixtures only; README privacy section |
@@ -461,7 +466,7 @@ A further review (2026-07-09) checked what chat tools actually store **locally o
 
 Plan A+ was adopted with four amendments from review:
 
-1. **Abstraction discovered, not designed** — write ChatGPT + Claude importers as concrete code; extract `AdapterProtocol` only when the third adapter (Claude Code) forces it. Guard against the adapter framework becoming its own scope creep.
+1. **Abstraction discovered, not designed** — write source adapters as concrete code; extract `AdapterProtocol` only in a dedicated refactor once repeated adapter wiring proves the shape. Guard against the adapter framework becoming its own scope creep.
 2. **Class B is *less* stable than Class A** — undocumented internals with no export contract. Spike-first format memos, pinned per-version fixtures, parse-don't-validate, copy-before-read for locked SQLite.
 3. **Time-fence MCP recall** — it's ~1 evening on FastMCP, a core learning goal, and the demo; land within 2 weeks of CLI search working rather than letting "v1.3" slide.
 4. **Scheduling = Windows Task Scheduler + docs** — never a daemon.

@@ -1,0 +1,6 @@
+{"timestamp":"2026-06-05T08:00:00Z","type":"session_meta","payload":{"id":"codex-malformed-1","timestamp":"not-a-timestamp","source":"test","model_provider":"openai"}}
+{not json
+{"timestamp":"2026-06-05T08:01:00Z","type":"unexpected_row","payload":{"ok":true}}
+{"timestamp":"bad-line-timestamp","type":"response_item","payload":{"type":"mystery","role":"assistant"}}
+{"timestamp":"2026-06-05T08:03:00Z","type":"event_msg","payload":{"type":"surprise","text":"not visible"}}
+{"timestamp":"2026-06-05T08:04:00Z","type":"response_item","payload":{"id":"msg-survivor","type":"message","role":"assistant","content":[{"type":"output_text","text":"Valid messages still parse."}]}}

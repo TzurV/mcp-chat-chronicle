@@ -1,0 +1,3 @@
+{"timestamp":"2026-06-01T10:00:00Z","type":"session_meta","payload":{"id":"codex-minimal-1","timestamp":"2026-06-01T10:00:00Z","cwd":"C:\\synthetic\\repo","originator":"codex_cli","cli_version":"0.0.0-test","instructions":"synthetic fixture","source":"test","model_provider":"openai"}}
+{"timestamp":"2026-06-01T10:01:00Z","type":"response_item","payload":{"id":"msg-user","type":"message","role":"user","content":[{"type":"input_text","text":"How do I list Codex session files?"}]}}
+{"timestamp":"2026-06-01T10:02:00+00:00","type":"response_item","payload":{"id":"msg-assistant","type":"message","role":"assistant","content":[{"type":"output_text","text":"Look under the sessions directory."},{"type":"output_text","text":"Each rollout file is JSONL."}]}}
