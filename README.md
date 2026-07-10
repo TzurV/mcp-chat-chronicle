@@ -31,10 +31,9 @@ The database is a local SQLite file. For this repo, keep development databases u
 
 ```powershell
 poetry run python -m chat_chronicle.db init --db-path .\.chronicle\chronicle.db
-poetry run python -m chat_chronicle.db init --db-path .\.chronicle\chronicle.db
 ```
 
-The second run should be safe and should report the same schema version. The `.db` file is ignored by git.
+Re-running the same command should be safe and should report the same schema version. The `.db` file is ignored by git.
 
 To point commands at this project-local DB for the current PowerShell session:
 
