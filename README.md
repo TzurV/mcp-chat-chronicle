@@ -2,7 +2,7 @@
 
 *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-> **Status: M1 in progress.** The DB/model layer and ChatGPT export parser are implemented; public ingest and search commands are still stubs. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
+> **Status: M1 in progress.** The DB/model layer plus ChatGPT and Claude export parsers are implemented; public ingest and search commands are still stubs. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
 
 ## Why
 

@@ -1,0 +1,92 @@
+[
+  {
+    "uuid": "9f1c1a4e-0000-4000-8000-000000000001",
+    "name": "Windows Task Scheduler nightly job",
+    "created_at": "2026-02-14T09:12:33.412915Z",
+    "updated_at": "2026-02-14T09:20:04.881220Z",
+    "account": { "uuid": "00000000-0000-4000-8000-000000000000" },
+    "chat_messages": [
+      {
+        "uuid": "3a2b0c10-0000-4000-8000-000000000010",
+        "text": "What is the simplest way to run a nightly command on Windows?",
+        "content": [
+          {
+            "type": "text",
+            "text": "What is the simplest way to run a nightly command on Windows?",
+            "start_timestamp": "2026-02-14T09:12:33.412915Z",
+            "stop_timestamp": "2026-02-14T09:12:33.412915Z",
+            "citations": []
+          }
+        ],
+        "sender": "human",
+        "created_at": "2026-02-14T09:12:33.412915Z",
+        "updated_at": "2026-02-14T09:12:33.412915Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "3a2b0c10-0000-4000-8000-000000000011",
+        "text": "Use Task Scheduler with schtasks.exe.",
+        "content": [
+          {
+            "type": "text",
+            "text": "Use Task Scheduler with schtasks.exe.",
+            "start_timestamp": "2026-02-14T09:20:01.004000Z",
+            "stop_timestamp": "2026-02-14T09:20:04.881220Z",
+            "citations": []
+          }
+        ],
+        "sender": "assistant",
+        "created_at": "2026-02-14T09:20:04.881220Z",
+        "updated_at": "2026-02-14T09:20:04.881220Z",
+        "attachments": [],
+        "files": []
+      }
+    ]
+  },
+  {
+    "uuid": "9f1c1a4e-0000-4000-8000-000000000002",
+    "name": "Poetry virtualenv leak",
+    "created_at": "2026-03-02T18:44:02.000000Z",
+    "updated_at": "2026-03-02T18:45:10.000000Z",
+    "account": { "uuid": "00000000-0000-4000-8000-000000000000" },
+    "chat_messages": [
+      {
+        "uuid": "3a2b0c10-0000-4000-8000-000000000020",
+        "text": "Poetry installed into the wrong .venv. Why?",
+        "content": [
+          {
+            "type": "text",
+            "text": "Poetry installed into the wrong .venv. Why?",
+            "start_timestamp": "2026-03-02T18:44:02.000000Z",
+            "stop_timestamp": "2026-03-02T18:44:02.000000Z",
+            "citations": []
+          }
+        ],
+        "sender": "human",
+        "created_at": "2026-03-02T18:44:02.000000Z",
+        "updated_at": "2026-03-02T18:44:02.000000Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "3a2b0c10-0000-4000-8000-000000000021",
+        "text": "An inherited VIRTUAL_ENV wins over the project environment.",
+        "content": [
+          {
+            "type": "text",
+            "text": "An inherited VIRTUAL_ENV wins over the project environment.",
+            "start_timestamp": "2026-03-02T18:45:05.000000Z",
+            "stop_timestamp": "2026-03-02T18:45:10.000000Z",
+            "citations": []
+          }
+        ],
+        "sender": "assistant",
+        "created_at": "2026-03-02T18:45:10.000000Z",
+        "updated_at": "2026-03-02T18:45:10.000000Z",
+        "attachments": [],
+        "files": []
+      }
+    ]
+  }
+]

@@ -1,0 +1,27 @@
+[
+  {
+    "uuid": "conv-minimal-1",
+    "name": "SQLite FTS5 ranking",
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T01:00:00.500000Z",
+    "chat_messages": [
+      {
+        "uuid": "msg-human",
+        "sender": "human",
+        "created_at": "2026-01-01T00:00:00Z",
+        "text": "How does bm25() ranking work in FTS5?",
+        "content": [{ "type": "text", "text": "How does bm25() ranking work in FTS5?" }]
+      },
+      {
+        "uuid": "msg-assistant",
+        "sender": "assistant",
+        "created_at": "2026-01-01T00:01:00Z",
+        "text": "",
+        "content": [
+          { "type": "text", "text": "It scores rows by term frequency and inverse document frequency." },
+          { "type": "text", "text": "Lower scores rank higher, so order by bm25() ascending." }
+        ]
+      }
+    ]
+  }
+]

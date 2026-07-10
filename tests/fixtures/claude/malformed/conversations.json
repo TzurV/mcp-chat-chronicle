@@ -1,0 +1,41 @@
+[
+  "not-an-object",
+  {
+    "name": "Conversation with no uuid",
+    "created_at": "2026-05-01T00:00:00Z",
+    "chat_messages": []
+  },
+  {
+    "uuid": "conv-bad-chat-messages",
+    "name": "chat_messages is not a list",
+    "created_at": "2026-05-01T00:00:00Z",
+    "chat_messages": { "0": { "text": "orphaned" } }
+  },
+  {
+    "uuid": "conv-mixed-validity",
+    "name": 12345,
+    "created_at": "not-a-timestamp",
+    "updated_at": "2026-05-02T10:30:00+02:00",
+    "chat_messages": [
+      42,
+      {
+        "uuid": "msg-bad-content",
+        "sender": "human",
+        "created_at": "2026-05-02T08:00:00Z",
+        "content": 99
+      },
+      {
+        "uuid": "msg-bad-role",
+        "sender": 7,
+        "created_at": "2026-05-02T08:29:00Z",
+        "text": "Roles must be strings."
+      },
+      {
+        "uuid": "msg-good",
+        "sender": "assistant",
+        "created_at": "2026-05-02T08:30:00Z",
+        "text": "This message survives the malformed neighbours."
+      }
+    ]
+  }
+]
