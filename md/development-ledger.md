@@ -8,11 +8,11 @@ This ledger records PM-level progress against `md/master-plan.md`. The master pl
 | --- | --- |
 | Date | 2026-07-10 |
 | Phase | M1 in progress |
-| Last accepted work package | WP-0.1 Repo bootstrap |
-| Current milestone state | M0 complete; WP-1.1, WP-1.2, and WP-1.3 accepted; M1 CLI ingest next |
+| Last accepted work package | WP-1.3.1 Claude real export content-block correction |
+| Current milestone state | M0 complete; WP-1.1, WP-1.2, WP-1.3, and WP-1.3.1 accepted; M1 CLI ingest next |
 | Next action | Execute WP-1.4 CLI ingest + stats |
 | Current branch | `main` |
-| Last known commit | `735613f Bootstrap project scaffold and PM handoff` |
+| Last known commit | `82e18f1 Implement Claude export importer` |
 
 ## Work Package Ledger
 
@@ -22,7 +22,8 @@ This ledger records PM-level progress against `md/master-plan.md`. The master pl
 | WP-1.1 | Normalized models + DB layer | Accepted | `md/handoffs/WP-1.1-normalized-models-db-layer.md` | `md/handoffs/reports/WP-1.1-completion-report.md` | `md/handoffs/reports/WP-1.1-validation-review.md` | Schema, models, idempotent upserts, ingest run logging, FTS rebuild/search, and project-local DB path accepted. |
 | WP-1.2 | ChatGPT export importer | Accepted | `md/handoffs/WP-1.2-chatgpt-export-importer.md` | `md/handoffs/reports/WP-1.2-completion-report.md` | `md/handoffs/reports/WP-1.2-validation-review.md` | Concrete importer accepted with synthetic fixtures; no adapter base introduced. |
 | WP-1.3 | Claude export importer | Accepted | `md/handoffs/WP-1.3-claude-export-importer.md` | `md/handoffs/reports/WP-1.3-completion-report.md` | `md/handoffs/reports/WP-1.3-validation-review.md` | Concrete importer accepted with synthetic fixtures; no adapter base introduced. Real export verification remains a follow-up. |
-| WP-1.4 | CLI ingest + stats | Handoff ready | `md/handoffs/WP-1.4-cli-ingest-stats.md` | `md/handoffs/reports/WP-1.4-completion-report.md` | Pending | Depends on accepted WP-1.2 and WP-1.3 importers. |
+| WP-1.3.1 | Claude real export content-block correction | Accepted | `md/handoffs/WP-1.3.1-claude-real-export-content-blocks.md` | `md/handoffs/reports/WP-1.3.1-completion-report.md` | `md/handoffs/reports/WP-1.3.1-validation-review.md` | Known Claude metadata blocks (`thinking`, `tool_use`, `tool_result`) now skip without noisy parse errors. |
+| WP-1.4 | CLI ingest + stats | Handoff ready | `md/handoffs/WP-1.4-cli-ingest-stats.md` | `md/handoffs/reports/WP-1.4-completion-report.md` | Pending | Depends on accepted WP-1.2, WP-1.3, and WP-1.3.1. |
 | WP-1.5 | scan-local read-only discovery | Not started | Pending | Pending | Pending | Can be planned independently, but should not import or parse source contents. |
 | WP-1.6 | collect + folder workflow + scheduling docs | Blocked by dependencies | Pending | Pending | Pending | Depends on source and ingest flow. |
 
@@ -56,9 +57,10 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 | Item | Owner | Status | Notes |
 | --- | --- | --- | --- |
-| First remote CI run | PM / executor after push | Open | WP-0.1 was validated locally; GitHub Actions matrix has not yet run remotely. |
+| First remote CI run | PM / executor after push | Open | Local validation has passed for accepted WPs; GitHub Actions matrix has not yet run remotely. |
 | Poetry `VIRTUAL_ENV` hazard | All executor chats | Mitigated procedurally | Documented in `md/agent-operating-notes.md`; add the preflight to each future handoff. |
 | Sandbox launcher failures | PM validation chats | Mitigated procedurally | Use direct `rg`/`Get-Content -Raw`; retry key validation commands with escalation only when the sandbox launcher fails. |
+| Claude real export metadata blocks | WP-1.3.1 executor | Mitigated | Known `thinking`, `tool_use`, and `tool_result` blocks now skip without noisy parser errors. Future benign block types should be added with evidence and synthetic tests. |
 
 ## Next Action
 

@@ -141,6 +141,66 @@ def test_plain_string_content_is_supported() -> None:
     )
 
 
+# --- real export content blocks (WP-1.3.1) --------------------------------
+
+
+def _messages_by_id(name: str):
+    conversation = _only(_parse(name))
+    return {message.provider_message_id: message for message in conversation.messages}
+
+
+def _error_codes_for_message(result: ClaudeImportResult, message_id: str) -> set[str]:
+    return {error.error for error in result.errors if error.message_id == message_id}
+
+
+def test_text_plus_thinking_extracts_text_without_errors() -> None:
+    result = _parse("real_blocks")
+    message = _messages_by_id("real_blocks")["msg-text-plus-thinking"]
+
+    assert message.body == "bm25() ranks by TF-IDF; lower is better."
+    assert _error_codes_for_message(result, "msg-text-plus-thinking") == set()
+
+
+def test_text_plus_tool_use_and_tool_result_extracts_text_without_errors() -> None:
+    result = _parse("real_blocks")
+    message = _messages_by_id("real_blocks")["msg-text-plus-tools"]
+
+    # Text blocks around the tool_use / tool_result are joined; the metadata is dropped.
+    assert message.body == "Let me check the schema.\n\nThe messages table has a body column."
+    assert _error_codes_for_message(result, "msg-text-plus-tools") == set()
+
+
+def test_metadata_only_message_is_skipped_without_parse_errors() -> None:
+    result = _parse("real_blocks")
+
+    ids = _messages_by_id("real_blocks")
+    assert "msg-metadata-only" not in ids
+    # Skipping a metadata-only message must not pollute errors_json.
+    assert _error_codes_for_message(result, "msg-metadata-only") == set()
+
+
+def test_unknown_block_type_without_text_still_reports_error() -> None:
+    result = _parse("real_blocks")
+
+    assert "msg-unknown-block" not in _messages_by_id("real_blocks")
+    assert "non_text_content_block" in _error_codes_for_message(result, "msg-unknown-block")
+
+
+def test_invalid_content_block_shape_still_reports_error() -> None:
+    result = _parse("real_blocks")
+
+    assert "msg-invalid-block-shape" not in _messages_by_id("real_blocks")
+    assert "invalid_content_block" in _error_codes_for_message(result, "msg-invalid-block-shape")
+
+
+def test_real_blocks_only_reports_true_parse_errors() -> None:
+    # The only errors should come from the deliberately malformed/unknown blocks,
+    # never from expected thinking / tool_use / tool_result metadata.
+    codes = _error_codes(_parse("real_blocks"))
+
+    assert codes == {"non_text_content_block", "invalid_content_block"}
+
+
 # --- missing optional fields ----------------------------------------------
 
 

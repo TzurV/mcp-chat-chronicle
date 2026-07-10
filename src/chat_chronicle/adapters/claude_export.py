@@ -32,6 +32,12 @@ PROVIDER = "claude"
 CONVERSATIONS_FILENAME = "conversations.json"
 _URL_TEMPLATE = "https://claude.ai/chat/{conv_id}"
 
+# Non-text Claude content block types that are expected export metadata, not parse
+# errors. A message can legitimately carry these alongside (or instead of) a ``text``
+# block; skipping them silently keeps ``errors_json`` meaningful (see WP-1.3.1). This
+# WP does not persist thinking/tool blocks into the normalized model.
+_KNOWN_METADATA_BLOCK_TYPES = frozenset({"thinking", "tool_use", "tool_result"})
+
 
 class ClaudeImportError(BaseModel):
     """A single non-fatal parse problem, serializable into ``ingest_runs.errors_json``."""
@@ -366,6 +372,11 @@ def _text_from_content(
         if isinstance(text, str):
             if text.strip():
                 parts.append(text)
+            continue
+
+        # Known Claude metadata (thinking / tool_use / tool_result) carries no
+        # searchable body; skip it silently rather than flagging a parse error.
+        if block_type in _KNOWN_METADATA_BLOCK_TYPES:
             continue
 
         errors.add(

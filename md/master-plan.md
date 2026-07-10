@@ -2,7 +2,7 @@
 
 **Repo:** `mcp-chat-chronicle` · **One-liner:** *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** In development · M0/WP-0.1 and M1/WP-1.1 through WP-1.3 accepted; M1/WP-1.4 is next · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)** adopted after two architecture reversals and an AI-enrichment review; the full reasoning chain is preserved in Appendix A. · **Last updated:** 2026-07-10
+**Status:** In development · M0/WP-0.1 and M1/WP-1.1 through WP-1.3.1 accepted; M1/WP-1.4 CLI ingest + stats is next · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)** adopted after two architecture reversals and an AI-enrichment review; the full reasoning chain is preserved in Appendix A. · **Last updated:** 2026-07-10
 **This document is the single source of truth.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Guiding principle:** *Build the boring useful archive first. Clever live capture, marker joins, and cache forensics are optional later experiments.*
@@ -253,7 +253,11 @@ Each WP = one sub-agent handoff: **Objective · Tasks · Acceptance criteria (AC
 **WP-1.3 Claude export importer.** *(depends WP-1.1)*
 Same contract; Claude's export `conversations.json` is a flat array (`uuid`, `name`, `created_at`, `chat_messages[]`). **First task: request a real export, sanitize it into a synthetic fixture** — verify the format before speccing the parser.
 
-**WP-1.4 CLI ingest + stats.** *(depends 1.2/1.3)*
+**WP-1.3.1 Claude real export content-block correction.** *(depends WP-1.3 — must complete before WP-1.4)*
+*Objective:* Align the Claude importer with real export content blocks discovered during manual verification. Real exports contain expected non-text metadata blocks such as `thinking`, `tool_use`, and `tool_result`; these must be skipped without polluting parser errors, while malformed or unknown blocks still produce serializable parse errors.
+*AC:* Synthetic fixture covers `text` plus known metadata blocks; metadata-only messages skip without noisy errors; unknown/malformed blocks still log errors; no DB writes, CLI ingest behavior, adapter base/protocol, or real export data introduced.
+
+**WP-1.4 CLI ingest + stats.** *(depends 1.2/1.3/1.3.1)*
 *AC:* `chronicle ingest <zip> --provider auto` detects provider by file signature; `chronicle stats` shows per-source counts + last `ingest_runs` summary; 1k conversations ingest < 30 s.
 
 **WP-1.5 scan-local (read-only discovery).**

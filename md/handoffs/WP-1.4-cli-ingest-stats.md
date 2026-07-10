@@ -3,15 +3,16 @@
 ## Objective
 Wire the accepted Class A importers into the public CLI so a user can ingest one official export file and inspect basic archive statistics.
 
-This work package makes `chronicle ingest <path> --provider auto` and `chronicle stats` functional using the WP-1.1 DB layer and the concrete WP-1.2/WP-1.3 importers.
+This work package makes `chronicle ingest <path> --provider auto` and `chronicle stats` functional using the WP-1.1 DB layer and the concrete WP-1.2/WP-1.3 importers after the WP-1.3.1 Claude real-export correction is accepted.
 
 ## Dependency Gate
-Do not start implementation until both are accepted:
+Do not start implementation until all of these are accepted:
 
 - WP-1.2 ChatGPT export importer
 - WP-1.3 Claude export importer
+- WP-1.3.1 Claude real export content-block correction
 
-If WP-1.3 is not accepted yet, return `blocked` and state that the Claude importer dependency is missing.
+If WP-1.3.1 is not accepted yet, return `blocked` and state that the Claude real-export parser correction dependency is missing.
 
 ## Source Of Truth
 Use `md/master-plan.md`, especially:
@@ -30,6 +31,8 @@ Also read:
 - `md/handoffs/reports/WP-1.2-validation-review.md`
 - `md/handoffs/WP-1.3-claude-export-importer.md`
 - `md/handoffs/reports/WP-1.3-validation-review.md` once it exists
+- `md/handoffs/WP-1.3.1-claude-real-export-content-blocks.md`
+- `md/handoffs/reports/WP-1.3.1-validation-review.md` once it exists
 
 ## Required Poetry Preflight
 Before running any Poetry command, from the repo root run:
@@ -170,7 +173,7 @@ Add focused tests, likely in `tests/test_cli_ingest_stats.py`.
 Use synthetic fixtures only. Reuse accepted synthetic fixtures from:
 
 - `tests/fixtures/chatgpt/`
-- `tests/fixtures/claude/` once WP-1.3 exists
+- `tests/fixtures/claude/` once WP-1.3 and WP-1.3.1 exist
 
 Required scenarios:
 
@@ -183,7 +186,7 @@ Required scenarios:
 - Unsupported/ambiguous provider exits non-zero and does not write an ingest run.
 - `chronicle stats --db-path <tmp>` shows total conversations/messages and provider counts after ingest.
 - `chronicle stats --db-path <tmp-empty>` works on an empty DB.
-- Existing WP-0.1, WP-1.1, WP-1.2, and WP-1.3 tests still pass.
+- Existing WP-0.1, WP-1.1, WP-1.2, WP-1.3, and WP-1.3.1 tests still pass.
 
 ## Acceptance Criteria
 WP-1.4 is complete only when all of these are true:
@@ -218,7 +221,7 @@ md/handoffs/reports/WP-1.4-completion-report.md
 The report must include:
 
 - Changed-files summary.
-- Dependency confirmation that WP-1.2 and WP-1.3 validation reports exist and are accepted.
+- Dependency confirmation that WP-1.2, WP-1.3, and WP-1.3.1 validation reports exist and are accepted.
 - Exact command output or concise pasted result for:
   - `poetry env info --path`
   - `poetry run pytest`
@@ -253,7 +256,7 @@ One of:
 - blocked
 
 ## Dependency Check
-Confirm WP-1.2 and WP-1.3 are accepted, with validation report paths.
+Confirm WP-1.2, WP-1.3, and WP-1.3.1 are accepted, with validation report paths.
 
 ## Summary
 Briefly describe what was implemented.

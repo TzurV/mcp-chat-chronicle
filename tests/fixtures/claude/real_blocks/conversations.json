@@ -1,0 +1,83 @@
+[
+  {
+    "uuid": "conv-real-blocks-1",
+    "name": "Real export content blocks",
+    "created_at": "2026-03-10T14:00:00.000000Z",
+    "updated_at": "2026-03-10T14:10:00.000000Z",
+    "chat_messages": [
+      {
+        "uuid": "msg-text-plus-thinking",
+        "sender": "assistant",
+        "created_at": "2026-03-10T14:00:00Z",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "The user wants FTS5 ranking details.",
+            "summaries": [],
+            "hidden": false,
+            "signature": "abc123"
+          },
+          { "type": "text", "text": "bm25() ranks by TF-IDF; lower is better." }
+        ]
+      },
+      {
+        "uuid": "msg-text-plus-tools",
+        "sender": "assistant",
+        "created_at": "2026-03-10T14:02:00Z",
+        "content": [
+          { "type": "text", "text": "Let me check the schema." },
+          {
+            "type": "tool_use",
+            "id": "toolu_01",
+            "name": "run_sql",
+            "input": { "query": "PRAGMA table_info(messages)" }
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "toolu_01",
+            "content": [{ "type": "text", "text": "cid|name|type" }],
+            "structured_content": null
+          },
+          { "type": "text", "text": "The messages table has a body column." }
+        ]
+      },
+      {
+        "uuid": "msg-metadata-only",
+        "sender": "assistant",
+        "created_at": "2026-03-10T14:04:00Z",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "No visible reply is needed here.",
+            "summaries": []
+          },
+          {
+            "type": "tool_use",
+            "id": "toolu_02",
+            "name": "noop",
+            "input": {}
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "toolu_02",
+            "content": []
+          }
+        ]
+      },
+      {
+        "uuid": "msg-unknown-block",
+        "sender": "assistant",
+        "created_at": "2026-03-10T14:06:00Z",
+        "content": [
+          { "type": "image", "source": { "type": "base64", "media_type": "image/png" } }
+        ]
+      },
+      {
+        "uuid": "msg-invalid-block-shape",
+        "sender": "human",
+        "created_at": "2026-03-10T14:08:00Z",
+        "content": [42]
+      }
+    ]
+  }
+]
