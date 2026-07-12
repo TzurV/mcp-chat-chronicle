@@ -49,8 +49,11 @@ class Message(ChronicleModel):
 class Conversation(ChronicleModel):
     provider: str
     provider_conv_id: str
+    project_id: int | None = None
     title: str | None = None
     url: str | None = None
+    origin_path: str | None = None
+    resume_hint: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     messages: list[Message]

@@ -13,7 +13,7 @@ from typing import Any
 
 from chat_chronicle.models import Conversation, IngestRunSummary, Message, UpsertResult
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 DB_ENV_VAR = "CHAT_CHRONICLE_DB"
 
 
@@ -75,23 +75,34 @@ def migrate(conn: sqlite3.Connection) -> None:
         raise RuntimeError(msg)
 
     if version < 1:
-        _migrate_v1(conn)
+        _create_schema_v2(conn)
         conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
         conn.commit()
+        return
+
+    if version < 2:
+        _migrate_v2(conn)
 
 
-def _migrate_v1(conn: sqlite3.Connection) -> None:
+def _create_schema_v2(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS sources (
             id INTEGER PRIMARY KEY,
             source_type TEXT NOT NULL CHECK(source_type IN
-                ('official_export','local_store','manual_folder','experimental_cache')),
+                ('official_export','local_store','manual_folder','experimental_cache','manual_entry')),
             provider TEXT NOT NULL,
             path_or_config TEXT,
             enabled INTEGER NOT NULL DEFAULT 1,
             last_seen_at TEXT,
             last_ingested_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            root_path TEXT,
+            created_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS ingest_runs (
@@ -110,10 +121,13 @@ def _migrate_v1(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY,
             source_id INTEGER REFERENCES sources(id),
+            project_id INTEGER REFERENCES projects(id),
             provider TEXT NOT NULL,
             provider_conv_id TEXT NOT NULL,
             title TEXT,
             url TEXT,
+            origin_path TEXT,
+            resume_hint TEXT,
             created_at TEXT,
             updated_at TEXT,
             message_count INTEGER,
@@ -165,8 +179,173 @@ def _migrate_v1(conn: sqlite3.Connection) -> None:
             ON conversations(provider, updated_at);
         CREATE INDEX IF NOT EXISTS idx_ingest_runs_source_started
             ON ingest_runs(source_id, started_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_provider_path_unique
+            ON sources(provider, path_or_config)
+            WHERE path_or_config IS NOT NULL;
         """
     )
+
+
+def _migrate_v2(conn: sqlite3.Connection) -> None:
+    """Migrate an existing v1 database to the v2 link-back schema."""
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("BEGIN")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                root_path TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        _dedupe_sources_for_unique_index(conn)
+        _rebuild_sources_for_v2_check(conn)
+        _add_column_if_missing(
+            conn,
+            "conversations",
+            "project_id",
+            "INTEGER REFERENCES projects(id)",
+        )
+        _add_column_if_missing(conn, "conversations", "origin_path", "TEXT")
+        _add_column_if_missing(conn, "conversations", "resume_hint", "TEXT")
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_provider_path_unique
+            ON sources(provider, path_or_config)
+            WHERE path_or_config IS NOT NULL
+            """
+        )
+        conn.execute("PRAGMA user_version = 2")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        msg = f"v2 migration left foreign key violations: {violations!r}"
+        raise RuntimeError(msg)
+
+
+def _dedupe_sources_for_unique_index(conn: sqlite3.Connection) -> None:
+    duplicates = conn.execute(
+        """
+        SELECT provider, path_or_config, min(id) AS keep_id
+        FROM sources
+        WHERE path_or_config IS NOT NULL
+        GROUP BY provider, path_or_config
+        HAVING count(*) > 1
+        ORDER BY keep_id
+        """
+    ).fetchall()
+    for duplicate in duplicates:
+        provider = duplicate["provider"]
+        path_or_config = duplicate["path_or_config"]
+        keep_id = int(duplicate["keep_id"])
+        ids = [
+            int(row["id"])
+            for row in conn.execute(
+                """
+                SELECT id
+                FROM sources
+                WHERE provider = ? AND path_or_config = ?
+                ORDER BY id
+                """,
+                (provider, path_or_config),
+            ).fetchall()
+        ]
+        duplicate_ids = [source_id for source_id in ids if source_id != keep_id]
+        if not duplicate_ids:
+            continue
+
+        best = conn.execute(
+            """
+            SELECT
+                max(enabled) AS enabled,
+                max(last_seen_at) AS last_seen_at,
+                max(last_ingested_at) AS last_ingested_at
+            FROM sources
+            WHERE id IN ({})
+            """.format(",".join("?" for _ in ids)),
+            ids,
+        ).fetchone()
+        conn.execute(
+            """
+            UPDATE sources
+            SET enabled = ?,
+                last_seen_at = ?,
+                last_ingested_at = ?
+            WHERE id = ?
+            """,
+            (
+                int(best["enabled"] or 0),
+                best["last_seen_at"],
+                best["last_ingested_at"],
+                keep_id,
+            ),
+        )
+        conn.executemany(
+            "UPDATE conversations SET source_id = ? WHERE source_id = ?",
+            [(keep_id, source_id) for source_id in duplicate_ids],
+        )
+        conn.executemany(
+            "UPDATE ingest_runs SET source_id = ? WHERE source_id = ?",
+            [(keep_id, source_id) for source_id in duplicate_ids],
+        )
+        conn.execute(
+            "DELETE FROM sources WHERE id IN ({})".format(
+                ",".join("?" for _ in duplicate_ids)
+            ),
+            duplicate_ids,
+        )
+
+
+def _rebuild_sources_for_v2_check(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE sources_v2 (
+            id INTEGER PRIMARY KEY,
+            source_type TEXT NOT NULL CHECK(source_type IN
+                ('official_export','local_store','manual_folder','experimental_cache','manual_entry')),
+            provider TEXT NOT NULL,
+            path_or_config TEXT,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_seen_at TEXT,
+            last_ingested_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO sources_v2 (
+            id, source_type, provider, path_or_config, enabled, last_seen_at, last_ingested_at
+        )
+        SELECT id, source_type, provider, path_or_config, enabled, last_seen_at, last_ingested_at
+        FROM sources
+        ORDER BY id
+        """
+    )
+    conn.execute("DROP TABLE sources")
+    conn.execute("ALTER TABLE sources_v2 RENAME TO sources")
+
+
+def _add_column_if_missing(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    columns = {
+        row["name"]
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def _utc_now_iso() -> str:
@@ -208,10 +387,11 @@ def upsert_conversation(
             cursor = conn.execute(
                 """
                 INSERT INTO conversations (
-                    source_id, provider, provider_conv_id, title, url,
+                    source_id, project_id, provider, provider_conv_id, title, url,
+                    origin_path, resume_hint,
                     created_at, updated_at, message_count, content_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 _conversation_values(source_id, conversation, content_hash),
             )
@@ -221,24 +401,12 @@ def upsert_conversation(
 
         conversation_id = int(existing["id"])
         if existing["content_hash"] == content_hash:
+            _update_conversation_metadata(
+                conn, conversation_id, source_id, conversation, content_hash
+            )
             return UpsertResult(conversation_id=conversation_id, status="skipped")
 
-        conn.execute(
-            """
-            UPDATE conversations
-            SET source_id = ?,
-                provider = ?,
-                provider_conv_id = ?,
-                title = ?,
-                url = ?,
-                created_at = ?,
-                updated_at = ?,
-                message_count = ?,
-                content_hash = ?
-            WHERE id = ?
-            """,
-            (*_conversation_values(source_id, conversation, content_hash), conversation_id),
-        )
+        _update_conversation_metadata(conn, conversation_id, source_id, conversation, content_hash)
         conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
         _insert_messages(conn, conversation_id, conversation.messages)
         return UpsertResult(conversation_id=conversation_id, status="updated")
@@ -248,17 +416,61 @@ def _conversation_values(
     source_id: int | None,
     conversation: Conversation,
     content_hash: str,
-) -> tuple[int | None, str, str, str | None, str | None, str | None, str | None, int, str]:
+) -> tuple[
+    int | None,
+    int | None,
+    str,
+    str,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    str | None,
+    int,
+    str,
+]:
     return (
         source_id,
+        conversation.project_id,
         conversation.provider,
         conversation.provider_conv_id,
         conversation.title,
         conversation.url,
+        conversation.origin_path,
+        conversation.resume_hint,
         _datetime_to_iso(conversation.created_at),
         _datetime_to_iso(conversation.updated_at),
         len(conversation.messages),
         content_hash,
+    )
+
+
+def _update_conversation_metadata(
+    conn: sqlite3.Connection,
+    conversation_id: int,
+    source_id: int | None,
+    conversation: Conversation,
+    content_hash: str,
+) -> None:
+    conn.execute(
+        """
+        UPDATE conversations
+        SET source_id = ?,
+            project_id = ?,
+            provider = ?,
+            provider_conv_id = ?,
+            title = ?,
+            url = ?,
+            origin_path = ?,
+            resume_hint = ?,
+            created_at = ?,
+            updated_at = ?,
+            message_count = ?,
+            content_hash = ?
+        WHERE id = ?
+        """,
+        (*_conversation_values(source_id, conversation, content_hash), conversation_id),
     )
 
 

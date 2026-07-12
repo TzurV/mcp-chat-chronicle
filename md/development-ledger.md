@@ -8,9 +8,9 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | --- | --- |
 | Date | 2026-07-12 |
 | Phase | M1 in progress |
-| Last accepted work package | WP-1.4 CLI ingest + stats |
-| Current milestone state | M0 complete; WP-1.1 through WP-1.4 accepted; Change Order 01 applied to plan; CO-1 schema migration + link-back touch-ups is next |
-| Next action | Write and execute the CO-1 schema migration + link-back touch-up handoff before WP-2.1 |
+| Last accepted work package | CO-1 schema migration + link-back touch-ups |
+| Current milestone state | M0 complete; WP-1.1 through WP-1.4 accepted; CO-1 accepted; WP-2.1 FTS search + open is next |
+| Next action | Write the WP-2.1 FTS5 search + open handoff |
 | Current branch | `main` |
 | Last known commit | `c3167c3 Add OpenAI Codex local extractor` |
 
@@ -25,7 +25,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-1.3.1 | Claude real export content-block correction | Accepted | `md/handoffs/WP-1.3.1-claude-real-export-content-blocks.md` | `md/handoffs/reports/WP-1.3.1-completion-report.md` | `md/handoffs/reports/WP-1.3.1-validation-review.md` | Known Claude metadata blocks (`thinking`, `tool_use`, `tool_result`) now skip without noisy parse errors. |
 | WP-1.3.2 | OpenAI Codex local extractor | Accepted | `md/handoffs/WP-1.3.2-openai-codex-local-extractor.md` | `md/handoffs/reports/WP-1.3.2-completion-report.md` | `md/handoffs/reports/WP-1.3.2-validation-review.md` | Concrete Class B extractor accepted for local Codex JSONL sessions. |
 | WP-1.4 | CLI ingest + stats | Accepted | `md/handoffs/WP-1.4-cli-ingest-stats.md` | `md/handoffs/reports/WP-1.4-completion-report.md` | `md/handoffs/reports/WP-1.4-validation-review.md` | `chronicle ingest` and `chronicle stats` accepted for ChatGPT, Claude, and OpenAI Codex sources. |
-| CO-1 | Schema migration + link-back touch-ups | Planned | Pending | Pending | Pending | Inserted by `md/change-order-01.md`; must land after WP-1.4 and before WP-2.1. Adds `projects`, `origin_path`, `resume_hint`, `manual_entry`, and title/link-back guarantees. |
+| CO-1 | Schema migration + link-back touch-ups | Accepted | `md/handoffs/CO-1-schema-link-back-migration.md` | `md/handoffs/reports/CO-1-completion-report.md` | `md/handoffs/reports/CO-1-validation-review.md` | Schema v2 accepted with `projects`, `origin_path`, `resume_hint`, `manual_entry`, link-back persistence, and source uniqueness hardening. |
 | WP-2.1 | FTS5 search + open | Planned | Pending | Pending | Pending | Must use CO-1 link-back behavior: web opens URL; CLI/local shows transcript plus `origin_path` and `resume_hint`. |
 | WP-3.1 | Claude Code extractor | Pulled forward | Pending | Pending | Pending | Prototype-critical per CO-01. Research spike must read Agent Sessions, claude-record, and codex-trace before local inspection/fixtures. |
 | Prototype | Real-history search demo | Planned | Pending | Pending | Pending | Search real Claude Code history plus at least one ingested export end-to-end. |
@@ -67,7 +67,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 | Sandbox launcher failures | PM validation chats | Mitigated procedurally | Use direct `rg`/`Get-Content -Raw`; retry key validation commands with escalation only when the sandbox launcher fails. |
 | Claude real export metadata blocks | WP-1.3.1 executor | Mitigated | Known `thinking`, `tool_use`, and `tool_result` blocks now skip without noisy parser errors. Future benign block types should be added with evidence and synthetic tests. |
 | OpenAI Codex local format drift | WP-1.3.2 executor | Mitigated procedurally | Codex local JSONL is undocumented Class B storage. Accepted extractor is tolerant, synthetic-fixture covered, and fail-visible on malformed/unknown records. |
-| CO-1 schema migration risk | CO-1 executor | Open | Existing DBs must migrate forward cleanly; accepted adapters need link-back/title verification without broad refactors. Consider enforcing source uniqueness while the schema is being migrated. |
+| CO-1 schema migration risk | CO-1 executor | Mitigated | Schema v2 migration accepted; source uniqueness now enforced by a DB-level partial unique index. |
 | Rename to WorkTrail | Release polish / pre-public | Open | Product name is WorkTrail; target repo/PyPI `worktrail-ai`, CLI `worktrail`. Rename before first public push. |
 
 ## Source And Export Observations
@@ -80,13 +80,11 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-Write the CO-1 schema migration + link-back touch-up handoff before starting WP-2.1 search/open.
+Write the WP-2.1 FTS5 search + open handoff.
 
-The CO-1 handoff must preserve the accepted WP-1.4 CLI behavior while adding the schema/link-back changes from `md/change-order-01.md`:
+The WP-2.1 handoff must consume the accepted CO-1 link-back fields:
 
-- migrate existing DBs forward cleanly;
-- add `projects`;
-- add `conversations.project_id`, `origin_path`, and `resume_hint`;
-- extend `sources.source_type` with `manual_entry`;
-- verify all accepted adapters preserve useful titles and link-back fields;
-- keep `chronicle ingest` and `chronicle stats` passing for ChatGPT, Claude, and OpenAI Codex.
+- web-source `open` should use `url`;
+- local-store `open` should render the stored transcript and print `origin_path` plus `resume_hint` when present;
+- search should use the existing FTS5 index and remain scoped to CLI search/open only;
+- do not implement Claude Code extraction, collect, source management, note, or rename behavior in WP-2.1.

@@ -49,6 +49,8 @@ def test_parse_minimal_session_returns_one_conversation() -> None:
     assert conversation.provider == "openai_codex"
     assert conversation.provider_conv_id == "codex-minimal-1"
     assert conversation.url is None
+    assert conversation.origin_path == str(_fixture_path("minimal").resolve())
+    assert conversation.resume_hint is None
     assert len(conversation.messages) == 2
 
 

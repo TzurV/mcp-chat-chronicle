@@ -120,7 +120,10 @@ def load_conversations(source: Path | str) -> OpenAICodexExtractResult:
         if path.suffix.lower() != ".jsonl":
             errors.add("unsupported_source_file", detail=path.name)
             return OpenAICodexExtractResult(errors=errors.errors)
-        return parse_session_jsonl(path.read_text(encoding="utf-8"), source_name=str(path))
+        return parse_session_jsonl(
+            path.read_text(encoding="utf-8"),
+            source_name=str(path.resolve()),
+        )
 
     index_entries, index_errors = _load_session_index(path)
     session_files = _find_session_files(path)
@@ -133,7 +136,7 @@ def load_conversations(source: Path | str) -> OpenAICodexExtractResult:
     for session_file in session_files:
         partial = parse_session_jsonl(
             session_file.read_text(encoding="utf-8"),
-            source_name=str(session_file),
+            source_name=str(session_file.resolve()),
             index_entries=index_entries,
         )
         conversations.extend(partial.conversations)
@@ -277,6 +280,8 @@ def parse_session_jsonl(
         provider_conv_id=provider_conv_id,
         title=title,
         url=None,
+        origin_path=_origin_path_from_source(source_name),
+        resume_hint=None,
         created_at=created_at,
         updated_at=updated_at,
         messages=messages,
@@ -627,6 +632,12 @@ def _fallback_id_from_source(source_name: str | None) -> str:
 
 def _fallback_title_from_source(source_name: str | None) -> str:
     return _fallback_id_from_source(source_name)
+
+
+def _origin_path_from_source(source_name: str | None) -> str | None:
+    if not source_name:
+        return None
+    return str(Path(source_name).expanduser().resolve(strict=False))
 
 
 def _prefix(text: str, *, limit: int = 80) -> str:
