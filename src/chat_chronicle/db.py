@@ -300,6 +300,62 @@ def begin_ingest_run(conn: sqlite3.Connection, source_id: int | None) -> int:
         return int(cursor.lastrowid)
 
 
+def get_or_create_source(
+    conn: sqlite3.Connection,
+    *,
+    source_type: str,
+    provider: str,
+    path_or_config: str,
+) -> int:
+    """Create or reuse a source row for a provider and absolute source path."""
+    now = _utc_now_iso()
+    with conn:
+        existing = conn.execute(
+            """
+            SELECT id
+            FROM sources
+            WHERE provider = ? AND path_or_config = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (provider, path_or_config),
+        ).fetchone()
+        if existing is not None:
+            source_id = int(existing["id"])
+            conn.execute(
+                """
+                UPDATE sources
+                SET source_type = ?,
+                    enabled = 1,
+                    last_seen_at = ?
+                WHERE id = ?
+                """,
+                (source_type, now, source_id),
+            )
+            return source_id
+
+        cursor = conn.execute(
+            """
+            INSERT INTO sources (
+                source_type, provider, path_or_config, enabled, last_seen_at
+            )
+            VALUES (?, ?, ?, 1, ?)
+            """,
+            (source_type, provider, path_or_config, now),
+        )
+        return int(cursor.lastrowid)
+
+
+def mark_source_ingested(conn: sqlite3.Connection, source_id: int) -> None:
+    """Record the latest successful ingest attempt time for a source row."""
+    now = _utc_now_iso()
+    with conn:
+        conn.execute(
+            "UPDATE sources SET last_seen_at = ?, last_ingested_at = ? WHERE id = ?",
+            (now, now, source_id),
+        )
+
+
 def finish_ingest_run(
     conn: sqlite3.Connection,
     run_id: int,

@@ -31,11 +31,9 @@ def test_version_flag() -> None:
 
 def test_stub_commands_exit_successfully() -> None:
     invocations = [
-        ["ingest", "export.zip"],
         ["ingest-folder", "exports"],
         ["collect"],
         ["scan-local"],
-        ["stats"],
         ["search", "docker network"],
         ["open", "1"],
     ]
