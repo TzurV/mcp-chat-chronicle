@@ -9,10 +9,10 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Date | 2026-07-13 |
 | Phase | M1 in progress |
 | Last accepted work package | WP-2.3 Search phrase mode + query guidance |
-| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1, WP-2.2, and WP-2.3 accepted; Claude project metadata gap remains |
-| Next action | Commit accepted WP-2.3 changes, then run WP-1.3.3 Claude project metadata linking when ready |
+| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1, WP-2.2, and WP-2.3 accepted; WP-2.3.1 and WP-1.3.3 handoffs ready |
+| Next action | Run WP-2.3.1 search result UX polish or WP-1.3.3 Claude project metadata linking, depending on priority |
 | Current branch | `main` |
-| Last known commit | `eb37a34 Polish recent CLI output docs` |
+| Last known commit | `0e0714b Add phrase search guidance` |
 
 ## Work Package Ledger
 
@@ -31,6 +31,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-2.1 | FTS5 search + open | Accepted | `md/handoffs/WP-2.1-fts-search-open.md` | `md/handoffs/reports/WP-2.1-completion-report.md` | `md/handoffs/reports/WP-2.1-validation-review.md` | Search/open accepted with FTS5 ranking, filters, snippets, URL open, and local transcript link-back behavior. |
 | WP-2.2 | Recent active chats CLI | Accepted | `md/handoffs/WP-2.2-recent-active-chats-cli.md` | `md/handoffs/reports/WP-2.2-completion-report.md` | `md/handoffs/reports/WP-2.2-validation-review.md` | Adds accepted `chronicle recent -n <N>` sorted by last activity date with provider/date filters and ID-Date-Provider-Title-URL table. Post-acceptance polish removes duplicate plain rows and adds a default-limit hint when `-n/--limit` is omitted. |
 | WP-2.3 | Search phrase mode + query guidance | Accepted | `md/handoffs/WP-2.3-search-phrase-query-guidance.md` | `md/handoffs/reports/WP-2.3-completion-report.md` | `md/handoffs/reports/WP-2.3-validation-review.md` | Accepted explicit `--phrase` mode and guidance for noisy multi-word broad-token searches. Private DB smoke returned conversation `673`; copied-DB Codex idempotency check did not duplicate records. |
+| WP-2.3.1 | Search result UX polish | Handoff ready | `md/handoffs/WP-2.3.1-search-result-ux-polish.md` | `md/handoffs/reports/WP-2.3.1-completion-report.md` | Pending | Follow-up from owner testing: phrase search should rank title matches first, then newest activity first; default search output should avoid duplicate `result ...` rows. |
 | WP-3.1 | Claude Code extractor | Accepted | `md/handoffs/WP-3.1-claude-code-extractor.md` | `md/handoffs/reports/WP-3.1-completion-report.md` | `md/handoffs/reports/WP-3.1-validation-review.md` | Accepted with WP-3.1.1 addendum. Concrete `claude_code` extractor, ingest wiring, project/link-back fields, synthetic fixtures, memo, and CLI smoke complete. |
 | WP-3.1.1 | Claude Code RS-2 format hardening | Accepted | `md/handoffs/WP-3.1.1-claude-code-rs2-format-hardening.md` | `md/handoffs/reports/WP-3.1.1-completion-report.md` | `md/handoffs/reports/WP-3.1.1-validation-review.md` | File-scoped Claude Code identity, `ai-title`, seven record types, `uuid`/`parentUuid`, sidechain, and same-session multi-file fixtures accepted. No broader RS-2 backlog scope approved. |
 | Prototype | Real-history search demo | Planned | Pending | Pending | Pending | Search real Claude Code history plus at least one ingested export end-to-end. |
@@ -108,9 +109,11 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-Commit accepted WP-2.3 changes. The remaining handoff-ready task is:
+The handoff-ready tasks are:
 
+- `md/handoffs/WP-2.3.1-search-result-ux-polish.md`
 - `md/handoffs/WP-1.3.3-claude-project-metadata-linking.md`
 
+Run WP-2.3.1 when the goal is polishing search result ordering/output.
 Run WP-1.3.3 when the goal is completing Claude export coverage for project
 metadata such as `CAR GUI`.
