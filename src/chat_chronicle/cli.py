@@ -58,6 +58,7 @@ _SUPPORTED_PROVIDERS = {
     _PROVIDER_OPENAI_CODEX,
 }
 _CONVERSATIONS_FILENAME = "conversations.json"
+_SPLIT_CONVERSATIONS_GLOB = "conversations-*.json"
 
 
 def _not_implemented(command: str, work_package: str) -> None:
@@ -446,15 +447,16 @@ def _detect_provider(path: Path) -> str:
 
 
 def _load_conversations_json_for_detection(path: Path) -> object | None:
-    candidate: Path | None = None
     if path.is_dir():
-        candidate = path / _CONVERSATIONS_FILENAME
-        if not candidate.is_file():
-            return None
-        try:
-            return json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            return None
+        canonical = path / _CONVERSATIONS_FILENAME
+        if canonical.is_file():
+            return _read_json_for_detection(canonical)
+        split_paths = sorted(
+            candidate
+            for candidate in path.rglob(_SPLIT_CONVERSATIONS_GLOB)
+            if candidate.is_file() and _is_split_conversations_name(candidate.name)
+        )
+        return _load_split_json_for_detection(split_paths)
 
     if path.is_file() and zipfile.is_zipfile(path):
         try:
@@ -464,20 +466,53 @@ def _load_conversations_json_for_detection(path: Path) -> object | None:
                     for name in archive.namelist()
                     if not name.endswith("/") and Path(name).name == _CONVERSATIONS_FILENAME
                 ]
-                if not members:
-                    return None
-                member = min(members, key=lambda name: (name.count("/"), name))
-                return json.loads(archive.read(member).decode("utf-8"))
+                if members:
+                    member = min(members, key=lambda name: (name.count("/"), name))
+                    return json.loads(archive.read(member).decode("utf-8"))
+                split_members = sorted(
+                    name
+                    for name in archive.namelist()
+                    if not name.endswith("/")
+                    and _is_split_conversations_name(Path(name).name)
+                )
+                records: list[object] = []
+                for member in split_members:
+                    try:
+                        data = json.loads(archive.read(member).decode("utf-8"))
+                    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                        continue
+                    if isinstance(data, list):
+                        records.extend(data)
+                return records or None
         except (OSError, json.JSONDecodeError, UnicodeDecodeError, zipfile.BadZipFile):
             return None
 
-    if path.is_file() and path.name == _CONVERSATIONS_FILENAME:
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            return None
+    if path.is_file() and (
+        path.name == _CONVERSATIONS_FILENAME or _is_split_conversations_name(path.name)
+    ):
+        return _read_json_for_detection(path)
 
     return None
+
+
+def _read_json_for_detection(path: Path) -> object | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def _load_split_json_for_detection(paths: list[Path]) -> object | None:
+    records: list[object] = []
+    for path in paths:
+        data = _read_json_for_detection(path)
+        if isinstance(data, list):
+            records.extend(data)
+    return records or None
+
+
+def _is_split_conversations_name(name: str) -> bool:
+    return name.startswith("conversations-") and name.endswith(".json")
 
 
 def _looks_like_chatgpt_export(data: object) -> bool:

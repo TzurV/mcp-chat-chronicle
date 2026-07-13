@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,26 @@ def test_ingest_auto_detects_chatgpt_and_inserts_conversations_and_messages(
 ) -> None:
     db_path = _db_path(tmp_path)
     source = FIXTURES / "chatgpt" / "minimal" / "conversations.json"
+
+    result = _invoke_ingest(source, db_path)
+
+    assert result.exit_code == 0, result.stdout
+    assert "provider: chatgpt" in result.stdout
+    assert "conversations seen: 1" in result.stdout
+    assert _count_rows(db_path, "conversations") == 1
+    assert _count_rows(db_path, "messages") == 2
+
+
+def test_ingest_auto_detects_split_chatgpt_zip(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    source = tmp_path / "chatgpt-split-export.zip"
+    record = json.loads(
+        (FIXTURES / "chatgpt" / "minimal" / "conversations.json").read_text(
+            encoding="utf-8"
+        )
+    )[0]
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("export/conversations-000.json", json.dumps([record]))
 
     result = _invoke_ingest(source, db_path)
 

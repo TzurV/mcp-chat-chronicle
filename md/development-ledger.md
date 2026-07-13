@@ -8,11 +8,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | --- | --- |
 | Date | 2026-07-13 |
 | Phase | M1 in progress |
-| Last accepted work package | WP-3.1 + WP-3.1.1 Claude Code extractor |
-| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 accepted; prototype private smoke is next |
-| Next action | Commit accepted WP-3.1/WP-3.1.1 changes, then run prototype private smoke against real Claude Code history |
+| Last accepted work package | WP-1.2.1 OpenAI split export compatibility |
+| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1 accepted; prototype private smoke is next |
+| Next action | Commit accepted WP-1.2.1 changes, then run prototype private smoke against real OpenAI export and Claude Code history |
 | Current branch | `main` |
-| Last known commit | `9195b52 Record chat history access research` |
+| Last known commit | `2841ec3 Add Claude Code local extractor` |
 
 ## Work Package Ledger
 
@@ -21,6 +21,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-0.1 | Repo bootstrap | Accepted | `md/handoffs/WP-0.1-repo-bootstrap.md` | `md/handoffs/reports/WP-0.1-completion-report.md` | `md/handoffs/reports/WP-0.1-validation-review.md` | Scaffold, CLI stubs, tests, CI, lint, license, and PM artifacts completed. |
 | WP-1.1 | Normalized models + DB layer | Accepted | `md/handoffs/WP-1.1-normalized-models-db-layer.md` | `md/handoffs/reports/WP-1.1-completion-report.md` | `md/handoffs/reports/WP-1.1-validation-review.md` | Schema, models, idempotent upserts, ingest run logging, FTS rebuild/search, and project-local DB path accepted. |
 | WP-1.2 | ChatGPT export importer | Accepted | `md/handoffs/WP-1.2-chatgpt-export-importer.md` | `md/handoffs/reports/WP-1.2-completion-report.md` | `md/handoffs/reports/WP-1.2-validation-review.md` | Concrete importer accepted with synthetic fixtures; no adapter base introduced. |
+| WP-1.2.1 | OpenAI split export compatibility | Accepted | `md/handoffs/WP-1.2.1-openai-split-export-compatibility.md` | `md/handoffs/reports/WP-1.2.1-completion-report.md` | `md/handoffs/reports/WP-1.2.1-validation-review.md` | Current OpenAI official exports with `conversations-*.json` ingest directly; real owner ZIP smoke accepted with 422 conversations and 5,166 messages. |
 | WP-1.3 | Claude export importer | Accepted | `md/handoffs/WP-1.3-claude-export-importer.md` | `md/handoffs/reports/WP-1.3-completion-report.md` | `md/handoffs/reports/WP-1.3-validation-review.md` | Concrete importer accepted with synthetic fixtures; no adapter base introduced. Real export verification remains a follow-up. |
 | WP-1.3.1 | Claude real export content-block correction | Accepted | `md/handoffs/WP-1.3.1-claude-real-export-content-blocks.md` | `md/handoffs/reports/WP-1.3.1-completion-report.md` | `md/handoffs/reports/WP-1.3.1-validation-review.md` | Known Claude metadata blocks (`thinking`, `tool_use`, `tool_result`) now skip without noisy parse errors. |
 | WP-1.3.2 | OpenAI Codex local extractor | Accepted | `md/handoffs/WP-1.3.2-openai-codex-local-extractor.md` | `md/handoffs/reports/WP-1.3.2-completion-report.md` | `md/handoffs/reports/WP-1.3.2-validation-review.md` | Concrete Class B extractor accepted for local Codex JSONL sessions. |
@@ -96,13 +97,14 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| ChatGPT official export | Pending real-file verification | User requested the export through the web ChatGPT UI and is waiting for the confirmation email. Re-run the direct ChatGPT parser check once the ZIP is available. |
+| ChatGPT/OpenAI official export | Received and compatibility accepted | Owner ZIP is under `exports/openai` and uses the current split layout (`conversations-000.json` ... `conversations-004.json`) with 422 records. WP-1.2.1 accepted direct ingest and auto-detection; PM smoke produced 422 conversations and 5,166 messages with 92 non-text part warnings. |
 | Claude official export | Observed | Claude export UX allows selecting a date range, which is useful for smaller validation exports. |
 | Research records | Recorded | `md/research/` now holds research-spike records for history data retrieval methods and current source-access status. |
 | Source listing utility | Already planned | WP-1.4 `stats` must show per-source summaries after ingest. A dedicated source inventory command belongs to WP-1.6 source management (`source add/list/disable`) rather than expanding WP-1.4. |
 
 ## Next Action
 
-Commit the accepted WP-3.1/WP-3.1.1 changes. Then run the prototype private
-smoke against real Claude Code history and at least one ingested official
-export. Report only counts and path-shape information from private transcripts.
+Commit the accepted WP-1.2.1 changes. Then run the prototype private smoke
+against the repo-local archive DB using the real OpenAI export and Claude Code
+local history. Report only counts and path-shape information from private
+transcripts.
