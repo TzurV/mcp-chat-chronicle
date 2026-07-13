@@ -32,6 +32,12 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-1.6 | collect + folder workflow + scheduling docs | Deferred until after prototype | Pending | Pending | Pending | Depends on source and ingest flow; no daemon. |
 | WP-1.5 | scan-local read-only discovery | Not on prototype path | Pending | Pending | Pending | Can be planned independently, but should not import or parse source contents. |
 
+## Research Artifact Ledger
+
+| ID | Name | State | Files | Notes |
+| --- | --- | --- | --- | --- |
+| RS-1 | Chat-history access methods on Windows 11 | Recorded | `md/research/RS-1-chat-history-access-task.md`; `md/research/RS-1-chat-history-access-findings.md` | Captures official exports, Class B local stores, Class C cache caveats, automation ceilings, Claude Code retention status, and owner retrieval checklist. Feeds WP-3.1, scan-local planning, Codex `.jsonl.zst` follow-up, and possible Copilot CSV backlog work. |
+
 ## Accepted Evidence Snapshot
 
 WP-0.1 was accepted based on:
@@ -77,6 +83,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 | --- | --- | --- |
 | ChatGPT official export | Pending real-file verification | User requested the export through the web ChatGPT UI and is waiting for the confirmation email. Re-run the direct ChatGPT parser check once the ZIP is available. |
 | Claude official export | Observed | Claude export UX allows selecting a date range, which is useful for smaller validation exports. |
+| Research records | Recorded | `md/research/` now holds research-spike records for history data retrieval methods and current source-access status. |
 | Source listing utility | Already planned | WP-1.4 `stats` must show per-source summaries after ingest. A dedicated source inventory command belongs to WP-1.6 source management (`source add/list/disable`) rather than expanding WP-1.4. |
 
 ## Next Action

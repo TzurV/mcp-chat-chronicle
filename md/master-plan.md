@@ -113,7 +113,8 @@ The product name is **WorkTrail**. The current local repo/package still uses `mc
 mcp-chat-chronicle/
 ├── pyproject.toml               # poetry; extras: [enrich], [mcp]
 ├── README.md                    # positioning (§1.4), 60-sec quickstart, honest limitations
-├── md/                          # this plan + design notes + article draft + post drafts
+├── md/                          # this plan + handoffs + design notes + research + article/post drafts
+│   └── research/                # research spikes on source access, local stores, retention, and roadmap inputs
 ├── src/chat_chronicle/
 │   ├── models.py                # Conversation, Message, Enrichment (Pydantic)
 │   ├── db.py                    # connection, migrations, idempotent upserts, FTS sync
@@ -454,6 +455,7 @@ The MCP demo: 30–45 s video, question in Claude Desktop → `search_chats` →
 
 ## 9. Reference Library
 
+**Research records:** `md/research/RS-1-chat-history-access-task.md` and `md/research/RS-1-chat-history-access-findings.md` record the Windows 11 chat-history access research spike: official export paths, durable local stores, local-cache caveats, automation ceilings, Claude Code retention settings, and owner data-retrieval status. Treat these files as planning inputs for source defaults, `scan-local`, WP-3.1 Claude Code extraction, Codex `.jsonl.zst` follow-up, and possible Copilot CSV backlog work.
 **MCP / SDK:** [MCP spec & docs](https://modelcontextprotocol.io) · [python-sdk (mcp 1.x)](https://github.com/modelcontextprotocol/python-sdk) · [FastMCP](https://github.com/PrefectHQ/fastmcp) · [OpenAI MCP connector rules](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)
 **Exports:** [ChatGPT conversations.json structure](https://community.openai.com/t/decoding-exported-data-by-parsing-conversations-json-and-or-chat-html/403144) · [mapping-tree Q&A](https://community.openai.com/t/questions-about-the-json-structures-in-the-exported-conversations-json/954762) · [export scripting example](https://gist.github.com/ocombe/1d7604bd29a91ceb716304ef8b5aa4b5)
 **Class B stores:** undocumented — WP-3.1/3.2 research spikes produce the authoritative format memos in `md/` (verify paths/format on the dev machine; do not trust third-party blog posts over local inspection). Required parser-prior-art reading before WP-3.1/3.2: [Agent Sessions](https://github.com/jazzyalex/agent-sessions), [claude-record](https://github.com/davidglogan/claude-record), and [codex-trace](https://github.com/PixelPaw-Labs/codex-trace).
