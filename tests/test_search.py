@@ -12,6 +12,7 @@ from chat_chronicle.search import (
     get_conversation_detail,
     list_recent_conversations,
     search_conversations,
+    should_show_broad_search_hint,
 )
 
 
@@ -114,6 +115,187 @@ def test_provider_since_until_and_tag_filters(tmp_path: Path) -> None:
     assert {result.provider for result in since_results} == {"claude"}
     assert {result.provider for result in until_results} == {"chatgpt"}
     assert [result.conversation_id for result in tag_results] == [chatgpt.conversation_id]
+
+
+def test_default_search_remains_broad_token_search(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        scattered = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "broad-scattered",
+                "YOU are reviewing unrelated filler before the MANAGER arrives",
+            ),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "YOU are the MANAGER")
+
+    assert [result.conversation_id for result in results] == [scattered.conversation_id]
+
+
+def test_phrase_search_requires_exact_body_phrase(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        exact = upsert_conversation(
+            conn,
+            None,
+            _conversation("phrase-exact", "Before we continue: YOU are the MANAGER."),
+        )
+        upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "phrase-partial",
+                "YOU are reviewing unrelated filler before the MANAGER arrives",
+            ),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "YOU are the MANAGER", phrase=True)
+
+    assert [result.conversation_id for result in results] == [exact.conversation_id]
+    assert "YOU are the MANAGER" in results[0].snippet
+
+
+def test_phrase_search_supports_provider_and_limit(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        first = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "phrase-first",
+                "exact provider phrase",
+                provider="openai_codex",
+                url=None,
+            ),
+        )
+        upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "phrase-second",
+                "exact provider phrase",
+                provider="openai_codex",
+                url=None,
+            ),
+        )
+        upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "phrase-other-provider",
+                "exact provider phrase",
+                provider="chatgpt",
+            ),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(
+            conn,
+            "exact provider phrase",
+            provider="openai_codex",
+            limit=1,
+            phrase=True,
+        )
+
+    assert [result.conversation_id for result in results] == [first.conversation_id]
+    assert {result.provider for result in results} == {"openai_codex"}
+
+
+def test_phrase_search_supports_date_and_tag_filters(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        tagged = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "phrase-tagged",
+                "filtered exact phrase",
+                updated_at=datetime(2026, 2, 10, 12, 0, tzinfo=UTC),
+            ),
+        )
+        upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "phrase-untagged",
+                "filtered exact phrase",
+                updated_at=datetime(2026, 3, 10, 12, 0, tzinfo=UTC),
+            ),
+        )
+        conn.execute(
+            "INSERT INTO enrichments (conversation_id, tags_json) VALUES (?, ?)",
+            (tagged.conversation_id, '["phrase-filter"]'),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(
+            conn,
+            "filtered exact phrase",
+            since="2026-02-01",
+            until="2026-02-28",
+            tag="phrase-filter",
+            phrase=True,
+        )
+
+    assert [result.conversation_id for result in results] == [tagged.conversation_id]
+
+
+def test_phrase_search_title_matches_rank_above_body_matches(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        body_match = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "body-phrase",
+                "the body contains title phrase target",
+                title="Later body match",
+            ),
+        )
+        title_match = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "title-phrase",
+                "body has only filler text",
+                title="Title Phrase Target",
+            ),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "title phrase target", phrase=True)
+
+    assert [result.conversation_id for result in results] == [
+        title_match.conversation_id,
+        body_match.conversation_id,
+    ]
+    assert results[0].rank < results[1].rank
+
+
+def test_phrase_search_handles_embedded_quotes(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        exact = upsert_conversation(
+            conn,
+            None,
+            _conversation("quoted-phrase", 'The answer was say "hello" now.'),
+        )
+        upsert_conversation(
+            conn,
+            None,
+            _conversation("quoted-partial", 'The answer was say "hello" later, not now.'),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, 'say "hello" now', phrase=True)
+
+    assert [result.conversation_id for result in results] == [exact.conversation_id]
+
+
+def test_broad_search_hint_detection() -> None:
+    assert should_show_broad_search_hint("YOU are the MANAGER")
+    assert not should_show_broad_search_hint("manager")
+    assert not should_show_broad_search_hint("YOU are the MANAGER", phrase=True)
+    assert not should_show_broad_search_hint('"YOU are the MANAGER"')
+    assert not should_show_broad_search_hint("docker AND network")
 
 
 def test_recent_conversations_default_limit_and_sorting(tmp_path: Path) -> None:

@@ -6,7 +6,8 @@ from typer.testing import CliRunner
 
 import chat_chronicle.cli as cli_module
 from chat_chronicle.cli import app
-from chat_chronicle.db import connect
+from chat_chronicle.db import connect, rebuild_fts, upsert_conversation
+from chat_chronicle.models import Conversation, Message
 
 runner = CliRunner()
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -37,6 +38,38 @@ def _conversation_id(db_path: Path, provider: str) -> int:
                 (provider,),
             ).fetchone()[0]
         )
+
+
+def _insert_search_conversation(
+    db_path: Path,
+    provider_conv_id: str,
+    body: str,
+    *,
+    provider: str = "chatgpt",
+    title: str = "Synthetic Search Chat",
+) -> int:
+    with connect(db_path) as conn:
+        inserted = upsert_conversation(
+            conn,
+            None,
+            Conversation(
+                provider=provider,
+                provider_conv_id=provider_conv_id,
+                title=title,
+                url="https://chatgpt.com/c/synthetic"
+                if provider == "chatgpt"
+                else None,
+                messages=[
+                    Message(
+                        role="user",
+                        body=body,
+                        seq=0,
+                    )
+                ],
+            ),
+        )
+        rebuild_fts(conn)
+        return inserted.conversation_id
 
 
 def test_search_finds_terms_from_ingested_chatgpt_claude_and_codex_fixtures(
@@ -133,6 +166,78 @@ def test_search_empty_query_exits_nonzero(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "Search query cannot be empty" in result.stderr
+
+
+def test_search_phrase_cli_returns_exact_phrase_without_broad_hint(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    exact_id = _insert_search_conversation(
+        db_path,
+        "cli-phrase-exact",
+        "The instruction says YOU are the MANAGER for this review.",
+        provider="openai_codex",
+    )
+    _insert_search_conversation(
+        db_path,
+        "cli-phrase-partial",
+        "YOU are reviewing unrelated filler before the MANAGER arrives.",
+        provider="openai_codex",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "search",
+            "--phrase",
+            "YOU are the MANAGER",
+            "--provider",
+            "openai_codex",
+            "--db-path",
+            str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert str(exact_id) in result.stdout
+    assert "cli-phrase-partial" not in result.stdout
+    assert "Hint: this was a broad token search" not in result.stdout
+
+
+def test_search_broad_query_guidance_hint_and_one_word_suppression(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    _insert_search_conversation(
+        db_path,
+        "cli-broad-hint",
+        "YOU are reviewing unrelated filler before the MANAGER arrives.",
+    )
+
+    broad = runner.invoke(
+        app,
+        ["search", "YOU are the MANAGER", "--db-path", str(db_path)],
+    )
+    one_word = runner.invoke(app, ["search", "MANAGER", "--db-path", str(db_path)])
+    advanced = runner.invoke(app, ["search", '"YOU are the MANAGER"', "--db-path", str(db_path)])
+
+    assert broad.exit_code == 0, broad.stdout
+    assert "Hint: this was a broad token search" in broad.stdout
+    assert one_word.exit_code == 0, one_word.stdout
+    assert "Hint: this was a broad token search" not in one_word.stdout
+    assert advanced.exit_code == 0, advanced.stdout
+    assert "Hint: this was a broad token search" not in advanced.stdout
+
+
+def test_search_broad_query_guidance_hint_after_no_results(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+
+    result = runner.invoke(
+        app,
+        ["search", "YOU are the MANAGER", "--db-path", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "No results" in result.stdout
+    assert "Hint: this was a broad token search" in result.stdout
 
 
 def test_recent_cli_lists_url_and_local_rows_with_filters(tmp_path: Path) -> None:
@@ -238,6 +343,14 @@ def test_chronicle_help_includes_recent_command() -> None:
     assert result.exit_code == 0, result.stdout
     assert "recent" in result.stdout
     assert "List the most recently active conversations" in result.stdout
+
+
+def test_search_help_documents_phrase_option() -> None:
+    result = runner.invoke(app, ["search", "--help"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "--phrase" in result.stdout
+    assert "exact phrase" in result.stdout
 
 
 def test_open_web_row_prints_url_and_calls_browser_helper(monkeypatch, tmp_path: Path) -> None:

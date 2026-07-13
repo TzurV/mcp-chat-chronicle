@@ -36,6 +36,7 @@ from chat_chronicle.search import (
     get_conversation_detail,
     list_recent_conversations,
     search_conversations,
+    should_show_broad_search_hint,
 )
 
 app = typer.Typer(
@@ -330,6 +331,13 @@ def recent(
 @app.command()
 def search(
     query: Annotated[str, typer.Argument(help="Full-text search query.")],
+    phrase: Annotated[
+        bool,
+        typer.Option(
+            "--phrase",
+            help="Treat QUERY as an exact phrase instead of broad FTS terms.",
+        ),
+    ] = False,
     provider: Annotated[str | None, typer.Option(help="Filter by provider.")] = None,
     since: Annotated[
         str | None, typer.Option(help="Only results on or after this ISO date.")
@@ -360,6 +368,7 @@ def search(
                 until=until,
                 tag=tag,
                 limit=limit,
+                phrase=phrase,
             )
     except ValueError as exc:
         _fail(str(exc))
@@ -369,6 +378,7 @@ def search(
     console.print(f"db path: {_connect_db_display_path(db_path)}")
     if not results:
         console.print("No results")
+        _print_broad_search_hint(query, phrase=phrase)
         return
 
     table = Table(title="Search results")
@@ -397,6 +407,7 @@ def search(
                 f"{result.snippet} | {_open_hint(result)}"
             )
         )
+    _print_broad_search_hint(query, phrase=phrase)
 
 
 @app.command("open")
@@ -442,6 +453,13 @@ def _connect_db_display_path(db_path: Path | None) -> Path:
 def _fail(message: str) -> None:
     error_console.print(f"[red]{message}[/]")
     raise typer.Exit(code=1)
+
+
+def _print_broad_search_hint(query: str, *, phrase: bool) -> None:
+    if should_show_broad_search_hint(query, phrase=phrase):
+        console.print(
+            'Hint: this was a broad token search. For exact phrase matching, use --phrase "..."'
+        )
 
 
 def _result_date(result: SearchResult) -> str:

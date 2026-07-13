@@ -56,6 +56,8 @@ class ConversationDetail:
 _MAX_LIMIT = 100
 _SNIPPET_LENGTH = 180
 _FTS_KEYWORDS = {"AND", "OR", "NOT", "NEAR"}
+_BROAD_SEARCH_HINT_STOP_TERMS = {"you", "are", "the", "a", "an", "to", "of", "in", "for"}
+_ADVANCED_FTS_KEYWORDS = {"AND", "OR", "NOT", "NEAR"}
 
 
 def search_conversations(
@@ -67,6 +69,7 @@ def search_conversations(
     until: str | None = None,
     tag: str | None = None,
     limit: int = 10,
+    phrase: bool = False,
 ) -> list[SearchResult]:
     """Return ranked FTS5 matches from the normalized archive."""
     normalized_query = query.strip()
@@ -77,6 +80,16 @@ def search_conversations(
 
     normalized_since = _normalize_date_filter(since, end_of_day=False)
     normalized_until = _normalize_date_filter(until, end_of_day=True)
+    if phrase:
+        return _search_phrase_conversations(
+            conn,
+            normalized_query,
+            provider=provider,
+            since=normalized_since,
+            until=normalized_until,
+            tag=tag,
+            limit=limit,
+        )
 
     clauses = ["chat_fts MATCH ?"]
     params: list[object] = [normalized_query]
@@ -154,6 +167,19 @@ def search_conversations(
             )
         )
     return results
+
+
+def should_show_broad_search_hint(query: str, *, phrase: bool = False) -> bool:
+    """Return whether a broad-token query would benefit from phrase-search guidance."""
+    if phrase:
+        return False
+    normalized_query = query.strip()
+    if not normalized_query:
+        return False
+    if _looks_like_advanced_fts_query(normalized_query):
+        return False
+    terms = [term.lower() for term in re.findall(r"[\w]+", normalized_query, flags=re.UNICODE)]
+    return len(terms) > 1 and bool(_BROAD_SEARCH_HINT_STOP_TERMS.intersection(terms))
 
 
 def list_recent_conversations(
@@ -271,6 +297,100 @@ def get_conversation_detail(
     )
 
 
+def _search_phrase_conversations(
+    conn: sqlite3.Connection,
+    query: str,
+    *,
+    provider: str | None,
+    since: str | None,
+    until: str | None,
+    tag: str | None,
+    limit: int,
+) -> list[SearchResult]:
+    clauses = [
+        """
+        (
+            instr(lower(coalesce(c.title, '')), lower(?)) > 0
+            OR EXISTS (
+                SELECT 1
+                FROM messages AS m_phrase
+                WHERE m_phrase.conversation_id = c.id
+                  AND instr(lower(coalesce(m_phrase.body, '')), lower(?)) > 0
+            )
+        )
+        """
+    ]
+    where_params: list[object] = [query, query]
+    if provider:
+        clauses.append("c.provider = ?")
+        where_params.append(provider)
+    if since:
+        clauses.append("coalesce(c.updated_at, c.created_at, '') >= ?")
+        where_params.append(since)
+    if until:
+        clauses.append("coalesce(c.updated_at, c.created_at, '') <= ?")
+        where_params.append(until)
+    if tag:
+        clauses.append(
+            """
+            (
+                EXISTS (
+                    SELECT 1
+                    FROM enrichments AS e_tag
+                    WHERE e_tag.conversation_id = c.id
+                      AND coalesce(e_tag.tags_json, '') LIKE ?
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM knowledge_items AS k_tag
+                    WHERE k_tag.conversation_id = c.id
+                      AND coalesce(k_tag.tags_json, '') LIKE ?
+                )
+            )
+            """
+        )
+        tag_pattern = f"%{tag}%"
+        where_params.extend([tag_pattern, tag_pattern])
+    params: list[object] = [query, *where_params, limit]
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            c.id AS conversation_id,
+            c.provider AS provider,
+            c.title AS title,
+            coalesce(c.updated_at, c.created_at) AS updated_at,
+            c.url AS url,
+            c.origin_path AS origin_path,
+            c.resume_hint AS resume_hint,
+            CASE
+                WHEN instr(lower(coalesce(c.title, '')), lower(?)) > 0 THEN 0.0
+                ELSE 1.0
+            END AS rank
+        FROM conversations AS c
+        WHERE {" AND ".join(clauses)}
+        ORDER BY rank ASC, c.id ASC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+
+    return [
+        SearchResult(
+            conversation_id=int(row["conversation_id"]),
+            provider=row["provider"],
+            title=row["title"],
+            updated_at=row["updated_at"],
+            url=row["url"],
+            origin_path=row["origin_path"],
+            resume_hint=row["resume_hint"],
+            snippet=_fallback_snippet(conn, int(row["conversation_id"]), [query.lower()]),
+            rank=float(row["rank"]),
+        )
+        for row in rows
+    ]
+
+
 def _normalize_date_filter(value: str | None, *, end_of_day: bool) -> str | None:
     if value is None:
         return None
@@ -298,6 +418,13 @@ def _query_terms(query: str) -> list[str]:
             continue
         terms.append(token.lower())
     return terms
+
+
+def _looks_like_advanced_fts_query(query: str) -> bool:
+    if '"' in query or "(" in query or ")" in query or ":" in query or "*" in query:
+        return True
+    tokens = re.findall(r"[\w]+", query, flags=re.UNICODE)
+    return any(token.upper() in _ADVANCED_FTS_KEYWORDS for token in tokens)
 
 
 def _coerce_sqlite_snippet(value: object, terms: list[str]) -> str | None:

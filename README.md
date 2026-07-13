@@ -54,9 +54,18 @@ C:\work\Github\mcp-chat-chronicle\.chronicle\chronicle.db
 chronicle ingest path/to/export.zip --provider auto    # ingest one supported source
 chronicle stats                                        # counts per source, last runs
 chronicle search "docker network"                      # FTS5, ranked, snippets
+chronicle search --phrase "YOU are the MANAGER"        # exact phrase search
 chronicle open <result-id>                             # deep link or transcript view
 chronicle recent -n 20                                 # recent active chats by last activity date
 ```
+
+`chronicle search` uses broad FTS5 token search by default. For an exact phrase such as `YOU are the MANAGER`, use:
+
+```powershell
+poetry run chronicle search --phrase "YOU are the MANAGER" --provider openai_codex --db-path .\.chronicle\chronicle.db
+```
+
+Search is case-insensitive for normal usage. Phrase mode matches the exact word sequence regardless of letter case, and default FTS search also treats case differences as non-significant. For noisy multi-word broad searches with common words such as `you`, `are`, and `the`, the CLI prints a hint suggesting `--phrase`.
 
 `chronicle recent` supports `--provider`, `--since`, `--until`, and `--db-path`. If `-n/--limit` is omitted, it shows up to 10 rows and prints a note explaining how to increase the limit.
 
