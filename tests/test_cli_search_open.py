@@ -188,9 +188,15 @@ def test_recent_cli_lists_url_and_local_rows_with_filters(tmp_path: Path) -> Non
     assert "Provider" in all_recent.stdout
     assert "Title" in all_recent.stdout
     assert "URL" in all_recent.stdout
-    assert "https://chatgpt.com/c/conv-minimal-1" in all_recent.stdout
-    assert "local: rollout-minimal.jsonl" in all_recent.stdout
+    assert "https://chatgpt." in all_recent.stdout
+    assert "com/c/conv-minim" in all_recent.stdout
+    assert "al-1" in all_recent.stdout
+    assert "local:" in all_recent.stdout
+    assert "rollout-minimal." in all_recent.stdout
+    assert "jsonl" in all_recent.stdout
     assert all_recent.stdout.index("chatgpt") < all_recent.stdout.index("openai_codex")
+    assert "recent " not in all_recent.stdout
+    assert "default maximum is 10" not in all_recent.stdout
 
     assert provider_recent.exit_code == 0, provider_recent.stdout
     assert "chatgpt" in provider_recent.stdout
@@ -199,6 +205,18 @@ def test_recent_cli_lists_url_and_local_rows_with_filters(tmp_path: Path) -> Non
     assert window_recent.exit_code == 0, window_recent.stdout
     assert "openai_codex" in window_recent.stdout
     assert "chatgpt" not in window_recent.stdout
+
+
+def test_recent_cli_default_limit_prints_hint(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    _ingest(db_path, FIXTURES / "chatgpt" / "minimal" / "conversations.json")
+
+    result = runner.invoke(app, ["recent", "--db-path", str(db_path)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "Recent conversations" in result.stdout
+    assert "default maximum is 10" in result.stdout
+    assert "Use -n/--limit to increase" in result.stdout
 
 
 def test_recent_cli_empty_db_and_limit_validation(tmp_path: Path) -> None:

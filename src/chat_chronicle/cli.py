@@ -265,13 +265,13 @@ def stats(
 @app.command()
 def recent(
     limit: Annotated[
-        int,
+        int | None,
         typer.Option(
             "-n",
             "--limit",
             help="Maximum number of conversations to show.",
         ),
-    ] = 10,
+    ] = None,
     provider: Annotated[str | None, typer.Option(help="Filter by provider.")] = None,
     since: Annotated[
         str | None,
@@ -287,6 +287,7 @@ def recent(
     ] = None,
 ) -> None:
     """List the most recently active conversations."""
+    effective_limit = limit if limit is not None else 10
     try:
         with connect(db_path) as conn:
             rows = list_recent_conversations(
@@ -294,7 +295,7 @@ def recent(
                 provider=provider,
                 since=since,
                 until=until,
-                limit=limit,
+                limit=effective_limit,
             )
     except ValueError as exc:
         _fail(str(exc))
@@ -319,14 +320,10 @@ def recent(
             Text(_recent_link_hint(row)),
         )
     console.print(table)
-    for row in rows:
+    if limit is None:
         console.print(
-            Text(
-                "recent "
-                f"{row.conversation_id} | {row.last_activity_at or ''} | "
-                f"{row.provider} | {row.title or '(untitled)'} | "
-                f"{_recent_link_hint(row)}"
-            )
+            f"Showing {len(rows)} conversation(s); default maximum is 10. "
+            "Use -n/--limit to increase the number shown, up to 100."
         )
 
 
