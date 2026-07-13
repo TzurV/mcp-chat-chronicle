@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":"Root fixture second project delta term."},"timestamp":"2026-07-04T12:00:00Z","cwd":"C:\\work\\synthetic\\project-two","sessionId":"claude-code-root-two","uuid":"msg-root-two-user","version":"2.0.5"}
+{"type":"assistant","message":{"role":"assistant","content":"Root fixture response two."},"timestamp":"2026-07-04T12:01:00Z","cwd":"C:\\work\\synthetic\\project-two","sessionId":"claude-code-root-two","uuid":"msg-root-two-assistant","version":"2.0.5"}

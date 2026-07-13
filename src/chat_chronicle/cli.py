@@ -16,12 +16,13 @@ from rich.table import Table
 from rich.text import Text
 
 from chat_chronicle import __version__
-from chat_chronicle.adapters import chatgpt_export, claude_export, openai_codex
+from chat_chronicle.adapters import chatgpt_export, claude_code, claude_export, openai_codex
 from chat_chronicle.db import (
     begin_ingest_run,
     connect,
     default_db_path,
     finish_ingest_run,
+    get_or_create_project,
     get_or_create_source,
     mark_source_ingested,
     rebuild_fts,
@@ -46,12 +47,14 @@ error_console = Console(stderr=True)
 
 _PROVIDER_CHATGPT = "chatgpt"
 _PROVIDER_CLAUDE = "claude"
+_PROVIDER_CLAUDE_CODE = "claude_code"
 _PROVIDER_OPENAI_CODEX = "openai_codex"
 _PROVIDER_AUTO = "auto"
 _SUPPORTED_PROVIDERS = {
     _PROVIDER_AUTO,
     _PROVIDER_CHATGPT,
     _PROVIDER_CLAUDE,
+    _PROVIDER_CLAUDE_CODE,
     _PROVIDER_OPENAI_CODEX,
 }
 _CONVERSATIONS_FILENAME = "conversations.json"
@@ -100,7 +103,7 @@ def ingest(
     if requested_provider not in _SUPPORTED_PROVIDERS:
         _fail(
             f"Unsupported provider '{provider}'. "
-            "Use auto, chatgpt, claude, or openai_codex."
+            "Use auto, chatgpt, claude, claude_code, or openai_codex."
         )
 
     source_path = path.expanduser()
@@ -115,7 +118,7 @@ def ingest(
     )
     source_type = (
         "local_store"
-        if effective_provider == _PROVIDER_OPENAI_CODEX
+        if effective_provider in {_PROVIDER_OPENAI_CODEX, _PROVIDER_CLAUDE_CODE}
         else "official_export"
     )
 
@@ -135,6 +138,7 @@ def ingest(
             errors=errors,
         )
 
+        _assign_project_ids(conn, result)
         for conversation in result.conversations:
             upsert_result = upsert_conversation(conn, source_id, conversation)
             if upsert_result.status == "added":
@@ -418,6 +422,8 @@ def _detect_provider(path: Path) -> str:
     detected: list[str] = []
     if _looks_like_codex_source(path):
         detected.append(_PROVIDER_OPENAI_CODEX)
+    if _looks_like_claude_code_source(path):
+        detected.append(_PROVIDER_CLAUDE_CODE)
 
     conversations_json = _load_conversations_json_for_detection(path)
     if conversations_json is not None:
@@ -433,7 +439,8 @@ def _detect_provider(path: Path) -> str:
         _fail(f"Ambiguous provider detection for {path}: {', '.join(unique)}")
     _fail(
         f"Unsupported source format for {path}. "
-        "Expected ChatGPT/Claude conversations.json or OpenAI Codex JSONL sessions."
+        "Expected ChatGPT/Claude conversations.json, OpenAI Codex JSONL sessions, "
+        "or Claude Code JSONL sessions."
     )
     raise AssertionError("unreachable")
 
@@ -511,6 +518,23 @@ def _looks_like_codex_source(path: Path) -> bool:
     return False
 
 
+def _looks_like_claude_code_source(path: Path) -> bool:
+    if path.is_file():
+        return path.suffix.lower() == ".jsonl" and _jsonl_has_claude_code_signature(path)
+
+    if path.name == "projects" and path.parent.name == ".claude" and any(path.rglob("*.jsonl")):
+        return True
+    if any(
+        candidate.parent.parent.name == "projects" and candidate.suffix.lower() == ".jsonl"
+        for candidate in path.glob("*.jsonl")
+    ):
+        return True
+    sample_files = sorted(path.rglob("*.jsonl"))[:10]
+    if any(_jsonl_has_claude_code_signature(candidate) for candidate in sample_files):
+        return True
+    return False
+
+
 def _jsonl_has_codex_signature(path: Path) -> bool:
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -536,14 +560,67 @@ def _jsonl_has_codex_signature(path: Path) -> bool:
     return False
 
 
+def _jsonl_has_claude_code_signature(path: Path) -> bool:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            inspected = 0
+            for line in handle:
+                if not line.strip():
+                    continue
+                inspected += 1
+                if inspected > 100:
+                    return False
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if not isinstance(record.get("type"), str):
+                    continue
+                if record.get("type") in {"user", "assistant", "summary", "ai-title"}:
+                    message = record.get("message")
+                    if isinstance(message, dict) and isinstance(message.get("role"), str):
+                        return True
+                    if isinstance(record.get("sessionId"), str):
+                        return True
+    except OSError:
+        return False
+    return False
+
+
 def _load_conversations(provider: str, path: Path) -> Any:
     if provider == _PROVIDER_CHATGPT:
         return chatgpt_export.load_conversations(path)
     if provider == _PROVIDER_CLAUDE:
         return claude_export.load_conversations(path)
+    if provider == _PROVIDER_CLAUDE_CODE:
+        return claude_code.load_conversations(path)
     if provider == _PROVIDER_OPENAI_CODEX:
         return openai_codex.load_conversations(path)
     raise ValueError(f"unsupported provider: {provider}")
+
+
+def _assign_project_ids(conn: sqlite3.Connection, result: Any) -> None:
+    project_hints = getattr(result, "project_hints", None)
+    if not isinstance(project_hints, dict) or not project_hints:
+        return
+
+    for conversation in result.conversations:
+        hint = project_hints.get(conversation.provider_conv_id)
+        if hint is None:
+            continue
+        name = getattr(hint, "name", None)
+        if not isinstance(name, str) or not name:
+            continue
+        root_path = getattr(hint, "root_path", None)
+        if root_path is not None and not isinstance(root_path, str):
+            root_path = None
+        conversation.project_id = get_or_create_project(
+            conn,
+            name=name,
+            root_path=root_path,
+        )
 
 
 def _serializable_errors(errors: list[Any]) -> list[dict[str, Any]]:

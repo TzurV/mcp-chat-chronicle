@@ -1,0 +1,8 @@
+{"type":"queue-operation","operation":"enqueue","sessionId":"claude-code-rs2-records","timestamp":"2026-07-07T15:00:00Z"}
+{"type":"ai-title","sessionId":"claude-code-rs2-records","aiTitle":"RS2 Live Shape Title"}
+{"type":"attachment","attachment":{"fileName":"synthetic-note.txt"},"sessionId":"claude-code-rs2-records","timestamp":"2026-07-07T15:00:01Z"}
+{"type":"file-history-snapshot","messageId":"rs2-user-uuid","snapshot":{"trackedFileBackups":{}},"isSnapshotUpdate":false}
+{"type":"user","message":{"role":"user","content":"RS2 user visible text."},"timestamp":"2026-07-07T15:01:00Z","cwd":"C:\\work\\synthetic\\rs2","sessionId":"claude-code-rs2-records","uuid":"rs2-user-uuid","parentUuid":null,"isSidechain":false,"version":"2.0.5"}
+{"type":"system","content":"RS2 system visible text.","timestamp":"2026-07-07T15:01:30Z","cwd":"C:\\work\\synthetic\\rs2","sessionId":"claude-code-rs2-records","uuid":"rs2-system-uuid","parentUuid":"rs2-user-uuid","isSidechain":false,"version":"2.0.5"}
+{"type":"assistant","message":{"role":"assistant","content":"RS2 assistant visible text."},"timestamp":"2026-07-07T15:02:00Z","cwd":"C:\\work\\synthetic\\rs2","sessionId":"claude-code-rs2-records","uuid":"rs2-assistant-uuid","parentUuid":"rs2-system-uuid","isSidechain":false,"version":"2.0.5"}
+{"type":"assistant","message":{"role":"assistant","content":"RS2 sidechain visible text."},"timestamp":"2026-07-07T15:03:00Z","cwd":"C:\\work\\synthetic\\rs2","sessionId":"claude-code-rs2-records","uuid":"rs2-sidechain-uuid","parentUuid":"rs2-user-uuid","isSidechain":true,"version":"2.0.5"}

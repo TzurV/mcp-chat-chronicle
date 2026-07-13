@@ -1,0 +1,4 @@
+{"type":"user","message":{"role":"user","content":"Healthy malformed fixture text."},"timestamp":"2026-07-05T13:00:00Z","cwd":"C:\\work\\synthetic\\malformed","sessionId":"claude-code-malformed","uuid":"msg-malformed-user","version":"2.0.5"}
+not valid json
+{"type":"surprise-record","sessionId":"claude-code-malformed","timestamp":"2026-07-05T13:00:30Z","detail":"synthetic"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Healthy assistant text survives."},{"type":"unknown_block","text":123}]},"timestamp":"bad timestamp","cwd":"C:\\work\\synthetic\\malformed","sessionId":"claude-code-malformed","uuid":"msg-malformed-assistant","version":"2.0.5"}

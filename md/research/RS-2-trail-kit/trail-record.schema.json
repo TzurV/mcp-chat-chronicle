@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "worktrail-trail-record-v1",
+  "title": "WorkTrail trail record",
+  "type": "object",
+  "required": ["trail_version", "logged_at", "engine", "note"],
+  "additionalProperties": false,
+  "properties": {
+    "trail_version": { "const": 1 },
+    "logged_at": { "type": "string", "description": "ISO 8601 datetime with timezone" },
+    "engine": {
+      "type": "string",
+      "enum": ["claude_code", "codex", "cowork", "chatgpt", "claude_web", "copilot", "gemini", "other"]
+    },
+    "app": { "type": ["string", "null"], "description": "Free-text surface description, e.g. 'Codex app' vs 'Codex CLI in VS Code'" },
+    "session_id": { "type": ["string", "null"], "description": "VERIFIED runtime-instance ID only (read from own store/env). Never model-guessed. Identifies a runtime session, NOT the logical conversation." },
+    "session_hint": { "type": ["object", "null"], "description": "Unverified environmental leaks (path UUIDs, sandbox aliases, prior runtime IDs). Ingest-time tiebreakers only." },
+    "conversation_url": { "type": ["string", "null"], "description": "Human-pasted address-bar URL. ChatGPT /c/<id> and Claude /chat/<uuid> parse to the IDs used in official exports." },
+    "title": { "type": ["string", "null"] },
+    "workspace": { "type": ["string", "null"], "description": "cwd / repo path for agent surfaces" },
+    "model": { "type": ["string", "null"], "description": "Self-reported = informative, not authoritative" },
+    "note": { "type": "string", "description": "One-sentence human-readable summary: what this session is about / where it left off" },
+    "marker": { "type": ["string", "null"], "description": "Short random token; for agent-writers usually the hex suffix of the filename (write-echo join)" }
+  }
+}
