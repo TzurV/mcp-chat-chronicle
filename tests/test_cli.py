@@ -34,8 +34,6 @@ def test_stub_commands_exit_successfully() -> None:
         ["ingest-folder", "exports"],
         ["collect"],
         ["scan-local"],
-        ["search", "docker network"],
-        ["open", "1"],
     ]
     for args in invocations:
         result = runner.invoke(app, args)

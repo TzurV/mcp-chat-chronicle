@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import webbrowser
 import zipfile
 from pathlib import Path
 from typing import Annotated, Any
@@ -11,6 +13,7 @@ from typing import Annotated, Any
 import typer
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 from chat_chronicle import __version__
 from chat_chronicle.adapters import chatgpt_export, claude_export, openai_codex
@@ -25,6 +28,12 @@ from chat_chronicle.db import (
     upsert_conversation,
 )
 from chat_chronicle.models import IngestRunSummary
+from chat_chronicle.search import (
+    ConversationDetail,
+    SearchResult,
+    get_conversation_detail,
+    search_conversations,
+)
 
 app = typer.Typer(
     name="chronicle",
@@ -258,17 +267,98 @@ def search(
     ] = None,
     tag: Annotated[str | None, typer.Option(help="Filter by enrichment tag.")] = None,
     limit: Annotated[int, typer.Option(help="Maximum number of results.")] = 10,
+    db_path: Annotated[
+        Path | None,
+        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+    ] = None,
 ) -> None:
     """Search the archive with FTS5 ranking and snippets."""
-    _not_implemented("search", "WP-2.1")
+    if not query.strip():
+        _fail("Search query cannot be empty.")
+    if limit < 1 or limit > 100:
+        _fail("Limit must be between 1 and 100.")
+
+    try:
+        with connect(db_path) as conn:
+            results = search_conversations(
+                conn,
+                query,
+                provider=provider,
+                since=since,
+                until=until,
+                tag=tag,
+                limit=limit,
+            )
+    except ValueError as exc:
+        _fail(str(exc))
+    except sqlite3.OperationalError as exc:
+        _fail(f"Invalid search query: {exc}")
+
+    console.print(f"db path: {_connect_db_display_path(db_path)}")
+    if not results:
+        console.print("No results")
+        return
+
+    table = Table(title="Search results")
+    table.add_column("ID", justify="right")
+    table.add_column("Date")
+    table.add_column("Provider")
+    table.add_column("Title", overflow="fold")
+    table.add_column("Snippet", overflow="fold")
+    table.add_column("Open hint", overflow="fold")
+    for result in results:
+        table.add_row(
+            Text(str(result.conversation_id)),
+            Text(_result_date(result)),
+            Text(result.provider),
+            Text(result.title or "(untitled)"),
+            Text(result.snippet),
+            Text(_open_hint(result)),
+        )
+    console.print(table)
+    for result in results:
+        console.print(
+            Text(
+                "result "
+                f"{result.conversation_id} | {_result_date(result)} | "
+                f"{result.provider} | {result.title or '(untitled)'} | "
+                f"{result.snippet} | {_open_hint(result)}"
+            )
+        )
 
 
 @app.command("open")
 def open_result(
     result_id: Annotated[int, typer.Argument(help="Conversation id from a search result.")],
+    db_path: Annotated[
+        Path | None,
+        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+    ] = None,
 ) -> None:
     """Open a result: deep link for web chats, transcript view otherwise."""
-    _not_implemented("open", "WP-2.1")
+    with connect(db_path) as conn:
+        detail = get_conversation_detail(conn, result_id)
+    if detail is None:
+        _fail(f"Conversation not found: {result_id}")
+
+    _print_conversation_header(detail)
+    if detail.url:
+        console.print(f"url: {detail.url}")
+        opened = _open_url_in_browser(detail.url)
+        if opened:
+            console.print("browser launch: attempted")
+        else:
+            console.print("browser launch: unavailable; use the printed URL")
+        return
+
+    if detail.origin_path:
+        console.print(f"origin_path: {detail.origin_path}")
+        console.print(f"origin_file: {Path(detail.origin_path).name}")
+    else:
+        console.print("source link: no URL or origin_path available")
+    if detail.resume_hint:
+        console.print(f"resume_hint: {detail.resume_hint}")
+    _render_transcript(detail)
 
 
 def _connect_db_display_path(db_path: Path | None) -> Path:
@@ -280,6 +370,48 @@ def _connect_db_display_path(db_path: Path | None) -> Path:
 def _fail(message: str) -> None:
     error_console.print(f"[red]{message}[/]")
     raise typer.Exit(code=1)
+
+
+def _result_date(result: SearchResult) -> str:
+    return result.updated_at or ""
+
+
+def _open_hint(result: SearchResult) -> str:
+    if result.url:
+        return f"chronicle open {result.conversation_id} (web URL)"
+    if result.origin_path:
+        return f"chronicle open {result.conversation_id} (local transcript)"
+    return f"chronicle open {result.conversation_id} (stored transcript)"
+
+
+def _print_conversation_header(detail: ConversationDetail) -> None:
+    console.print(f"id: {detail.conversation_id}")
+    console.print(f"provider: {detail.provider}")
+    console.print(f"title: {detail.title or '(untitled)'}")
+    date_value = detail.updated_at or detail.created_at or ""
+    if date_value:
+        console.print(f"date: {date_value}")
+
+
+def _render_transcript(detail: ConversationDetail) -> None:
+    console.print("transcript:")
+    if not detail.messages:
+        console.print("(no messages)")
+        return
+    for message in detail.messages:
+        role = message.role or "unknown"
+        timestamp = f" [{message.created_at}]" if message.created_at else ""
+        console.print(Text(f"{role}{timestamp}:"))
+        console.print(Text(message.body))
+
+
+def _open_url_in_browser(url: str) -> bool:
+    if os.environ.get("CHAT_CHRONICLE_NO_BROWSER") in {"1", "true", "TRUE", "yes", "YES"}:
+        return False
+    try:
+        return bool(webbrowser.open(url))
+    except OSError:
+        return False
 
 
 def _detect_provider(path: Path) -> str:
