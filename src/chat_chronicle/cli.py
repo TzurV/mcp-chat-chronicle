@@ -31,8 +31,10 @@ from chat_chronicle.db import (
 from chat_chronicle.models import IngestRunSummary
 from chat_chronicle.search import (
     ConversationDetail,
+    RecentConversation,
     SearchResult,
     get_conversation_detail,
+    list_recent_conversations,
     search_conversations,
 )
 
@@ -261,6 +263,74 @@ def stats(
 
 
 @app.command()
+def recent(
+    limit: Annotated[
+        int,
+        typer.Option(
+            "-n",
+            "--limit",
+            help="Maximum number of conversations to show.",
+        ),
+    ] = 10,
+    provider: Annotated[str | None, typer.Option(help="Filter by provider.")] = None,
+    since: Annotated[
+        str | None,
+        typer.Option(help="Only conversations active on or after this ISO date."),
+    ] = None,
+    until: Annotated[
+        str | None,
+        typer.Option(help="Only conversations active on or before this ISO date."),
+    ] = None,
+    db_path: Annotated[
+        Path | None,
+        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+    ] = None,
+) -> None:
+    """List the most recently active conversations."""
+    try:
+        with connect(db_path) as conn:
+            rows = list_recent_conversations(
+                conn,
+                provider=provider,
+                since=since,
+                until=until,
+                limit=limit,
+            )
+    except ValueError as exc:
+        _fail(str(exc))
+
+    console.print(f"db path: {_connect_db_display_path(db_path)}")
+    if not rows:
+        console.print("No conversations")
+        return
+
+    table = Table(title="Recent conversations")
+    table.add_column("ID", justify="right")
+    table.add_column("Date")
+    table.add_column("Provider")
+    table.add_column("Title", overflow="fold")
+    table.add_column("URL", overflow="fold")
+    for row in rows:
+        table.add_row(
+            Text(str(row.conversation_id)),
+            Text(row.last_activity_at or ""),
+            Text(row.provider),
+            Text(row.title or "(untitled)"),
+            Text(_recent_link_hint(row)),
+        )
+    console.print(table)
+    for row in rows:
+        console.print(
+            Text(
+                "recent "
+                f"{row.conversation_id} | {row.last_activity_at or ''} | "
+                f"{row.provider} | {row.title or '(untitled)'} | "
+                f"{_recent_link_hint(row)}"
+            )
+        )
+
+
+@app.command()
 def search(
     query: Annotated[str, typer.Argument(help="Full-text search query.")],
     provider: Annotated[str | None, typer.Option(help="Filter by provider.")] = None,
@@ -387,6 +457,16 @@ def _open_hint(result: SearchResult) -> str:
     if result.origin_path:
         return f"chronicle open {result.conversation_id} (local transcript)"
     return f"chronicle open {result.conversation_id} (stored transcript)"
+
+
+def _recent_link_hint(result: RecentConversation) -> str:
+    if result.url:
+        return result.url
+    if result.origin_path:
+        return f"local: {Path(result.origin_path).name}"
+    if result.resume_hint:
+        return result.resume_hint
+    return "-"
 
 
 def _print_conversation_header(detail: ConversationDetail) -> None:

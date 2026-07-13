@@ -22,6 +22,17 @@ class SearchResult:
 
 
 @dataclass(frozen=True)
+class RecentConversation:
+    conversation_id: int
+    provider: str
+    title: str | None
+    last_activity_at: str | None
+    url: str | None
+    origin_path: str | None
+    resume_hint: str | None
+
+
+@dataclass(frozen=True)
 class MessageDetail:
     role: str | None
     created_at: str | None
@@ -145,6 +156,66 @@ def search_conversations(
     return results
 
 
+def list_recent_conversations(
+    conn: sqlite3.Connection,
+    *,
+    provider: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 10,
+) -> list[RecentConversation]:
+    """Return conversations sorted by most recent activity."""
+    if limit < 1 or limit > _MAX_LIMIT:
+        raise ValueError(f"Limit must be between 1 and {_MAX_LIMIT}.")
+
+    normalized_since = _normalize_date_filter(since, end_of_day=False)
+    normalized_until = _normalize_date_filter(until, end_of_day=True)
+
+    clauses = ["coalesce(c.updated_at, c.created_at) IS NOT NULL"]
+    params: list[object] = []
+    if provider:
+        clauses.append("c.provider = ?")
+        params.append(provider)
+    if normalized_since:
+        clauses.append("coalesce(c.updated_at, c.created_at, '') >= ?")
+        params.append(normalized_since)
+    if normalized_until:
+        clauses.append("coalesce(c.updated_at, c.created_at, '') <= ?")
+        params.append(normalized_until)
+    params.append(limit)
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            c.id AS conversation_id,
+            c.provider AS provider,
+            c.title AS title,
+            coalesce(c.updated_at, c.created_at) AS last_activity_at,
+            c.url AS url,
+            c.origin_path AS origin_path,
+            c.resume_hint AS resume_hint
+        FROM conversations AS c
+        WHERE {" AND ".join(clauses)}
+        ORDER BY last_activity_at DESC, c.id DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+
+    return [
+        RecentConversation(
+            conversation_id=int(row["conversation_id"]),
+            provider=row["provider"],
+            title=row["title"],
+            last_activity_at=row["last_activity_at"],
+            url=row["url"],
+            origin_path=row["origin_path"],
+            resume_hint=row["resume_hint"],
+        )
+        for row in rows
+    ]
+
+
 def get_conversation_detail(
     conn: sqlite3.Connection,
     conversation_id: int,
@@ -208,7 +279,7 @@ def _normalize_date_filter(value: str | None, *, end_of_day: bool) -> str | None
         return None
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", stripped):
         date.fromisoformat(stripped)
-        suffix = "T23:59:59.999999Z" if end_of_day else "T00:00:00Z"
+        suffix = "T23:59:59.999999Z" if end_of_day else "T00:00:00.000000Z"
         return f"{stripped}{suffix}"
 
     try:

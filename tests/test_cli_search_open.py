@@ -135,6 +135,93 @@ def test_search_empty_query_exits_nonzero(tmp_path: Path) -> None:
     assert "Search query cannot be empty" in result.stderr
 
 
+def test_recent_cli_lists_url_and_local_rows_with_filters(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    _ingest(db_path, FIXTURES / "chatgpt" / "minimal" / "conversations.json")
+    _ingest(db_path, FIXTURES / "openai_codex" / "minimal" / "rollout-minimal.jsonl")
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            UPDATE conversations
+            SET created_at = ?, updated_at = ?
+            WHERE provider = 'chatgpt'
+            """,
+            ("2026-01-01T00:00:00.000000Z", "2026-03-01T00:00:00.000000Z"),
+        )
+        conn.execute(
+            """
+            UPDATE conversations
+            SET created_at = ?, updated_at = ?, resume_hint = ?
+            WHERE provider = 'openai_codex'
+            """,
+            (
+                "2026-02-01T00:00:00.000000Z",
+                None,
+                "codex resume codex-minimal-1",
+            ),
+        )
+
+    all_recent = runner.invoke(app, ["recent", "-n", "5", "--db-path", str(db_path)])
+    provider_recent = runner.invoke(
+        app,
+        ["recent", "-n", "5", "--provider", "chatgpt", "--db-path", str(db_path)],
+    )
+    window_recent = runner.invoke(
+        app,
+        [
+            "recent",
+            "-n",
+            "5",
+            "--since",
+            "2026-02-01",
+            "--until",
+            "2026-02-28",
+            "--db-path",
+            str(db_path),
+        ],
+    )
+
+    assert all_recent.exit_code == 0, all_recent.stdout
+    assert "Recent conversations" in all_recent.stdout
+    assert "ID" in all_recent.stdout
+    assert "Date" in all_recent.stdout
+    assert "Provider" in all_recent.stdout
+    assert "Title" in all_recent.stdout
+    assert "URL" in all_recent.stdout
+    assert "https://chatgpt.com/c/conv-minimal-1" in all_recent.stdout
+    assert "local: rollout-minimal.jsonl" in all_recent.stdout
+    assert all_recent.stdout.index("chatgpt") < all_recent.stdout.index("openai_codex")
+
+    assert provider_recent.exit_code == 0, provider_recent.stdout
+    assert "chatgpt" in provider_recent.stdout
+    assert "openai_codex" not in provider_recent.stdout
+
+    assert window_recent.exit_code == 0, window_recent.stdout
+    assert "openai_codex" in window_recent.stdout
+    assert "chatgpt" not in window_recent.stdout
+
+
+def test_recent_cli_empty_db_and_limit_validation(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+
+    empty = runner.invoke(app, ["recent", "--db-path", str(db_path)])
+    invalid_limit = runner.invoke(app, ["recent", "-n", "0", "--db-path", str(db_path)])
+
+    assert empty.exit_code == 0, empty.stdout
+    assert "No conversations" in empty.stdout
+    assert db_path.exists()
+    assert invalid_limit.exit_code != 0
+    assert "Limit must be between 1 and 100" in invalid_limit.stderr
+
+
+def test_chronicle_help_includes_recent_command() -> None:
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "recent" in result.stdout
+    assert "List the most recently active conversations" in result.stdout
+
+
 def test_open_web_row_prints_url_and_calls_browser_helper(monkeypatch, tmp_path: Path) -> None:
     db_path = _db_path(tmp_path)
     _ingest(db_path, FIXTURES / "chatgpt" / "minimal" / "conversations.json")

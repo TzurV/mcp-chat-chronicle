@@ -8,11 +8,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | --- | --- |
 | Date | 2026-07-13 |
 | Phase | M1 in progress |
-| Last accepted work package | WP-1.2.1 OpenAI split export compatibility |
-| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1 accepted; prototype private smoke is next |
-| Next action | Commit accepted WP-1.2.1 changes, then run prototype private smoke against real OpenAI export and Claude Code history |
+| Last accepted work package | WP-2.2 Recent active chats CLI |
+| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1 and WP-2.2 accepted; Claude project metadata gap remains |
+| Next action | Commit accepted WP-2.2 changes, then run WP-1.3.3 Claude project metadata linking when ready |
 | Current branch | `main` |
-| Last known commit | `2841ec3 Add Claude Code local extractor` |
+| Last known commit | `3a813af Support split OpenAI exports` |
 
 ## Work Package Ledger
 
@@ -25,9 +25,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-1.3 | Claude export importer | Accepted | `md/handoffs/WP-1.3-claude-export-importer.md` | `md/handoffs/reports/WP-1.3-completion-report.md` | `md/handoffs/reports/WP-1.3-validation-review.md` | Concrete importer accepted with synthetic fixtures; no adapter base introduced. Real export verification remains a follow-up. |
 | WP-1.3.1 | Claude real export content-block correction | Accepted | `md/handoffs/WP-1.3.1-claude-real-export-content-blocks.md` | `md/handoffs/reports/WP-1.3.1-completion-report.md` | `md/handoffs/reports/WP-1.3.1-validation-review.md` | Known Claude metadata blocks (`thinking`, `tool_use`, `tool_result`) now skip without noisy parse errors. |
 | WP-1.3.2 | OpenAI Codex local extractor | Accepted | `md/handoffs/WP-1.3.2-openai-codex-local-extractor.md` | `md/handoffs/reports/WP-1.3.2-completion-report.md` | `md/handoffs/reports/WP-1.3.2-validation-review.md` | Concrete Class B extractor accepted for local Codex JSONL sessions. |
+| WP-1.3.3 | Claude export project metadata linking | Handoff ready | `md/handoffs/WP-1.3.3-claude-project-metadata-linking.md` | `md/handoffs/reports/WP-1.3.3-completion-report.md` | Pending | Follow-up from real Claude export: project metadata such as `CAR GUI` is not indexed/searchable unless linked to conversations. |
 | WP-1.4 | CLI ingest + stats | Accepted | `md/handoffs/WP-1.4-cli-ingest-stats.md` | `md/handoffs/reports/WP-1.4-completion-report.md` | `md/handoffs/reports/WP-1.4-validation-review.md` | `chronicle ingest` and `chronicle stats` accepted for ChatGPT, Claude, and OpenAI Codex sources. |
 | CO-1 | Schema migration + link-back touch-ups | Accepted | `md/handoffs/CO-1-schema-link-back-migration.md` | `md/handoffs/reports/CO-1-completion-report.md` | `md/handoffs/reports/CO-1-validation-review.md` | Schema v2 accepted with `projects`, `origin_path`, `resume_hint`, `manual_entry`, link-back persistence, and source uniqueness hardening. |
 | WP-2.1 | FTS5 search + open | Accepted | `md/handoffs/WP-2.1-fts-search-open.md` | `md/handoffs/reports/WP-2.1-completion-report.md` | `md/handoffs/reports/WP-2.1-validation-review.md` | Search/open accepted with FTS5 ranking, filters, snippets, URL open, and local transcript link-back behavior. |
+| WP-2.2 | Recent active chats CLI | Accepted | `md/handoffs/WP-2.2-recent-active-chats-cli.md` | `md/handoffs/reports/WP-2.2-completion-report.md` | `md/handoffs/reports/WP-2.2-validation-review.md` | Adds accepted `chronicle recent -n <N>` sorted by last activity date with provider/date filters and ID-Date-Provider-Title-URL table. |
 | WP-3.1 | Claude Code extractor | Accepted | `md/handoffs/WP-3.1-claude-code-extractor.md` | `md/handoffs/reports/WP-3.1-completion-report.md` | `md/handoffs/reports/WP-3.1-validation-review.md` | Accepted with WP-3.1.1 addendum. Concrete `claude_code` extractor, ingest wiring, project/link-back fields, synthetic fixtures, memo, and CLI smoke complete. |
 | WP-3.1.1 | Claude Code RS-2 format hardening | Accepted | `md/handoffs/WP-3.1.1-claude-code-rs2-format-hardening.md` | `md/handoffs/reports/WP-3.1.1-completion-report.md` | `md/handoffs/reports/WP-3.1.1-validation-review.md` | File-scoped Claude Code identity, `ai-title`, seven record types, `uuid`/`parentUuid`, sidechain, and same-session multi-file fixtures accepted. No broader RS-2 backlog scope approved. |
 | Prototype | Real-history search demo | Planned | Pending | Pending | Pending | Search real Claude Code history plus at least one ingested export end-to-end. |
@@ -98,13 +100,15 @@ If Poetry reports another project environment, the executor must stop and fix th
 | Item | Status | Notes |
 | --- | --- | --- |
 | ChatGPT/OpenAI official export | Received and compatibility accepted | Owner ZIP is under `exports/openai` and uses the current split layout (`conversations-000.json` ... `conversations-004.json`) with 422 records. WP-1.2.1 accepted direct ingest and auto-detection; PM smoke produced 422 conversations and 5,166 messages with 92 non-text part warnings. |
-| Claude official export | Observed | Claude export UX allows selecting a date range, which is useful for smaller validation exports. |
+| Claude official export | Ingested; project metadata gap found | Claude provider has 13 conversations in the repo-local DB. The project metadata file for `CAR GUI` exists in the export, but `chronicle search "CAR GUI" --provider claude` returns no results because project metadata is not yet linked/indexed. WP-1.3.3 addresses this. |
 | Research records | Recorded | `md/research/` now holds research-spike records for history data retrieval methods and current source-access status. |
 | Source listing utility | Already planned | WP-1.4 `stats` must show per-source summaries after ingest. A dedicated source inventory command belongs to WP-1.6 source management (`source add/list/disable`) rather than expanding WP-1.4. |
 
 ## Next Action
 
-Commit the accepted WP-1.2.1 changes. Then run the prototype private smoke
-against the repo-local archive DB using the real OpenAI export and Claude Code
-local history. Report only counts and path-shape information from private
-transcripts.
+Commit the accepted WP-2.2 changes. The remaining handoff-ready task is:
+
+- `md/handoffs/WP-1.3.3-claude-project-metadata-linking.md`
+
+Run WP-1.3.3 when the goal is completing Claude export coverage for project
+metadata such as `CAR GUI`.
