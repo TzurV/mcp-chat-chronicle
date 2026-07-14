@@ -346,7 +346,10 @@ def test_chronicle_help_includes_recent_command() -> None:
 
 
 def test_search_help_documents_phrase_option() -> None:
-    result = runner.invoke(app, ["search", "--help"])
+    # Typer/Rich renders --help through its own console; on a narrow terminal
+    # (the 80-col fallback used under CI) option names wrap and break substring
+    # checks. Pin a wide width via COLUMNS so the help text is stable.
+    result = runner.invoke(app, ["search", "--help"], env={"COLUMNS": "200"})
 
     assert result.exit_code == 0, result.stdout
     assert "--phrase" in result.stdout

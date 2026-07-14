@@ -16,7 +16,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -420,7 +420,11 @@ def _title_from_metadata_record(record: dict[str, Any], record_type: str) -> str
 def _project_hint(cwd: str | None, project_dir_name: str | None) -> ClaudeCodeProjectHint | None:
     if cwd:
         root = str(Path(cwd).expanduser())
-        name = Path(root).name or root
+        # A recorded cwd may be a Windows path parsed on POSIX (backslash
+        # separators that PosixPath treats as a filename) or vice-versa. Take
+        # the trailing segment regardless of separator style so the project
+        # name is derived correctly on any OS.
+        name = PureWindowsPath(root).name or Path(root).name or root
         return ClaudeCodeProjectHint(name=name, root_path=root)
     if project_dir_name:
         return ClaudeCodeProjectHint(name=project_dir_name, root_path=None)
