@@ -558,6 +558,42 @@ def get_or_create_source(
         return int(cursor.lastrowid)
 
 
+def get_or_create_project(
+    conn: sqlite3.Connection,
+    *,
+    name: str,
+    root_path: str | None = None,
+) -> int:
+    """Create or reuse a project row by stable project name."""
+    now = _utc_now_iso()
+    with conn:
+        existing = conn.execute(
+            """
+            SELECT id, root_path
+            FROM projects
+            WHERE name = ?
+            """,
+            (name,),
+        ).fetchone()
+        if existing is not None:
+            project_id = int(existing["id"])
+            if root_path and existing["root_path"] != root_path:
+                conn.execute(
+                    "UPDATE projects SET root_path = ? WHERE id = ?",
+                    (root_path, project_id),
+                )
+            return project_id
+
+        cursor = conn.execute(
+            """
+            INSERT INTO projects (name, root_path, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (name, root_path, now),
+        )
+        return int(cursor.lastrowid)
+
+
 def mark_source_ingested(conn: sqlite3.Connection, source_id: int) -> None:
     """Record the latest successful ingest attempt time for a source row."""
     now = _utc_now_iso()

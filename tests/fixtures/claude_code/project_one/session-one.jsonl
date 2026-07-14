@@ -1,0 +1,4 @@
+{"type":"ai-title","sessionId":"claude-code-session-one","aiTitle":"Synthetic Claude Code fixture"}
+{"type":"user","message":{"role":"user","content":"Find the alpha fixture term."},"timestamp":"2026-07-01T09:00:00Z","cwd":"C:\\work\\synthetic\\project-one","sessionId":"claude-code-session-one","uuid":"msg-user-1","version":"2.0.5"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The alpha fixture term is present in this response."},{"type":"tool_use","name":"Read","input":{"file_path":"README.md"}}]},"timestamp":"2026-07-01T09:01:00Z","cwd":"C:\\work\\synthetic\\project-one","sessionId":"claude-code-session-one","uuid":"msg-assistant-1","version":"2.0.5"}
+{"type":"file-history-snapshot","messageId":"msg-user-1","snapshot":{"trackedFileBackups":{}},"isSnapshotUpdate":false}

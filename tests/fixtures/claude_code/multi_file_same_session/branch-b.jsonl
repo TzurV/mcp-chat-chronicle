@@ -1,0 +1,3 @@
+{"type":"ai-title","sessionId":"shared-resume-session","aiTitle":"Shared Resume Branch B"}
+{"type":"user","message":{"role":"user","content":"Branch B unique visible text."},"timestamp":"2026-07-09T18:00:00Z","cwd":"C:\\work\\synthetic\\shared","sessionId":"shared-resume-session","uuid":"branch-b-user","version":"2.0.5"}
+{"type":"assistant","message":{"role":"assistant","content":"Branch B answer."},"timestamp":"2026-07-09T18:01:00Z","cwd":"C:\\work\\synthetic\\shared","sessionId":"shared-resume-session","uuid":"branch-b-assistant","version":"2.0.5"}

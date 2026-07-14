@@ -1,0 +1,5 @@
+{"type":"queue-operation","operation":"enqueue","sessionId":"claude-code-metadata","timestamp":"2026-07-06T14:00:00Z"}
+{"type":"attachment","attachment":{"fileName":"synthetic.txt"},"sessionId":"claude-code-metadata","timestamp":"2026-07-06T14:00:01Z"}
+{"type":"mode","mode":"default","sessionId":"claude-code-metadata"}
+{"type":"user","message":{"role":"user","content":"Metadata fixture visible text."},"timestamp":"2026-07-06T14:01:00Z","cwd":"C:\\work\\synthetic\\metadata","sessionId":"claude-code-metadata","uuid":"msg-metadata-user","version":"2.0.5"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_result","content":"tool output intentionally skipped"},{"type":"text","text":"Metadata fixture answer."}]},"timestamp":"2026-07-06T14:02:00Z","cwd":"C:\\work\\synthetic\\metadata","sessionId":"claude-code-metadata","uuid":"msg-metadata-assistant","version":"2.0.5"}

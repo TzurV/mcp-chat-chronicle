@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":"Root fixture first project gamma term."},"timestamp":"2026-07-03T11:00:00Z","cwd":"C:\\work\\synthetic\\project-one","sessionId":"claude-code-root-one","uuid":"msg-root-one-user","version":"2.0.5"}
+{"type":"assistant","message":{"role":"assistant","content":"Root fixture response one."},"timestamp":"2026-07-03T11:01:00Z","cwd":"C:\\work\\synthetic\\project-one","sessionId":"claude-code-root-one","uuid":"msg-root-one-assistant","version":"2.0.5"}

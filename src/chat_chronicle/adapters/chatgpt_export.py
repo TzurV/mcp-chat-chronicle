@@ -1,8 +1,9 @@
 """ChatGPT official-export importer.
 
-Parses ``conversations.json`` from an official ChatGPT data export and converts
-each conversation into the normalized :class:`~chat_chronicle.models.Conversation`
-and :class:`~chat_chronicle.models.Message` models.
+Parses ``conversations.json`` or split ``conversations-*.json`` files from an
+official ChatGPT data export and converts each conversation into the normalized
+:class:`~chat_chronicle.models.Conversation` and
+:class:`~chat_chronicle.models.Message` models.
 
 This module is deliberately concrete. The shared adapter abstraction is only
 extracted once three adapters exist (master plan design rule 2).
@@ -26,7 +27,9 @@ from chat_chronicle.models import Conversation, Message
 
 PROVIDER = "chatgpt"
 CONVERSATIONS_FILENAME = "conversations.json"
+SPLIT_CONVERSATIONS_GLOB = "conversations-*.json"
 _URL_TEMPLATE = "https://chatgpt.com/c/{conv_id}"
+_SILENT_METADATA_CONTENT_TYPES = {"thoughts", "reasoning_recap"}
 
 # Guards against a cyclic or self-referential ``parent`` chain in ``mapping``.
 _MAX_CHAIN_DEPTH = 100_000
@@ -66,7 +69,7 @@ class _ErrorSink:
 
 
 def load_conversations(source: Path | str) -> ChatGPTImportResult:
-    """Parse a ChatGPT export from a zip, a directory, or a ``conversations.json`` path."""
+    """Parse a ChatGPT export from a zip, a directory, or a conversations JSON path."""
     path = Path(source)
     errors = _ErrorSink()
 
@@ -76,10 +79,14 @@ def load_conversations(source: Path | str) -> ChatGPTImportResult:
 
     if path.is_dir():
         candidate = path / CONVERSATIONS_FILENAME
-        if not candidate.is_file():
+        if candidate.is_file():
+            return _parse_json_text(candidate.read_text(encoding="utf-8"), str(candidate))
+
+        split_candidates = _find_split_conversations_paths(path)
+        if not split_candidates:
             errors.add("conversations_json_not_found", detail=str(candidate))
             return ChatGPTImportResult(errors=errors.errors)
-        return _parse_json_text(candidate.read_text(encoding="utf-8"), str(candidate))
+        return _parse_split_files(split_candidates)
 
     if zipfile.is_zipfile(path):
         return _parse_zip(path)
@@ -91,11 +98,26 @@ def _parse_zip(path: Path) -> ChatGPTImportResult:
     errors = _ErrorSink()
     with zipfile.ZipFile(path) as archive:
         member = _find_conversations_member(archive)
-        if member is None:
+        if member is not None:
+            raw = archive.read(member).decode("utf-8")
+            return _parse_json_text(raw, f"{path}::{member}")
+
+        split_members = _find_split_conversations_members(archive)
+        if not split_members:
             errors.add("conversations_json_not_found", detail=str(path))
             return ChatGPTImportResult(errors=errors.errors)
-        raw = archive.read(member).decode("utf-8")
-    return _parse_json_text(raw, f"{path}::{member}")
+        sources: list[tuple[str, str]] = []
+        for member in split_members:
+            origin = f"{path}::{member}"
+            try:
+                sources.append((origin, archive.read(member).decode("utf-8")))
+            except UnicodeDecodeError as exc:
+                errors.add("invalid_encoding", detail=f"{origin}: {exc}")
+    parsed = _parse_split_sources(sources)
+    return ChatGPTImportResult(
+        conversations=parsed.conversations,
+        errors=errors.errors + parsed.errors,
+    )
 
 
 def _find_conversations_member(archive: zipfile.ZipFile) -> str | None:
@@ -110,6 +132,26 @@ def _find_conversations_member(archive: zipfile.ZipFile) -> str | None:
     return min(candidates, key=lambda name: (name.count("/"), name))
 
 
+def _find_split_conversations_members(archive: zipfile.ZipFile) -> list[str]:
+    return sorted(
+        name
+        for name in archive.namelist()
+        if not name.endswith("/") and _is_split_conversations_name(Path(name).name)
+    )
+
+
+def _find_split_conversations_paths(path: Path) -> list[Path]:
+    return sorted(
+        candidate
+        for candidate in path.rglob(SPLIT_CONVERSATIONS_GLOB)
+        if candidate.is_file() and _is_split_conversations_name(candidate.name)
+    )
+
+
+def _is_split_conversations_name(name: str) -> bool:
+    return name.startswith("conversations-") and name.endswith(".json")
+
+
 def _parse_json_text(raw: str, origin: str) -> ChatGPTImportResult:
     try:
         data = json.loads(raw)
@@ -118,6 +160,46 @@ def _parse_json_text(raw: str, origin: str) -> ChatGPTImportResult:
             errors=[ChatGPTImportError(error="invalid_json", detail=f"{origin}: {exc}")]
         )
     return parse_conversations_json(data)
+
+
+def _parse_split_files(paths: list[Path]) -> ChatGPTImportResult:
+    errors = _ErrorSink()
+    sources: list[tuple[str, str]] = []
+    for path in paths:
+        try:
+            sources.append((str(path), path.read_text(encoding="utf-8")))
+        except UnicodeDecodeError as exc:
+            errors.add("invalid_encoding", detail=f"{path}: {exc}")
+    parsed = _parse_split_sources(sources)
+    return ChatGPTImportResult(
+        conversations=parsed.conversations,
+        errors=errors.errors + parsed.errors,
+    )
+
+
+def _parse_split_sources(sources: list[tuple[str, str]]) -> ChatGPTImportResult:
+    records: list[object] = []
+    errors = _ErrorSink()
+
+    for origin, raw in sources:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            errors.add("invalid_json", detail=f"{origin}: {exc}")
+            continue
+        if not isinstance(data, list):
+            errors.add(
+                "unexpected_export_shape",
+                detail=f"{origin}: expected a list of conversations, got {type(data).__name__}",
+            )
+            continue
+        records.extend(data)
+
+    parsed = parse_conversations_json(records)
+    return ChatGPTImportResult(
+        conversations=parsed.conversations,
+        errors=errors.errors + parsed.errors,
+    )
 
 
 def parse_conversations_json(data: object) -> ChatGPTImportResult:
@@ -402,9 +484,12 @@ def _extract_body(
         )
         return None
 
+    content_type = content.get("content_type")
+    if content_type in _SILENT_METADATA_CONTENT_TYPES:
+        return None
+
     parts = content.get("parts")
     if not isinstance(parts, list):
-        content_type = content.get("content_type")
         errors.add(
             "unsupported_content_type",
             record_id=conv_id,

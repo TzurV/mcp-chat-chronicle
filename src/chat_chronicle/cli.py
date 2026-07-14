@@ -16,12 +16,13 @@ from rich.table import Table
 from rich.text import Text
 
 from chat_chronicle import __version__
-from chat_chronicle.adapters import chatgpt_export, claude_export, openai_codex
+from chat_chronicle.adapters import chatgpt_export, claude_code, claude_export, openai_codex
 from chat_chronicle.db import (
     begin_ingest_run,
     connect,
     default_db_path,
     finish_ingest_run,
+    get_or_create_project,
     get_or_create_source,
     mark_source_ingested,
     rebuild_fts,
@@ -30,9 +31,12 @@ from chat_chronicle.db import (
 from chat_chronicle.models import IngestRunSummary
 from chat_chronicle.search import (
     ConversationDetail,
+    RecentConversation,
     SearchResult,
     get_conversation_detail,
+    list_recent_conversations,
     search_conversations,
+    should_show_broad_search_hint,
 )
 
 app = typer.Typer(
@@ -46,15 +50,18 @@ error_console = Console(stderr=True)
 
 _PROVIDER_CHATGPT = "chatgpt"
 _PROVIDER_CLAUDE = "claude"
+_PROVIDER_CLAUDE_CODE = "claude_code"
 _PROVIDER_OPENAI_CODEX = "openai_codex"
 _PROVIDER_AUTO = "auto"
 _SUPPORTED_PROVIDERS = {
     _PROVIDER_AUTO,
     _PROVIDER_CHATGPT,
     _PROVIDER_CLAUDE,
+    _PROVIDER_CLAUDE_CODE,
     _PROVIDER_OPENAI_CODEX,
 }
 _CONVERSATIONS_FILENAME = "conversations.json"
+_SPLIT_CONVERSATIONS_GLOB = "conversations-*.json"
 
 
 def _not_implemented(command: str, work_package: str) -> None:
@@ -100,7 +107,7 @@ def ingest(
     if requested_provider not in _SUPPORTED_PROVIDERS:
         _fail(
             f"Unsupported provider '{provider}'. "
-            "Use auto, chatgpt, claude, or openai_codex."
+            "Use auto, chatgpt, claude, claude_code, or openai_codex."
         )
 
     source_path = path.expanduser()
@@ -115,7 +122,7 @@ def ingest(
     )
     source_type = (
         "local_store"
-        if effective_provider == _PROVIDER_OPENAI_CODEX
+        if effective_provider in {_PROVIDER_OPENAI_CODEX, _PROVIDER_CLAUDE_CODE}
         else "official_export"
     )
 
@@ -135,6 +142,7 @@ def ingest(
             errors=errors,
         )
 
+        _assign_project_ids(conn, result)
         for conversation in result.conversations:
             upsert_result = upsert_conversation(conn, source_id, conversation)
             if upsert_result.status == "added":
@@ -256,8 +264,80 @@ def stats(
 
 
 @app.command()
+def recent(
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            "-n",
+            "--limit",
+            help="Maximum number of conversations to show.",
+        ),
+    ] = None,
+    provider: Annotated[str | None, typer.Option(help="Filter by provider.")] = None,
+    since: Annotated[
+        str | None,
+        typer.Option(help="Only conversations active on or after this ISO date."),
+    ] = None,
+    until: Annotated[
+        str | None,
+        typer.Option(help="Only conversations active on or before this ISO date."),
+    ] = None,
+    db_path: Annotated[
+        Path | None,
+        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+    ] = None,
+) -> None:
+    """List the most recently active conversations."""
+    effective_limit = limit if limit is not None else 10
+    try:
+        with connect(db_path) as conn:
+            rows = list_recent_conversations(
+                conn,
+                provider=provider,
+                since=since,
+                until=until,
+                limit=effective_limit,
+            )
+    except ValueError as exc:
+        _fail(str(exc))
+
+    console.print(f"db path: {_connect_db_display_path(db_path)}")
+    if not rows:
+        console.print("No conversations")
+        return
+
+    table = Table(title="Recent conversations")
+    table.add_column("ID", justify="right")
+    table.add_column("Date")
+    table.add_column("Provider")
+    table.add_column("Title", overflow="fold")
+    table.add_column("URL", overflow="fold")
+    for row in rows:
+        table.add_row(
+            Text(str(row.conversation_id)),
+            Text(row.last_activity_at or ""),
+            Text(row.provider),
+            Text(row.title or "(untitled)"),
+            Text(_recent_link_hint(row)),
+        )
+    console.print(table)
+    if limit is None:
+        console.print(
+            f"Showing {len(rows)} conversation(s); default maximum is 10. "
+            "Use -n/--limit to increase the number shown, up to 100."
+        )
+
+
+@app.command()
 def search(
     query: Annotated[str, typer.Argument(help="Full-text search query.")],
+    phrase: Annotated[
+        bool,
+        typer.Option(
+            "--phrase",
+            help="Treat QUERY as an exact phrase instead of broad FTS terms.",
+        ),
+    ] = False,
     provider: Annotated[str | None, typer.Option(help="Filter by provider.")] = None,
     since: Annotated[
         str | None, typer.Option(help="Only results on or after this ISO date.")
@@ -288,6 +368,7 @@ def search(
                 until=until,
                 tag=tag,
                 limit=limit,
+                phrase=phrase,
             )
     except ValueError as exc:
         _fail(str(exc))
@@ -297,6 +378,7 @@ def search(
     console.print(f"db path: {_connect_db_display_path(db_path)}")
     if not results:
         console.print("No results")
+        _print_broad_search_hint(query, phrase=phrase)
         return
 
     table = Table(title="Search results")
@@ -325,6 +407,7 @@ def search(
                 f"{result.snippet} | {_open_hint(result)}"
             )
         )
+    _print_broad_search_hint(query, phrase=phrase)
 
 
 @app.command("open")
@@ -372,6 +455,13 @@ def _fail(message: str) -> None:
     raise typer.Exit(code=1)
 
 
+def _print_broad_search_hint(query: str, *, phrase: bool) -> None:
+    if should_show_broad_search_hint(query, phrase=phrase):
+        console.print(
+            'Hint: this was a broad token search. For exact phrase matching, use --phrase "..."'
+        )
+
+
 def _result_date(result: SearchResult) -> str:
     return result.updated_at or ""
 
@@ -382,6 +472,16 @@ def _open_hint(result: SearchResult) -> str:
     if result.origin_path:
         return f"chronicle open {result.conversation_id} (local transcript)"
     return f"chronicle open {result.conversation_id} (stored transcript)"
+
+
+def _recent_link_hint(result: RecentConversation) -> str:
+    if result.url:
+        return result.url
+    if result.origin_path:
+        return f"local: {Path(result.origin_path).name}"
+    if result.resume_hint:
+        return result.resume_hint
+    return "-"
 
 
 def _print_conversation_header(detail: ConversationDetail) -> None:
@@ -418,6 +518,8 @@ def _detect_provider(path: Path) -> str:
     detected: list[str] = []
     if _looks_like_codex_source(path):
         detected.append(_PROVIDER_OPENAI_CODEX)
+    if _looks_like_claude_code_source(path):
+        detected.append(_PROVIDER_CLAUDE_CODE)
 
     conversations_json = _load_conversations_json_for_detection(path)
     if conversations_json is not None:
@@ -433,21 +535,23 @@ def _detect_provider(path: Path) -> str:
         _fail(f"Ambiguous provider detection for {path}: {', '.join(unique)}")
     _fail(
         f"Unsupported source format for {path}. "
-        "Expected ChatGPT/Claude conversations.json or OpenAI Codex JSONL sessions."
+        "Expected ChatGPT/Claude conversations.json, OpenAI Codex JSONL sessions, "
+        "or Claude Code JSONL sessions."
     )
     raise AssertionError("unreachable")
 
 
 def _load_conversations_json_for_detection(path: Path) -> object | None:
-    candidate: Path | None = None
     if path.is_dir():
-        candidate = path / _CONVERSATIONS_FILENAME
-        if not candidate.is_file():
-            return None
-        try:
-            return json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            return None
+        canonical = path / _CONVERSATIONS_FILENAME
+        if canonical.is_file():
+            return _read_json_for_detection(canonical)
+        split_paths = sorted(
+            candidate
+            for candidate in path.rglob(_SPLIT_CONVERSATIONS_GLOB)
+            if candidate.is_file() and _is_split_conversations_name(candidate.name)
+        )
+        return _load_split_json_for_detection(split_paths)
 
     if path.is_file() and zipfile.is_zipfile(path):
         try:
@@ -457,20 +561,53 @@ def _load_conversations_json_for_detection(path: Path) -> object | None:
                     for name in archive.namelist()
                     if not name.endswith("/") and Path(name).name == _CONVERSATIONS_FILENAME
                 ]
-                if not members:
-                    return None
-                member = min(members, key=lambda name: (name.count("/"), name))
-                return json.loads(archive.read(member).decode("utf-8"))
+                if members:
+                    member = min(members, key=lambda name: (name.count("/"), name))
+                    return json.loads(archive.read(member).decode("utf-8"))
+                split_members = sorted(
+                    name
+                    for name in archive.namelist()
+                    if not name.endswith("/")
+                    and _is_split_conversations_name(Path(name).name)
+                )
+                records: list[object] = []
+                for member in split_members:
+                    try:
+                        data = json.loads(archive.read(member).decode("utf-8"))
+                    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                        continue
+                    if isinstance(data, list):
+                        records.extend(data)
+                return records or None
         except (OSError, json.JSONDecodeError, UnicodeDecodeError, zipfile.BadZipFile):
             return None
 
-    if path.is_file() and path.name == _CONVERSATIONS_FILENAME:
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            return None
+    if path.is_file() and (
+        path.name == _CONVERSATIONS_FILENAME or _is_split_conversations_name(path.name)
+    ):
+        return _read_json_for_detection(path)
 
     return None
+
+
+def _read_json_for_detection(path: Path) -> object | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def _load_split_json_for_detection(paths: list[Path]) -> object | None:
+    records: list[object] = []
+    for path in paths:
+        data = _read_json_for_detection(path)
+        if isinstance(data, list):
+            records.extend(data)
+    return records or None
+
+
+def _is_split_conversations_name(name: str) -> bool:
+    return name.startswith("conversations-") and name.endswith(".json")
 
 
 def _looks_like_chatgpt_export(data: object) -> bool:
@@ -511,6 +648,23 @@ def _looks_like_codex_source(path: Path) -> bool:
     return False
 
 
+def _looks_like_claude_code_source(path: Path) -> bool:
+    if path.is_file():
+        return path.suffix.lower() == ".jsonl" and _jsonl_has_claude_code_signature(path)
+
+    if path.name == "projects" and path.parent.name == ".claude" and any(path.rglob("*.jsonl")):
+        return True
+    if any(
+        candidate.parent.parent.name == "projects" and candidate.suffix.lower() == ".jsonl"
+        for candidate in path.glob("*.jsonl")
+    ):
+        return True
+    sample_files = sorted(path.rglob("*.jsonl"))[:10]
+    if any(_jsonl_has_claude_code_signature(candidate) for candidate in sample_files):
+        return True
+    return False
+
+
 def _jsonl_has_codex_signature(path: Path) -> bool:
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -536,14 +690,67 @@ def _jsonl_has_codex_signature(path: Path) -> bool:
     return False
 
 
+def _jsonl_has_claude_code_signature(path: Path) -> bool:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            inspected = 0
+            for line in handle:
+                if not line.strip():
+                    continue
+                inspected += 1
+                if inspected > 100:
+                    return False
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if not isinstance(record.get("type"), str):
+                    continue
+                if record.get("type") in {"user", "assistant", "summary", "ai-title"}:
+                    message = record.get("message")
+                    if isinstance(message, dict) and isinstance(message.get("role"), str):
+                        return True
+                    if isinstance(record.get("sessionId"), str):
+                        return True
+    except OSError:
+        return False
+    return False
+
+
 def _load_conversations(provider: str, path: Path) -> Any:
     if provider == _PROVIDER_CHATGPT:
         return chatgpt_export.load_conversations(path)
     if provider == _PROVIDER_CLAUDE:
         return claude_export.load_conversations(path)
+    if provider == _PROVIDER_CLAUDE_CODE:
+        return claude_code.load_conversations(path)
     if provider == _PROVIDER_OPENAI_CODEX:
         return openai_codex.load_conversations(path)
     raise ValueError(f"unsupported provider: {provider}")
+
+
+def _assign_project_ids(conn: sqlite3.Connection, result: Any) -> None:
+    project_hints = getattr(result, "project_hints", None)
+    if not isinstance(project_hints, dict) or not project_hints:
+        return
+
+    for conversation in result.conversations:
+        hint = project_hints.get(conversation.provider_conv_id)
+        if hint is None:
+            continue
+        name = getattr(hint, "name", None)
+        if not isinstance(name, str) or not name:
+            continue
+        root_path = getattr(hint, "root_path", None)
+        if root_path is not None and not isinstance(root_path, str):
+            root_path = None
+        conversation.project_id = get_or_create_project(
+            conn,
+            name=name,
+            root_path=root_path,
+        )
 
 
 def _serializable_errors(errors: list[Any]) -> list[dict[str, Any]]:

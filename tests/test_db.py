@@ -12,6 +12,7 @@ from chat_chronicle.db import (
     connect,
     default_db_path,
     finish_ingest_run,
+    get_or_create_project,
     get_user_version,
     initialize_database,
     rebuild_fts,
@@ -448,6 +449,16 @@ def test_sources_enforce_unique_provider_path_when_path_is_not_null(tmp_path) ->
             VALUES ('manual_entry', 'chatgpt', NULL)
             """
         )
+
+
+def test_get_or_create_project_reuses_and_refreshes_root_path(tmp_path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        first = get_or_create_project(conn, name="Synthetic", root_path=None)
+        second = get_or_create_project(conn, name="Synthetic", root_path="C:/work/synthetic")
+
+        assert second == first
+        row = conn.execute("SELECT name, root_path FROM projects WHERE id = ?", (first,)).fetchone()
+        assert dict(row) == {"name": "Synthetic", "root_path": "C:/work/synthetic"}
 
 
 def test_ingest_run_finish_records_counts_and_errors(tmp_path) -> None:

@@ -2,7 +2,7 @@
 
 *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-> **Status: M1 in progress.** The DB/model layer plus ChatGPT and Claude export parsers are implemented; public ingest and search commands are still stubs. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
+> **Status: M1 in progress.** The local DB, official export importers, local coding-agent extractors, ingest, stats, search, open, and recent-activity CLI paths are implemented. Claude project metadata linking remains a known follow-up. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
 
 ## Why
 
@@ -48,16 +48,33 @@ Expected path:
 C:\work\Github\mcp-chat-chronicle\.chronicle\chronicle.db
 ```
 
-## CLI surface (v1 target)
+## CLI Surface
 
 ```bash
-chronicle ingest path/to/export.zip --provider auto   # one official export file
-chronicle ingest-folder path/to/exports               # sweep a drop folder
-chronicle collect                                     # run all enabled sources
-chronicle scan-local                                  # read-only: what exists on this machine?
-chronicle stats                                       # counts per source, last runs
-chronicle search "docker network"                     # FTS5, ranked, snippets
-chronicle open <result-id>                            # deep link or transcript view
+chronicle ingest path/to/export.zip --provider auto    # ingest one supported source
+chronicle stats                                        # counts per source, last runs
+chronicle search "docker network"                      # FTS5, ranked, snippets
+chronicle search --phrase "YOU are the MANAGER"        # exact phrase search
+chronicle open <result-id>                             # deep link or transcript view
+chronicle recent -n 20                                 # recent active chats by last activity date
+```
+
+`chronicle search` uses broad FTS5 token search by default. For an exact phrase such as `YOU are the MANAGER`, use:
+
+```powershell
+poetry run chronicle search --phrase "YOU are the MANAGER" --provider openai_codex --db-path .\.chronicle\chronicle.db
+```
+
+Search is case-insensitive for normal usage. Phrase mode matches the exact word sequence regardless of letter case, and default FTS search also treats case differences as non-significant. For noisy multi-word broad searches with common words such as `you`, `are`, and `the`, the CLI prints a hint suggesting `--phrase`.
+
+`chronicle recent` supports `--provider`, `--since`, `--until`, and `--db-path`. If `-n/--limit` is omitted, it shows up to 10 rows and prints a note explaining how to increase the limit.
+
+The following commands remain planned for later workflow/source-management work:
+
+```bash
+chronicle ingest-folder path/to/exports                # sweep a drop folder
+chronicle collect                                      # run all enabled sources
+chronicle scan-local                                   # read-only: what exists on this machine?
 ```
 
 ## Stack, and what we deliberately did not choose
