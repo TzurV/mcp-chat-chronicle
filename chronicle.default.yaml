@@ -1,0 +1,60 @@
+# Chat Chronicle default configuration template.
+#
+# This tracked template documents the config schema. It must NOT contain
+# private absolute paths. `chronicle init` generates a local, git-ignored
+# copy at `.chronicle/config.yaml`; edit that copy for machine-specific setup.
+#
+# Path values support:
+#   - environment variables: ${USERPROFILE} (Windows), $HOME (POSIX);
+#   - `~` home expansion;
+#   - relative paths, resolved from the project root / current directory.
+#
+# DB path precedence (highest first):
+#   1. CLI `--db-path`
+#   2. CHAT_CHRONICLE_DB environment variable
+#   3. this file's `paths.db`
+#   4. built-in default `.chronicle/chronicle.db`
+
+version: 1
+
+paths:
+  db: .chronicle/chronicle.db
+  exports_root: exports
+
+engines:
+  chatgpt:
+    enabled: true
+    interested: true
+  claude:
+    enabled: true
+    interested: true
+  openai_codex:
+    enabled: true
+    interested: true
+  claude_code:
+    enabled: true
+    interested: true
+  cursor:
+    enabled: false
+    interested: true
+  copilot_vscode:
+    enabled: false
+    interested: false
+
+sources:
+  chatgpt:
+    provider: chatgpt
+    kind: official_export
+    path: exports/openai
+  claude:
+    provider: claude
+    kind: official_export
+    path: exports/claude
+  openai_codex:
+    provider: openai_codex
+    kind: local_store
+    path: ${USERPROFILE}/.codex
+  claude_code:
+    provider: claude_code
+    kind: local_store
+    path: ${USERPROFILE}/.claude/projects

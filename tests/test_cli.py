@@ -29,16 +29,17 @@ def test_version_flag() -> None:
     assert __version__ in result.stdout
 
 
-def test_stub_commands_exit_successfully() -> None:
-    invocations = [
-        ["ingest-folder", "exports"],
-        ["collect"],
-        ["scan-local"],
-    ]
-    for args in invocations:
-        result = runner.invoke(app, args)
-        assert result.exit_code == 0, f"{args} exited {result.exit_code}"
-        assert "not implemented yet" in result.stdout
+def test_scan_local_stub_exits_successfully() -> None:
+    result = runner.invoke(app, ["scan-local"])
+    assert result.exit_code == 0
+    assert "not implemented yet" in result.stdout
+
+
+def test_ingest_folder_points_at_supported_commands() -> None:
+    result = runner.invoke(app, ["ingest-folder", "exports"])
+    assert result.exit_code == 0
+    assert "superseded" in result.stdout
+    assert "chronicle collect" in result.stdout
 
 
 def test_malformed_argument_fails() -> None:

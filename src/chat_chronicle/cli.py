@@ -18,6 +18,17 @@ from rich.text import Text
 
 from chat_chronicle import __version__
 from chat_chronicle.adapters import chatgpt_export, claude_code, claude_export, openai_codex
+from chat_chronicle.collect import CollectHooks, CollectReport
+from chat_chronicle.collect import collect as run_collect
+from chat_chronicle.config import (
+    ConfigError,
+    default_config,
+    default_config_path,
+    dump_config_yaml,
+    load_config,
+    resolve_db_path,
+    resolve_path,
+)
 from chat_chronicle.db import (
     begin_ingest_run,
     connect,
@@ -25,6 +36,7 @@ from chat_chronicle.db import (
     finish_ingest_run,
     get_or_create_project,
     get_or_create_source,
+    initialize_database,
     mark_source_ingested,
     rebuild_fts,
     record_ingest_failure,
@@ -172,7 +184,7 @@ def ingest(
     ] = "auto",
     db_path: Annotated[
         Path | None,
-        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+        typer.Option(help="SQLite database path. Overrides CHAT_CHRONICLE_DB, config, default."),
     ] = None,
 ) -> None:
     """Ingest one supported source, or sweep a parent directory for sources."""
@@ -183,6 +195,7 @@ def ingest(
             "Use auto, chatgpt, claude, claude_code, or openai_codex."
         )
 
+    db_path = _resolve_effective_db_path(db_path)
     source_path = path.expanduser()
     if not source_path.exists():
         _fail(f"Source path does not exist: {source_path}")
@@ -472,13 +485,195 @@ def ingest_folder(
     path: Annotated[Path, typer.Argument(help="Drop folder to sweep for exports.")],
 ) -> None:
     """Sweep a drop folder for export archives and ingest each one."""
-    _not_implemented("ingest-folder", "WP-1.6")
+    console.print(
+        "[yellow]`chronicle ingest-folder` is superseded[/]: "
+        "use `chronicle ingest <folder>` for a one-off directory sweep, or "
+        "`chronicle collect` to ingest all configured sources."
+    )
 
 
 @app.command()
-def collect() -> None:
-    """Run every enabled source through its adapter."""
-    _not_implemented("collect", "WP-1.6")
+def init(
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            help="Config file path to create. Defaults to .chronicle/config.yaml.",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite an existing config file."),
+    ] = False,
+) -> None:
+    """Create the local .chronicle/, config, DB, and export folder structure."""
+    base_dir = Path.cwd()
+    target_config = config_path.expanduser() if config_path else default_config_path(base_dir)
+    target_config = target_config.resolve()
+
+    config = default_config()
+    created: list[str] = []
+    existing: list[str] = []
+    seen_dirs: set[Path] = set()
+
+    def ensure_dir(path: Path) -> None:
+        _ensure_directory(path, created, existing, seen_dirs)
+
+    # 1. Config file (never clobbered unless --force).
+    ensure_dir(target_config.parent)
+    if target_config.exists() and not force:
+        existing.append(f"{target_config} (config, kept; use --force to overwrite)")
+    else:
+        overwrote = target_config.exists()
+        target_config.write_text(dump_config_yaml(config), encoding="utf-8")
+        created.append(f"{target_config} (config{', overwritten' if overwrote else ''})")
+
+    # 2. Export folders under the configured exports root.
+    exports_root = resolve_path(config.paths.exports_root, base_dir)
+    ensure_dir(exports_root)
+    ensure_dir(exports_root / "openai")
+    ensure_dir(exports_root / "claude")
+
+    # 3. Database: initialize schema only if the DB does not already exist.
+    db_target = resolve_path(config.paths.db, base_dir)
+    ensure_dir(db_target.parent)
+    if db_target.exists():
+        existing.append(f"{db_target} (database, kept)")
+    else:
+        initialize_database(db_target)
+        created.append(f"{db_target} (database, schema initialized)")
+
+    console.print("chronicle init")
+    console.print(f"created: {len(created)}  existing: {len(existing)}")
+    for entry in created:
+        console.print(f"  + {entry}")
+    for entry in existing:
+        console.print(f"  = {entry}")
+
+
+def _ensure_directory(
+    path: Path, created: list[str], existing: list[str], seen: set[Path]
+) -> None:
+    resolved = path.resolve()
+    if resolved in seen:
+        return
+    seen.add(resolved)
+    if resolved.exists():
+        existing.append(f"{resolved} (dir, kept)")
+        return
+    resolved.mkdir(parents=True, exist_ok=True)
+    created.append(f"{resolved} (dir)")
+
+
+@app.command()
+def collect(
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            help="Config file path. Defaults to .chronicle/config.yaml.",
+        ),
+    ] = None,
+    db_path: Annotated[
+        Path | None,
+        typer.Option(help="SQLite database path. Overrides env/config/default."),
+    ] = None,
+) -> None:
+    """Ingest every enabled configured source using accepted adapters."""
+    base_dir = Path.cwd()
+    resolved_config_path = (
+        config_path.expanduser().resolve() if config_path else default_config_path(base_dir)
+    )
+    if not resolved_config_path.exists():
+        _fail(
+            f"No config found at {resolved_config_path}. Run `chronicle init` first "
+            "or pass --config."
+        )
+
+    try:
+        config = load_config(resolved_config_path)
+    except ConfigError as exc:
+        _fail(str(exc))
+
+    effective_db = resolve_db_path(config, cli_db_path=db_path, base_dir=base_dir)
+
+    hooks = CollectHooks(
+        ingest_one=_collect_ingest_one,
+        ingest_directory=_collect_ingest_directory,
+        rebuild_fts=rebuild_fts,
+    )
+    with connect(effective_db) as conn:
+        report = run_collect(conn, config, hooks, base_dir=base_dir)
+
+    _print_collect_report(report, effective_db)
+    if not report.collected:
+        console.print("collect: no sources collected (all missing/skipped).")
+
+
+def _collect_ingest_one(
+    conn: sqlite3.Connection, provider: str, path: Path
+) -> IngestRunSummary:
+    outcome = _ingest_source_with_connection(conn, provider, path)
+    if outcome.status != "success":
+        raise RuntimeError(outcome.error or f"failed to ingest {path}")
+    return outcome.summary
+
+
+def _collect_ingest_directory(
+    conn: sqlite3.Connection, directory: Path
+) -> list[IngestRunSummary]:
+    discovery = _discover_directory_sources(directory, _PROVIDER_AUTO)
+    summaries: list[IngestRunSummary] = []
+    for source in discovery.sources:
+        outcome = _ingest_source_with_connection(conn, source.provider, source.path)
+        if outcome.status != "success":
+            raise RuntimeError(outcome.error or f"failed to ingest {source.path}")
+        summaries.append(outcome.summary)
+    return summaries
+
+
+def _print_collect_report(report: CollectReport, db_path: Path | None) -> None:
+    console.print(f"db path: {_connect_db_display_path(db_path)}")
+
+    table = Table(title="Collect sources")
+    table.add_column("Source")
+    table.add_column("Provider")
+    table.add_column("Kind")
+    table.add_column("Path", overflow="fold")
+    table.add_column("Status")
+    table.add_column("Seen", justify="right")
+    table.add_column("Added", justify="right")
+    table.add_column("Updated", justify="right")
+    table.add_column("Skipped", justify="right")
+    table.add_column("Errors", justify="right")
+    table.add_column("Note", overflow="fold")
+    if report.results:
+        for result in report.results:
+            table.add_row(
+                result.name,
+                result.provider,
+                result.kind,
+                str(result.path),
+                result.status,
+                str(result.seen),
+                str(result.added),
+                str(result.updated),
+                str(result.skipped),
+                str(result.errors),
+                result.note,
+            )
+    else:
+        table.add_row("(none)", "", "", "", "", "0", "0", "0", "0", "0", "")
+    console.print(table)
+
+    console.print(f"sources collected: {len(report.collected)}")
+    console.print(f"total conversations seen: {report.total_seen}")
+    console.print(
+        "total added: "
+        f"{report.total_added}  updated: {report.total_updated}  "
+        f"skipped: {report.total_skipped}"
+    )
+    console.print(f"total parse errors: {report.total_errors}")
 
 
 @app.command("scan-local")
@@ -491,10 +686,11 @@ def scan_local() -> None:
 def stats(
     db_path: Annotated[
         Path | None,
-        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+        typer.Option(help="SQLite database path. Overrides CHAT_CHRONICLE_DB, config, default."),
     ] = None,
 ) -> None:
     """Show per-source counts and the most recent ingest runs."""
+    db_path = _resolve_effective_db_path(db_path)
     display_path = _connect_db_display_path(db_path)
     with connect(db_path) as conn:
         totals = _fetch_totals(conn)
@@ -584,10 +780,11 @@ def recent(
     ] = None,
     db_path: Annotated[
         Path | None,
-        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+        typer.Option(help="SQLite database path. Overrides CHAT_CHRONICLE_DB, config, default."),
     ] = None,
 ) -> None:
     """List the most recently active conversations."""
+    db_path = _resolve_effective_db_path(db_path)
     effective_limit = limit if limit is not None else 10
     try:
         with connect(db_path) as conn:
@@ -649,7 +846,7 @@ def search(
     limit: Annotated[int, typer.Option(help="Maximum number of results.")] = 10,
     db_path: Annotated[
         Path | None,
-        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+        typer.Option(help="SQLite database path. Overrides CHAT_CHRONICLE_DB, config, default."),
     ] = None,
 ) -> None:
     """Search the archive with FTS5 ranking and snippets."""
@@ -658,6 +855,7 @@ def search(
     if limit < 1 or limit > 100:
         _fail("Limit must be between 1 and 100.")
 
+    db_path = _resolve_effective_db_path(db_path)
     try:
         with connect(db_path) as conn:
             results = search_conversations(
@@ -706,10 +904,11 @@ def open_result(
     result_id: Annotated[int, typer.Argument(help="Conversation id from a search result.")],
     db_path: Annotated[
         Path | None,
-        typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
+        typer.Option(help="SQLite database path. Overrides CHAT_CHRONICLE_DB, config, default."),
     ] = None,
 ) -> None:
     """Open a result: deep link for web chats, transcript view otherwise."""
+    db_path = _resolve_effective_db_path(db_path)
     with connect(db_path) as conn:
         detail = get_conversation_detail(conn, result_id)
     if detail is None:
@@ -733,6 +932,30 @@ def open_result(
     if detail.resume_hint:
         console.print(f"resume_hint: {detail.resume_hint}")
     _render_transcript(detail)
+
+
+def _resolve_effective_db_path(cli_db_path: Path | None) -> Path | None:
+    """Resolve the DB path for any command using the WP-1.6 precedence.
+
+    1. CLI ``--db-path``
+    2. ``CHAT_CHRONICLE_DB`` environment variable
+    3. config YAML ``paths.db`` (from ``.chronicle/config.yaml`` if present)
+    4. built-in default (``None`` -> the DB layer applies ``default_db_path``)
+
+    Read commands work without a config file. When one is present it is loaded
+    and validated; a malformed config is surfaced as a clear CLI error so
+    behavior stays coherent with ``chronicle collect``.
+    """
+    base_dir = Path.cwd()
+    config = None
+    if cli_db_path is None and not os.environ.get("CHAT_CHRONICLE_DB"):
+        config_path = default_config_path(base_dir)
+        if config_path.exists():
+            try:
+                config = load_config(config_path)
+            except ConfigError as exc:
+                _fail(str(exc))
+    return resolve_db_path(config, cli_db_path=cli_db_path, base_dir=base_dir)
 
 
 def _connect_db_display_path(db_path: Path | None) -> Path:

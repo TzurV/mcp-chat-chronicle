@@ -25,6 +25,113 @@ poetry install
 poetry run chronicle --help
 ```
 
+## One-command workflow: `init` + `collect`
+
+For routine use, two commands set up and refresh the archive:
+
+```powershell
+poetry run chronicle init
+poetry run chronicle collect
+```
+
+`chronicle init` is the explicit setup step. Package install never creates
+files or folders; `init` does. It creates, if missing:
+
+```text
+.chronicle/
+.chronicle/config.yaml        # generated, git-ignored local config
+.chronicle/chronicle.db       # DB schema is initialized only if the file is new
+exports/
+exports/openai/
+exports/claude/
+```
+
+`init` never overwrites an existing `config.yaml` unless you pass `--force`,
+and never deletes or recreates an existing database. Useful flags:
+
+```powershell
+poetry run chronicle init --config .\.chronicle\config.yaml
+poetry run chronicle init --force
+```
+
+`chronicle collect` reads `.chronicle/config.yaml` and ingests every enabled
+configured source using the same accepted adapters as `chronicle ingest`:
+
+- official export folders (`exports/openai`, `exports/claude`) are swept for
+  all supported child sources;
+- local stores (`%USERPROFILE%\.codex`, `%USERPROFILE%\.claude\projects`) are
+  each ingested as one source.
+
+Missing configured paths are reported and skipped, never fatal. Reruns are
+idempotent — unchanged conversations are skipped, not duplicated. Output shows
+each source's provider/path/status plus aggregate seen/added/updated/skipped/
+errors counts.
+
+```powershell
+poetry run chronicle collect --config .\.chronicle\config.yaml
+poetry run chronicle collect --db-path .\.chronicle\chronicle.db
+```
+
+### Where config lives and what it stores
+
+The tracked template [`chronicle.default.yaml`](chronicle.default.yaml)
+documents the schema (and contains no private absolute paths). `init` copies it
+to a git-ignored local `.chronicle/config.yaml`. The config stores:
+
+- `paths.db` — default database path;
+- `paths.exports_root` — root under which export folders live;
+- `engines.<name>.enabled` / `.interested` — which engines `collect` ingests
+  and which you want supported (interest records intent for the future
+  download helper; it does not change parsing);
+- `sources.<name>` — `provider` / `kind` (`official_export` or `local_store`) /
+  `path` entries.
+
+Path values support `${USERPROFILE}`/`$HOME` environment variables, `~` home
+expansion, and relative paths resolved from the project root.
+
+### DB path precedence
+
+Every command that opens the database (`ingest`, `collect`, `stats`, `search`,
+`recent`, `open`) resolves the database path in this order (highest first):
+
+1. CLI `--db-path`;
+2. `CHAT_CHRONICLE_DB` environment variable;
+3. config YAML `paths.db` (from `.chronicle/config.yaml` when present);
+4. built-in default `.chronicle/chronicle.db`.
+
+Read commands still work without a config file — they fall through to the
+built-in default. When a config file is present it must be valid; a malformed
+config surfaces a clear error rather than silently using the default.
+
+> Cloud chats (ChatGPT, Claude web) still require a manual export/download into
+> `exports/...` before `collect` can ingest them. An automated history-download
+> helper is a future backlog item, not yet scheduled.
+
+### Scheduling recurring collection (optional, Windows Task Scheduler)
+
+There is no background daemon by design. To refresh the archive automatically,
+register a one-line **Windows Task Scheduler** job that runs `chronicle collect`
+on a schedule. This is optional and you run it yourself — Chat Chronicle never
+creates or registers a scheduled task for you.
+
+Daily at 20:00, from your project directory:
+
+```powershell
+schtasks /Create /SC DAILY /ST 20:00 /TN "ChatChronicleCollect" /TR "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\work\Github\mcp-chat-chronicle'; poetry run chronicle collect\""
+```
+
+Adjust the path, time, and frequency (`/SC HOURLY`, `/SC WEEKLY`, ...) to taste.
+Inspect, run, or remove it with:
+
+```powershell
+schtasks /Query /TN "ChatChronicleCollect"
+schtasks /Run   /TN "ChatChronicleCollect"
+schtasks /Delete /TN "ChatChronicleCollect" /F
+```
+
+Because `chronicle collect` is idempotent, running it on a schedule only adds
+new conversations and never duplicates existing rows.
+
 ## Local development database
 
 The database is a local SQLite file. For this repo, keep development databases under the project directory and out of git:
@@ -51,6 +158,8 @@ C:\work\Github\mcp-chat-chronicle\.chronicle\chronicle.db
 ## CLI Surface
 
 ```bash
+chronicle init                                         # create .chronicle/, config, DB, export folders
+chronicle collect                                      # ingest all enabled configured sources
 chronicle ingest path/to/export.zip --provider auto    # ingest one supported source
 chronicle ingest path/to/exports --provider auto       # sweep a parent folder for supported sources
 chronicle stats                                        # counts per source, last runs
@@ -87,10 +196,9 @@ Search is case-insensitive for normal usage. Phrase mode matches the exact word 
 
 `chronicle recent` supports `--provider`, `--since`, `--until`, and `--db-path`. If `-n/--limit` is omitted, it shows up to 10 rows and prints a note explaining how to increase the limit.
 
-The following commands remain planned for later workflow/source-management work:
+The following command remains planned for later source-management work:
 
 ```bash
-chronicle collect                                      # run all enabled sources
 chronicle scan-local                                   # read-only: what exists on this machine?
 ```
 
