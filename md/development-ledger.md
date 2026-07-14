@@ -12,7 +12,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1, WP-1.3.3, WP-1.4.1, WP-1.5, WP-1.6, WP-2.2, WP-2.3, WP-2.3.1, and WP-2.3.2 accepted |
 | Next action | Resume prototype owner smoke across `init`, `scan-local`, `collect`, `stats`, `recent`, `search`, and `open`; then decide whether to schedule MCP recall, Cursor extractor, source-management polish, or release/rename preparation |
 | Current branch | `main` |
-| Last known commit | Pending cleanup commit after WP-1.5 and WP-2.3.2 acceptance |
+| Last known commit | See `git log -1 --oneline` for the current repository head |
 
 ## Work Package Ledger
 
