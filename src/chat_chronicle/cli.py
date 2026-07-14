@@ -7,6 +7,7 @@ import os
 import sqlite3
 import webbrowser
 import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -26,6 +27,7 @@ from chat_chronicle.db import (
     get_or_create_source,
     mark_source_ingested,
     rebuild_fts,
+    record_ingest_failure,
     upsert_conversation,
 )
 from chat_chronicle.models import IngestRunSummary
@@ -62,6 +64,77 @@ _SUPPORTED_PROVIDERS = {
 }
 _CONVERSATIONS_FILENAME = "conversations.json"
 _SPLIT_CONVERSATIONS_GLOB = "conversations-*.json"
+_SKIPPED_DIR_NAMES = frozenset(
+    {
+        ".chronicle",
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "node_modules",
+    }
+)
+_SUPPORTED_HIDDEN_SOURCE_DIRS = frozenset({".claude", ".codex"})
+_SKIPPED_FILE_SUFFIXES = frozenset({".db", ".sqlite", ".sqlite3"})
+
+
+@dataclass(frozen=True)
+class _DiscoveredSource:
+    provider: str
+    path: Path
+
+
+@dataclass
+class _DirectoryDiscovery:
+    sources: list[_DiscoveredSource] = field(default_factory=list)
+    ignored_paths: int = 0
+    incompatible_sources: int = 0
+    ambiguous_sources: int = 0
+
+
+@dataclass
+class _SourceIngestOutcome:
+    provider: str
+    path: Path
+    run_id: int | None
+    summary: IngestRunSummary
+    status: str = "success"
+    error: str | None = None
+
+
+@dataclass
+class _DirectoryIngestOutcome:
+    outcomes: list[_SourceIngestOutcome] = field(default_factory=list)
+
+    @property
+    def successes(self) -> list[_SourceIngestOutcome]:
+        return [outcome for outcome in self.outcomes if outcome.status == "success"]
+
+    @property
+    def failures(self) -> list[_SourceIngestOutcome]:
+        return [outcome for outcome in self.outcomes if outcome.status != "success"]
+
+    @property
+    def total_seen(self) -> int:
+        return sum(outcome.summary.conversations_seen for outcome in self.successes)
+
+    @property
+    def total_added(self) -> int:
+        return sum(outcome.summary.added for outcome in self.successes)
+
+    @property
+    def total_updated(self) -> int:
+        return sum(outcome.summary.updated for outcome in self.successes)
+
+    @property
+    def total_skipped(self) -> int:
+        return sum(outcome.summary.skipped for outcome in self.successes)
+
+    @property
+    def total_errors(self) -> int:
+        return sum(len(outcome.summary.errors) for outcome in self.successes)
 
 
 def _not_implemented(command: str, work_package: str) -> None:
@@ -102,7 +175,7 @@ def ingest(
         typer.Option(help="SQLite database path. Defaults to CHAT_CHRONICLE_DB or .chronicle."),
     ] = None,
 ) -> None:
-    """Ingest a single official export or supported local session source."""
+    """Ingest one supported source, or sweep a parent directory for sources."""
     requested_provider = provider.lower()
     if requested_provider not in _SUPPORTED_PROVIDERS:
         _fail(
@@ -115,27 +188,99 @@ def ingest(
         _fail(f"Source path does not exist: {source_path}")
     resolved_source = source_path.resolve()
 
-    effective_provider = (
-        _detect_provider(resolved_source)
-        if requested_provider == _PROVIDER_AUTO
-        else requested_provider
-    )
+    if resolved_source.is_dir():
+        single_provider = _single_source_provider(resolved_source, requested_provider)
+        if single_provider is None:
+            _ingest_directory(resolved_source, requested_provider, db_path)
+            return
+        effective_provider = single_provider
+    else:
+        effective_provider = (
+            _detect_provider(resolved_source)
+            if requested_provider == _PROVIDER_AUTO
+            else requested_provider
+        )
+
+    outcome = _ingest_one_source(effective_provider, resolved_source, db_path)
+    if outcome.status != "success":
+        _fail(outcome.error or f"Failed to ingest source: {resolved_source}")
+
+    _print_single_ingest_summary(outcome, db_path)
+
+
+def _single_source_provider(path: Path, requested_provider: str) -> str | None:
+    candidates = _detect_provider_candidates(path)
+    if requested_provider == _PROVIDER_AUTO:
+        unique = sorted(set(candidates))
+        if len(unique) == 1:
+            return unique[0]
+        if len(unique) > 1:
+            _fail(f"Ambiguous provider detection for {path}: {', '.join(unique)}")
+        return None
+    if requested_provider in candidates:
+        return requested_provider
+    return None
+
+
+def _ingest_directory(parent: Path, requested_provider: str, db_path: Path | None) -> None:
+    discovery = _discover_directory_sources(parent, requested_provider)
+    if not discovery.sources:
+        details: list[str] = []
+        if discovery.incompatible_sources:
+            details.append(f"{discovery.incompatible_sources} incompatible source(s)")
+        if discovery.ambiguous_sources:
+            details.append(f"{discovery.ambiguous_sources} ambiguous source(s)")
+        if discovery.ignored_paths:
+            details.append(f"{discovery.ignored_paths} ignored path(s)")
+        suffix = f" ({', '.join(details)})" if details else ""
+        _fail(f"No supported sources found in directory: {parent}{suffix}")
+
+    aggregate = _DirectoryIngestOutcome()
+    with connect(db_path) as conn:
+        for source in discovery.sources:
+            aggregate.outcomes.append(
+                _ingest_source_with_connection(conn, source.provider, source.path)
+            )
+        if aggregate.successes:
+            rebuild_fts(conn)
+
+    _print_directory_ingest_summary(parent, discovery, aggregate, db_path)
+    if not aggregate.successes:
+        _fail("No sources were ingested successfully.")
+
+
+def _ingest_one_source(
+    provider: str,
+    source_path: Path,
+    db_path: Path | None,
+) -> _SourceIngestOutcome:
+    with connect(db_path) as conn:
+        outcome = _ingest_source_with_connection(conn, provider, source_path)
+        if outcome.status == "success":
+            rebuild_fts(conn)
+        return outcome
+
+
+def _ingest_source_with_connection(
+    conn: sqlite3.Connection,
+    provider: str,
+    source_path: Path,
+) -> _SourceIngestOutcome:
+    effective_provider = provider
     source_type = (
         "local_store"
         if effective_provider in {_PROVIDER_OPENAI_CODEX, _PROVIDER_CLAUDE_CODE}
         else "official_export"
     )
-
-    with connect(db_path) as conn:
-        source_id = get_or_create_source(
-            conn,
-            source_type=source_type,
-            provider=effective_provider,
-            path_or_config=str(resolved_source),
-        )
-        run_id = begin_ingest_run(conn, source_id)
-
-        result = _load_conversations(effective_provider, resolved_source)
+    source_id = get_or_create_source(
+        conn,
+        source_type=source_type,
+        provider=effective_provider,
+        path_or_config=str(source_path),
+    )
+    run_id = begin_ingest_run(conn, source_id)
+    try:
+        result = _load_conversations(effective_provider, source_path)
         errors = _serializable_errors(result.errors)
         summary = IngestRunSummary(
             conversations_seen=len(result.conversations),
@@ -154,17 +299,172 @@ def ingest(
 
         finish_ingest_run(conn, run_id, summary)
         mark_source_ingested(conn, source_id)
-        rebuild_fts(conn)
+        return _SourceIngestOutcome(
+            provider=effective_provider,
+            path=source_path,
+            run_id=run_id,
+            summary=summary,
+        )
+    except Exception as exc:
+        error = {"error": type(exc).__name__, "detail": str(exc)}
+        record_ingest_failure(conn, run_id, [error])
+        return _SourceIngestOutcome(
+            provider=effective_provider,
+            path=source_path,
+            run_id=run_id,
+            summary=IngestRunSummary(errors=[error]),
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
-    console.print(f"provider: {effective_provider}")
+
+def _print_single_ingest_summary(
+    outcome: _SourceIngestOutcome,
+    db_path: Path | None,
+) -> None:
+    summary = outcome.summary
+    console.print(f"provider: {outcome.provider}")
     console.print(f"db path: {_connect_db_display_path(db_path)}")
-    console.print(f"source path: {resolved_source}")
+    console.print(f"source path: {outcome.path}")
     console.print(f"conversations seen: {summary.conversations_seen}")
     console.print(
         f"added: {summary.added}  updated: {summary.updated}  skipped: {summary.skipped}"
     )
     console.print(f"parse errors: {len(summary.errors)}")
-    console.print(f"ingest run id: {run_id}")
+    console.print(f"ingest run id: {outcome.run_id}")
+
+
+def _print_directory_ingest_summary(
+    parent: Path,
+    discovery: _DirectoryDiscovery,
+    aggregate: _DirectoryIngestOutcome,
+    db_path: Path | None,
+) -> None:
+    console.print(f"db path: {_connect_db_display_path(db_path)}")
+    console.print(f"parent source directory: {parent}")
+    console.print(f"discovered supported sources: {len(discovery.sources)}")
+    for source in discovery.sources:
+        console.print(f"source: {source.provider} {source.path}")
+    if discovery.incompatible_sources:
+        console.print(f"skipped incompatible sources: {discovery.incompatible_sources}")
+    if discovery.ambiguous_sources:
+        console.print(f"skipped ambiguous sources: {discovery.ambiguous_sources}")
+    console.print(f"ignored unsupported paths: {discovery.ignored_paths}")
+    console.print(f"total conversations seen: {aggregate.total_seen}")
+    console.print(
+        "total added: "
+        f"{aggregate.total_added}  updated: {aggregate.total_updated}  "
+        f"skipped: {aggregate.total_skipped}"
+    )
+    console.print(f"total parse errors: {aggregate.total_errors}")
+    run_ids = [str(outcome.run_id) for outcome in aggregate.successes if outcome.run_id is not None]
+    console.print(f"ingest run ids: {', '.join(run_ids) if run_ids else '(none)'}")
+    if aggregate.failures:
+        console.print(f"failed sources: {len(aggregate.failures)}")
+        for outcome in aggregate.failures:
+            console.print(f"failed source: {outcome.provider} {outcome.path} ({outcome.error})")
+
+
+def _discover_directory_sources(parent: Path, requested_provider: str) -> _DirectoryDiscovery:
+    discovery = _DirectoryDiscovery()
+    discovered_by_path: dict[Path, _DiscoveredSource] = {}
+    roots: list[Path] = [parent]
+
+    while roots:
+        current = roots.pop(0)
+        children = _sorted_children(current)
+        for child in children:
+            if child.is_dir():
+                if _should_skip_directory(child):
+                    discovery.ignored_paths += 1
+                    continue
+
+                candidates = _detect_provider_candidates(child)
+                accepted = _source_from_candidates(
+                    child,
+                    candidates,
+                    requested_provider,
+                    discovery,
+                )
+                if accepted is not None:
+                    discovered_by_path.setdefault(accepted.path, accepted)
+                    continue
+                if candidates:
+                    continue
+
+                roots.append(child)
+                roots.sort(key=_path_sort_key)
+                continue
+
+            if not child.is_file():
+                discovery.ignored_paths += 1
+                continue
+            if _should_skip_file(child):
+                discovery.ignored_paths += 1
+                continue
+
+            candidates = _detect_provider_candidates(child)
+            accepted = _source_from_candidates(child, candidates, requested_provider, discovery)
+            if accepted is not None:
+                discovered_by_path.setdefault(accepted.path, accepted)
+            elif not candidates:
+                discovery.ignored_paths += 1
+
+    discovery.sources = [
+        discovered_by_path[path] for path in sorted(discovered_by_path, key=_path_sort_key)
+    ]
+    return discovery
+
+
+def _source_from_candidates(
+    path: Path,
+    candidates: list[str],
+    requested_provider: str,
+    discovery: _DirectoryDiscovery,
+) -> _DiscoveredSource | None:
+    if not candidates:
+        return None
+
+    unique = sorted(set(candidates))
+    if requested_provider == _PROVIDER_AUTO:
+        if len(unique) == 1:
+            return _DiscoveredSource(provider=unique[0], path=path.resolve())
+        discovery.ambiguous_sources += 1
+        return None
+
+    if requested_provider in unique:
+        return _DiscoveredSource(provider=requested_provider, path=path.resolve())
+
+    discovery.incompatible_sources += 1
+    return None
+
+
+def _sorted_children(path: Path) -> list[Path]:
+    try:
+        return sorted(path.iterdir(), key=_path_sort_key)
+    except OSError:
+        return []
+
+
+def _path_sort_key(path: Path) -> str:
+    return str(path.resolve(strict=False)).casefold()
+
+
+def _should_skip_directory(path: Path) -> bool:
+    name = path.name
+    lower = name.lower()
+    if lower in _SKIPPED_DIR_NAMES:
+        return True
+    if name.startswith(".") and lower not in _SUPPORTED_HIDDEN_SOURCE_DIRS:
+        return True
+    return False
+
+
+def _should_skip_file(path: Path) -> bool:
+    lower_name = path.name.lower()
+    if lower_name.startswith("."):
+        return True
+    return path.suffix.lower() in _SKIPPED_FILE_SUFFIXES
 
 
 @app.command("ingest-folder")
@@ -506,6 +806,20 @@ def _open_url_in_browser(url: str) -> bool:
 
 
 def _detect_provider(path: Path) -> str:
+    unique = sorted(set(_detect_provider_candidates(path)))
+    if len(unique) == 1:
+        return unique[0]
+    if len(unique) > 1:
+        _fail(f"Ambiguous provider detection for {path}: {', '.join(unique)}")
+    _fail(
+        f"Unsupported source format for {path}. "
+        "Expected ChatGPT/Claude conversations.json, OpenAI Codex JSONL sessions, "
+        "or Claude Code JSONL sessions."
+    )
+    raise AssertionError("unreachable")
+
+
+def _detect_provider_candidates(path: Path) -> list[str]:
     detected: list[str] = []
     if _looks_like_codex_source(path):
         detected.append(_PROVIDER_OPENAI_CODEX)
@@ -519,17 +833,7 @@ def _detect_provider(path: Path) -> str:
         if _looks_like_claude_export(conversations_json):
             detected.append(_PROVIDER_CLAUDE)
 
-    unique = sorted(set(detected))
-    if len(unique) == 1:
-        return unique[0]
-    if len(unique) > 1:
-        _fail(f"Ambiguous provider detection for {path}: {', '.join(unique)}")
-    _fail(
-        f"Unsupported source format for {path}. "
-        "Expected ChatGPT/Claude conversations.json, OpenAI Codex JSONL sessions, "
-        "or Claude Code JSONL sessions."
-    )
-    raise AssertionError("unreachable")
+    return detected
 
 
 def _load_conversations_json_for_detection(path: Path) -> object | None:
@@ -650,7 +954,7 @@ def _looks_like_claude_code_source(path: Path) -> bool:
         for candidate in path.glob("*.jsonl")
     ):
         return True
-    sample_files = sorted(path.rglob("*.jsonl"))[:10]
+    sample_files = sorted(path.glob("*.jsonl"))[:10]
     if any(_jsonl_has_claude_code_signature(candidate) for candidate in sample_files):
         return True
     return False

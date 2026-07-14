@@ -33,6 +33,15 @@ def _invoke_ingest(source: Path, db_path: Path, provider: str = "auto"):
     )
 
 
+def _copy_fixture(source: Path, destination: Path) -> Path:
+    if source.is_dir():
+        shutil.copytree(source, destination)
+    else:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+    return destination
+
+
 def _count_rows(db_path: Path, table: str) -> int:
     with connect(db_path) as conn:
         return int(conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
@@ -41,6 +50,13 @@ def _count_rows(db_path: Path, table: str) -> int:
 def _single_value(db_path: Path, sql: str):
     with connect(db_path) as conn:
         return conn.execute(sql).fetchone()[0]
+
+
+def _source_rows(db_path: Path):
+    with connect(db_path) as conn:
+        return conn.execute(
+            "SELECT provider, path_or_config FROM sources ORDER BY id"
+        ).fetchall()
 
 
 def test_ingest_auto_detects_chatgpt_and_inserts_conversations_and_messages(
@@ -123,6 +139,165 @@ def test_ingest_auto_detects_openai_codex_home_directory(tmp_path: Path) -> None
 
     assert result.exit_code == 0, result.stdout
     assert "provider: openai_codex" in result.stdout
+
+
+def test_directory_sweep_auto_ingests_multiple_supported_child_sources(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    parent = tmp_path / "exports"
+    parent.mkdir()
+    _copy_fixture(FIXTURES / "chatgpt" / "minimal", parent / "a-chatgpt-export")
+    _copy_fixture(FIXTURES / "claude" / "minimal", parent / "b-claude-export")
+    _copy_fixture(
+        FIXTURES / "openai_codex" / "minimal" / "rollout-minimal.jsonl",
+        parent / "c-codex" / "rollout-minimal.jsonl",
+    )
+
+    result = _invoke_ingest(parent, db_path)
+
+    assert result.exit_code == 0, result.stdout
+    assert "parent source directory:" in result.stdout
+    assert "discovered supported sources: 3" in result.stdout
+    assert "source: chatgpt" in result.stdout
+    assert "source: claude" in result.stdout
+    assert "source: openai_codex" in result.stdout
+    assert "total conversations seen: 3" in result.stdout
+    assert "total added: 3  updated: 0  skipped: 0" in result.stdout
+    assert _count_rows(db_path, "sources") == 3
+    assert _count_rows(db_path, "conversations") == 3
+    assert _count_rows(db_path, "messages") == 6
+
+
+def test_directory_sweep_preserves_single_source_directory_behavior(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    source = _copy_fixture(FIXTURES / "chatgpt" / "minimal", tmp_path / "chatgpt-export")
+    (source / "ignored.txt").write_text("not part of the export", encoding="utf-8")
+
+    result = _invoke_ingest(source, db_path)
+
+    assert result.exit_code == 0, result.stdout
+    assert "provider: chatgpt" in result.stdout
+    assert "source path:" in result.stdout
+    assert "parent source directory:" not in result.stdout
+    assert _count_rows(db_path, "sources") == 1
+    rows = _source_rows(db_path)
+    assert rows[0]["path_or_config"] == str(source.resolve())
+
+
+def test_directory_sweep_orders_discovered_sources_by_resolved_path(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    parent = tmp_path / "exports"
+    parent.mkdir()
+    _copy_fixture(FIXTURES / "claude" / "minimal", parent / "z-claude-export")
+    _copy_fixture(FIXTURES / "chatgpt" / "minimal", parent / "a-chatgpt-export")
+
+    result = _invoke_ingest(parent, db_path)
+
+    assert result.exit_code == 0, result.stdout
+    rows = _source_rows(db_path)
+    assert [row["provider"] for row in rows] == ["chatgpt", "claude"]
+    assert [row["path_or_config"] for row in rows] == sorted(
+        row["path_or_config"] for row in rows
+    )
+
+
+def test_directory_sweep_ignores_unsupported_files_when_supported_sources_exist(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    parent = tmp_path / "exports"
+    parent.mkdir()
+    _copy_fixture(FIXTURES / "chatgpt" / "minimal", parent / "chatgpt-export")
+    (parent / "notes.txt").write_text("not an export", encoding="utf-8")
+    (parent / "chronicle.db").write_text("private sqlite placeholder", encoding="utf-8")
+
+    result = _invoke_ingest(parent, db_path)
+
+    assert result.exit_code == 0, result.stdout
+    assert "discovered supported sources: 1" in result.stdout
+    assert "ignored unsupported paths: 2" in result.stdout
+    assert _count_rows(db_path, "conversations") == 1
+
+
+def test_directory_sweep_no_supported_sources_exits_nonzero(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    parent = tmp_path / "exports"
+    parent.mkdir()
+    (parent / "notes.txt").write_text("not an export", encoding="utf-8")
+
+    result = _invoke_ingest(parent, db_path)
+
+    assert result.exit_code != 0
+    assert "No supported sources found in directory" in result.stderr
+    assert not db_path.exists()
+
+
+def test_directory_sweep_explicit_provider_ingests_only_compatible_sources(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    parent = tmp_path / "exports"
+    parent.mkdir()
+    _copy_fixture(FIXTURES / "chatgpt" / "minimal", parent / "a-chatgpt-export")
+    _copy_fixture(FIXTURES / "claude" / "minimal", parent / "b-claude-export")
+
+    result = _invoke_ingest(parent, db_path, provider="claude")
+
+    assert result.exit_code == 0, result.stdout
+    assert "discovered supported sources: 1" in result.stdout
+    assert "skipped incompatible sources: 1" in result.stdout
+    assert "source: claude" in result.stdout
+    assert "source: chatgpt" not in result.stdout
+    rows = _source_rows(db_path)
+    assert [row["provider"] for row in rows] == ["claude"]
+    assert _count_rows(db_path, "conversations") == 1
+
+
+def test_directory_sweep_rerun_is_idempotent_without_duplicate_rows(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    parent = tmp_path / "exports"
+    parent.mkdir()
+    _copy_fixture(FIXTURES / "chatgpt" / "minimal", parent / "a-chatgpt-export")
+    _copy_fixture(FIXTURES / "claude" / "minimal", parent / "b-claude-export")
+
+    first = _invoke_ingest(parent, db_path)
+    second = _invoke_ingest(parent, db_path)
+
+    assert first.exit_code == 0, first.stdout
+    assert second.exit_code == 0, second.stdout
+    assert "total added: 0  updated: 0  skipped: 2" in second.stdout
+    assert _count_rows(db_path, "sources") == 2
+    assert _count_rows(db_path, "conversations") == 2
+    assert _count_rows(db_path, "messages") == 4
+    assert _count_rows(db_path, "ingest_runs") == 4
+
+
+def test_stats_remains_coherent_after_directory_sweep(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    parent = tmp_path / "exports"
+    parent.mkdir()
+    _copy_fixture(FIXTURES / "chatgpt" / "minimal", parent / "a-chatgpt-export")
+    _copy_fixture(FIXTURES / "claude" / "minimal", parent / "b-claude-export")
+    ingest_result = _invoke_ingest(parent, db_path)
+    assert ingest_result.exit_code == 0, ingest_result.stdout
+
+    result = runner.invoke(app, ["stats", "--db-path", str(db_path)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "total conversations: 2" in result.stdout
+    assert "total messages: 4" in result.stdout
+    assert "chatgpt" in result.stdout
+    assert "claude" in result.stdout
+    assert "Recent ingest runs" in result.stdout
 
 
 @pytest.mark.parametrize(

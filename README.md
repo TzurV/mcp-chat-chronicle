@@ -2,7 +2,7 @@
 
 *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-> **Status: M1 in progress.** The local DB, official export importers, local coding-agent extractors, ingest, stats, search, open, and recent-activity CLI paths are implemented. Claude project metadata linking remains a known follow-up. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
+> **Status: M1 in progress.** The local DB, official export importers, local coding-agent extractors, single-source and parent-folder ingest, stats, search, open, and recent-activity CLI paths are implemented. Claude project metadata linking remains a known follow-up. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
 
 ## Why
 
@@ -52,11 +52,29 @@ C:\work\Github\mcp-chat-chronicle\.chronicle\chronicle.db
 
 ```bash
 chronicle ingest path/to/export.zip --provider auto    # ingest one supported source
+chronicle ingest path/to/exports --provider auto       # sweep a parent folder for supported sources
 chronicle stats                                        # counts per source, last runs
 chronicle search "docker network"                      # FTS5, ranked, snippets
 chronicle search --phrase "YOU are the MANAGER"        # exact phrase search
 chronicle open <result-id>                             # deep link or transcript view
 chronicle recent -n 20                                 # recent active chats by last activity date
+```
+
+`chronicle ingest` accepts either a single supported source or a parent directory. A parent directory is scanned for supported child sources such as ChatGPT/OpenAI exports, Claude exports, OpenAI Codex local JSONL sessions, and Claude Code project JSONL sessions. Directories that are already valid single sources, such as `$env:USERPROFILE\.codex` or `$env:USERPROFILE\.claude\projects`, still ingest as one source rather than being expanded file by file.
+
+Example parent-folder ingest:
+
+```powershell
+poetry run chronicle ingest .\exports --provider auto --db-path .\.chronicle\chronicle.db
+```
+
+Re-running the same command is expected to be idempotent: existing conversations should be skipped rather than duplicated.
+
+Example Claude export smoke test:
+
+```powershell
+poetry run chronicle ingest .\exports\claude --provider claude --db-path .\.chronicle\chronicle.db
+poetry run chronicle recent -n 10 --provider claude --db-path .\.chronicle\chronicle.db
 ```
 
 `chronicle search` uses broad FTS5 token search by default. For an exact phrase such as `YOU are the MANAGER`, use:
@@ -72,7 +90,6 @@ Search is case-insensitive for normal usage. Phrase mode matches the exact word 
 The following commands remain planned for later workflow/source-management work:
 
 ```bash
-chronicle ingest-folder path/to/exports                # sweep a drop folder
 chronicle collect                                      # run all enabled sources
 chronicle scan-local                                   # read-only: what exists on this machine?
 ```
