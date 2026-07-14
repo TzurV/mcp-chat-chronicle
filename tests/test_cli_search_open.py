@@ -41,6 +41,10 @@ def _conversation_id(db_path: Path, provider: str) -> int:
         )
 
 
+def _plain_result_lines(output: str) -> list[str]:
+    return [line for line in output.splitlines() if line.startswith("result ")]
+
+
 def _insert_search_conversation(
     db_path: Path,
     provider_conv_id: str,
@@ -90,6 +94,7 @@ def test_search_finds_terms_from_ingested_chatgpt_claude_and_codex_fixtures(
     assert "Docker networking notes" in chatgpt.stdout
     assert "chronicle open" in chatgpt.stdout
     assert "docker bridge network" in chatgpt.stdout
+    assert _plain_result_lines(chatgpt.stdout) == []
     assert claude.exit_code == 0, claude.stdout
     assert "claude" in claude.stdout
     assert "SQLite FTS5 ranking" in claude.stdout
@@ -111,6 +116,22 @@ def test_search_no_results_and_empty_database_exit_zero(tmp_path: Path) -> None:
     no_match = runner.invoke(app, ["search", "zzznomatch", "--db-path", str(db_path)])
     assert no_match.exit_code == 0, no_match.stdout
     assert "No results" in no_match.stdout
+
+
+def test_search_cli_does_not_print_duplicate_plain_result_rows(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    _insert_search_conversation(
+        db_path,
+        "cli-no-plain-row",
+        "docker search table output",
+        title="Search output row",
+    )
+
+    result = runner.invoke(app, ["search", "docker", "--db-path", str(db_path)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "Search results" in result.stdout
+    assert _plain_result_lines(result.stdout) == []
 
 
 def test_search_cli_filters_and_limit_validation(tmp_path: Path) -> None:
@@ -301,6 +322,7 @@ def test_recent_cli_lists_url_and_local_rows_with_filters(tmp_path: Path) -> Non
     assert "rollout-minimal." in all_recent.stdout
     assert "jsonl" in all_recent.stdout
     assert all_recent.stdout.index("chatgpt") < all_recent.stdout.index("openai_codex")
+    assert _plain_result_lines(all_recent.stdout) == []
     assert "recent " not in all_recent.stdout
     assert "default maximum is 10" not in all_recent.stdout
 

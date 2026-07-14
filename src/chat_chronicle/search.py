@@ -369,7 +369,7 @@ def _search_phrase_conversations(
             END AS rank
         FROM conversations AS c
         WHERE {" AND ".join(clauses)}
-        ORDER BY rank ASC, c.id ASC
+        ORDER BY rank ASC, updated_at DESC, c.id DESC
         LIMIT ?
         """,
         params,

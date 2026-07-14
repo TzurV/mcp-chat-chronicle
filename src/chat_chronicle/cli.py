@@ -398,15 +398,6 @@ def search(
             Text(_open_hint(result)),
         )
     console.print(table)
-    for result in results:
-        console.print(
-            Text(
-                "result "
-                f"{result.conversation_id} | {_result_date(result)} | "
-                f"{result.provider} | {result.title or '(untitled)'} | "
-                f"{result.snippet} | {_open_hint(result)}"
-            )
-        )
     _print_broad_search_hint(query, phrase=phrase)
 
 

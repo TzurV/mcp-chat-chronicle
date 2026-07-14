@@ -166,6 +166,7 @@ def test_phrase_search_supports_provider_and_limit(tmp_path: Path) -> None:
                 "phrase-first",
                 "exact provider phrase",
                 provider="openai_codex",
+                updated_at=datetime(2026, 1, 2, 12, 0, tzinfo=UTC),
                 url=None,
             ),
         )
@@ -176,6 +177,7 @@ def test_phrase_search_supports_provider_and_limit(tmp_path: Path) -> None:
                 "phrase-second",
                 "exact provider phrase",
                 provider="openai_codex",
+                updated_at=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
                 url=None,
             ),
         )
@@ -249,6 +251,7 @@ def test_phrase_search_title_matches_rank_above_body_matches(tmp_path: Path) -> 
                 "body-phrase",
                 "the body contains title phrase target",
                 title="Later body match",
+                updated_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
             ),
         )
         title_match = upsert_conversation(
@@ -258,6 +261,7 @@ def test_phrase_search_title_matches_rank_above_body_matches(tmp_path: Path) -> 
                 "title-phrase",
                 "body has only filler text",
                 title="Title Phrase Target",
+                updated_at=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
             ),
         )
         rebuild_fts(conn)
@@ -269,6 +273,69 @@ def test_phrase_search_title_matches_rank_above_body_matches(tmp_path: Path) -> 
         body_match.conversation_id,
     ]
     assert results[0].rank < results[1].rank
+
+
+def test_body_only_phrase_matches_sort_by_last_activity_descending(
+    tmp_path: Path,
+) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        older = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "body-older",
+                "body only exact phrase",
+                updated_at=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
+            ),
+        )
+        newest = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "body-newest",
+                "body only exact phrase",
+                updated_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+            ),
+        )
+        created_only = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "body-created-only",
+                "body only exact phrase",
+                updated_at=datetime(2026, 2, 1, 12, 0, tzinfo=UTC),
+                set_updated_at=False,
+            ),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "body only exact phrase", phrase=True)
+
+    assert [result.conversation_id for result in results] == [
+        newest.conversation_id,
+        created_only.conversation_id,
+        older.conversation_id,
+    ]
+
+
+def test_body_only_phrase_timestamp_ties_sort_by_id_descending(tmp_path: Path) -> None:
+    timestamp = datetime(2026, 4, 1, 12, 0, tzinfo=UTC)
+    with connect(tmp_path / "chronicle.db") as conn:
+        older_id = upsert_conversation(
+            conn,
+            None,
+            _conversation("tie-older", "tied exact phrase", updated_at=timestamp),
+        ).conversation_id
+        newer_id = upsert_conversation(
+            conn,
+            None,
+            _conversation("tie-newer", "tied exact phrase", updated_at=timestamp),
+        ).conversation_id
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "tied exact phrase", phrase=True)
+
+    assert [result.conversation_id for result in results] == [newer_id, older_id]
 
 
 def test_phrase_search_handles_embedded_quotes(tmp_path: Path) -> None:
