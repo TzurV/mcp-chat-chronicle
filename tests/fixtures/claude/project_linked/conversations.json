@@ -1,0 +1,23 @@
+[
+  {
+    "uuid": "conv-project-linked-1",
+    "name": "Linked Claude project chat",
+    "project_uuid": "project-linked-uuid",
+    "created_at": "2026-07-01T10:00:00Z",
+    "updated_at": "2026-07-01T10:05:00Z",
+    "chat_messages": [
+      {
+        "uuid": "msg-project-linked-human",
+        "sender": "human",
+        "created_at": "2026-07-01T10:00:00Z",
+        "text": "How should the command panel state be stored?"
+      },
+      {
+        "uuid": "msg-project-linked-assistant",
+        "sender": "assistant",
+        "created_at": "2026-07-01T10:05:00Z",
+        "text": "Keep the selected command and panel filters in local state."
+      }
+    ]
+  }
+]

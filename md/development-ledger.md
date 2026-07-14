@@ -8,11 +8,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | --- | --- |
 | Date | 2026-07-14 |
 | Phase | M1 in progress |
-| Last accepted work package | WP-1.4.1 Directory ingest sweep |
-| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1, WP-1.4.1, WP-2.2, WP-2.3, and WP-2.3.1 accepted; WP-1.3.3 handoff ready |
-| Next action | Run WP-1.3.3 when the goal is Claude project metadata searchability, or run owner smoke for WP-1.4.1 against `.\exports` |
+| Last accepted work package | WP-1.3.3 Claude export project metadata linking |
+| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1, WP-1.3.3, WP-1.4.1, WP-2.2, WP-2.3, and WP-2.3.1 accepted; WP-1.5/WP-1.6 scope updated for config, scan-local, and collect |
+| Next action | Prepare WP-1.5/WP-1.6 handoff for source inventory, YAML defaults, init, and collect |
 | Current branch | `main` |
-| Last known commit | `1f507bc Polish search result UX` |
+| Last known commit | `077ad1c Add directory ingest sweep` |
 
 ## Work Package Ledger
 
@@ -25,7 +25,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-1.3 | Claude export importer | Accepted | `md/handoffs/WP-1.3-claude-export-importer.md` | `md/handoffs/reports/WP-1.3-completion-report.md` | `md/handoffs/reports/WP-1.3-validation-review.md` | Concrete importer accepted with synthetic fixtures; no adapter base introduced. Real export verification remains a follow-up. |
 | WP-1.3.1 | Claude real export content-block correction | Accepted | `md/handoffs/WP-1.3.1-claude-real-export-content-blocks.md` | `md/handoffs/reports/WP-1.3.1-completion-report.md` | `md/handoffs/reports/WP-1.3.1-validation-review.md` | Known Claude metadata blocks (`thinking`, `tool_use`, `tool_result`) now skip without noisy parse errors. |
 | WP-1.3.2 | OpenAI Codex local extractor | Accepted | `md/handoffs/WP-1.3.2-openai-codex-local-extractor.md` | `md/handoffs/reports/WP-1.3.2-completion-report.md` | `md/handoffs/reports/WP-1.3.2-validation-review.md` | Concrete Class B extractor accepted for local Codex JSONL sessions. |
-| WP-1.3.3 | Claude export project metadata linking | Handoff ready | `md/handoffs/WP-1.3.3-claude-project-metadata-linking.md` | `md/handoffs/reports/WP-1.3.3-completion-report.md` | Pending | Follow-up from real Claude export: project metadata such as `CAR GUI` is not indexed/searchable unless linked to conversations. |
+| WP-1.3.3 | Claude export project metadata linking | Accepted | `md/handoffs/WP-1.3.3-claude-project-metadata-linking.md` | `md/handoffs/reports/WP-1.3.3-completion-report.md` | `md/handoffs/reports/WP-1.3.3-validation-review.md` | Project metadata is parsed and linked/searchable when the export provides exact project UUID references. Owner real export has 30 project rows, including `CAR GUI`, but no reliable conversation project key, so no guessed links are created. |
 | WP-1.4 | CLI ingest + stats | Accepted | `md/handoffs/WP-1.4-cli-ingest-stats.md` | `md/handoffs/reports/WP-1.4-completion-report.md` | `md/handoffs/reports/WP-1.4-validation-review.md` | `chronicle ingest` and `chronicle stats` accepted for ChatGPT, Claude, and OpenAI Codex sources. |
 | WP-1.4.1 | Directory ingest sweep | Accepted | `md/handoffs/WP-1.4.1-directory-ingest-sweep.md` | `md/handoffs/reports/WP-1.4.1-completion-report.md` | `md/handoffs/reports/WP-1.4.1-validation-review.md` | Adds parent-folder ingestion to `chronicle ingest <directory>` while preserving existing single-source directory behavior for `.codex`, `.claude\projects`, and provider export directories. |
 | CO-1 | Schema migration + link-back touch-ups | Accepted | `md/handoffs/CO-1-schema-link-back-migration.md` | `md/handoffs/reports/CO-1-completion-report.md` | `md/handoffs/reports/CO-1-validation-review.md` | Schema v2 accepted with `projects`, `origin_path`, `resume_hint`, `manual_entry`, link-back persistence, and source uniqueness hardening. |
@@ -36,8 +36,8 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-3.1 | Claude Code extractor | Accepted | `md/handoffs/WP-3.1-claude-code-extractor.md` | `md/handoffs/reports/WP-3.1-completion-report.md` | `md/handoffs/reports/WP-3.1-validation-review.md` | Accepted with WP-3.1.1 addendum. Concrete `claude_code` extractor, ingest wiring, project/link-back fields, synthetic fixtures, memo, and CLI smoke complete. |
 | WP-3.1.1 | Claude Code RS-2 format hardening | Accepted | `md/handoffs/WP-3.1.1-claude-code-rs2-format-hardening.md` | `md/handoffs/reports/WP-3.1.1-completion-report.md` | `md/handoffs/reports/WP-3.1.1-validation-review.md` | File-scoped Claude Code identity, `ai-title`, seven record types, `uuid`/`parentUuid`, sidechain, and same-session multi-file fixtures accepted. No broader RS-2 backlog scope approved. |
 | Prototype | Real-history search demo | Planned | Pending | Pending | Pending | Search real Claude Code history plus at least one ingested export end-to-end. |
-| WP-1.6 | collect + folder workflow + scheduling docs | Deferred until after prototype | Pending | Pending | Pending | Broader source workflow remains deferred; WP-1.4.1 covers only one-command directory sweep for existing `chronicle ingest`. |
-| WP-1.5 | scan-local read-only discovery | Not on prototype path | Pending | Pending | Pending | Can be planned independently, but should not import or parse source contents. |
+| WP-1.5 | scan-local source inventory | Planned | Pending | Pending | Pending | Read-only discovery of configured/default histories: exports root, OpenAI/Claude export folders, OpenAI Codex local store, Claude Code projects, and future local-store probes. No DB writes or full transcript parsing. |
+| WP-1.6 | config defaults + collect workflow + scheduling docs | Planned | Pending | Pending | Pending | YAML defaults, explicit init command, default DB/export directories, one-line `collect` for local stores plus exports root, idempotent reruns, and Task Scheduler docs. |
 
 ## Research Artifact Ledger
 
@@ -59,6 +59,8 @@ These are not approved scope. They are recorded from RS-2 for future change-orde
 | Cowork extractor | RS-2 | Proposed only | Class B candidate pending future approval. |
 | LinkedIn post candidate | RS-2 | Proposed only | Possible post on six-engine self-identification survey; no publishing scope approved. |
 | OpenAI Codex local app deep-link | Prototype smoke | Proposed only | `chronicle open <id>` renders a local transcript from JSONL, but there is no verified deep-link/resume behavior that opens the original Codex app chat like ChatGPT web URLs. |
+| Config-driven collection workflow | Owner discussion | Approved for WP-1.5/WP-1.6 planning | Add YAML defaults, explicit init, source inventory, and one-line collect. This is orchestration over accepted adapters, not new parsing scope. |
+| History download helper | Owner discussion | Proposed only | Future tool to help download histories from chat providers when supported by documented/exportable flows. Config YAML should record which engines the user uses or wants supported, but download automation is not part of WP-1.5/WP-1.6 unless explicitly scheduled. |
 
 ## Accepted Evidence Snapshot
 
@@ -96,6 +98,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 | Claude real export metadata blocks | WP-1.3.1 executor | Mitigated | Known `thinking`, `tool_use`, and `tool_result` blocks now skip without noisy parser errors. Future benign block types should be added with evidence and synthetic tests. |
 | OpenAI Codex local format drift | WP-1.3.2 executor | Mitigated procedurally | Codex local JSONL is undocumented Class B storage. Accepted extractor is tolerant, synthetic-fixture covered, and fail-visible on malformed/unknown records. |
 | CO-1 schema migration risk | CO-1 executor | Mitigated | Schema v2 migration accepted; source uniqueness now enforced by a DB-level partial unique index. |
+| Claude standalone project metadata | WP-1.3.3 / future schema follow-up | Known limitation | Real Claude exports may include `projects/*.json` rows with no reliable conversation reference. Project rows are stored, but search only returns conversations linked by exact project UUID references. |
 | WP-2.1 real-archive performance | Prototype validation | Open | Synthetic performance smoke passed on 350 conversations; master-plan p95 target on a larger real archive remains to be measured during prototype validation. |
 | Rename to WorkTrail | Release polish / pre-public | Open | Product name is WorkTrail; target repo/PyPI `worktrail-ai`, CLI `worktrail`. Rename before first public push. |
 
@@ -104,17 +107,16 @@ If Poetry reports another project environment, the executor must stop and fix th
 | Item | Status | Notes |
 | --- | --- | --- |
 | ChatGPT/OpenAI official export | Received and compatibility accepted | Owner ZIP is under `exports/openai` and uses the current split layout (`conversations-000.json` ... `conversations-004.json`) with 422 records. WP-1.2.1 accepted direct ingest and auto-detection; PM smoke produced 422 conversations and 5,166 messages with 92 non-text part warnings. |
-| Claude official export | Ingested; project metadata gap found | Claude provider has 13 conversations in the repo-local DB. The project metadata file for `CAR GUI` exists in the export, but `chronicle search "CAR GUI" --provider claude` returns no results because project metadata is not yet linked/indexed. WP-1.3.3 addresses this. |
+| Claude official export | Ingested; project metadata limitation characterized | Claude provider has 13 conversations in the repo-local DB. WP-1.3.3 parses 30 project metadata rows, including `CAR GUI`, and links/searches project names only when exact project UUID references exist. The owner real export has no project-like conversation keys, so `CAR GUI` cannot safely return Claude conversations without guessing. |
 | Research records | Recorded | `md/research/` now holds research-spike records for history data retrieval methods and current source-access status. |
-| Source listing utility | Already planned | WP-1.4 `stats` must show per-source summaries after ingest. A dedicated source inventory command belongs to WP-1.6 source management (`source add/list/disable`) rather than expanding WP-1.4. |
+| Source listing utility | Planned as WP-1.5 | `stats` lists already-ingested sources. `scan-local` should list available histories before ingest, using configured/default paths and read-only checks. |
+| Config defaults | Planned as WP-1.6 | Use YAML to define `.chronicle/chronicle.db`, `exports`, `exports/openai`, `exports/claude`, `%USERPROFILE%\.codex`, and `%USERPROFILE%\.claude\projects`. Installation must not mutate folders; an explicit init command should create directories/config. |
+| Engine interest settings | Planned as WP-1.6 | Config YAML should include which engines/sources the user uses or wants support for. This should drive scan/help/collect defaults, not parser behavior. |
+| One-line loader | Planned as WP-1.6 | `chronicle collect` should ingest enabled local stores and all supported sources under the configured exports root with idempotent reruns. |
 
 ## Next Action
 
-The handoff-ready task is:
-
-- `md/handoffs/WP-1.3.3-claude-project-metadata-linking.md`
-
-Run owner smoke for accepted WP-1.4.1 when ready:
+Recommended owner smoke for accepted WP-1.4.1 remains:
 
 ```powershell
 poetry run chronicle ingest .\exports --provider auto --db-path .\.chronicle\chronicle.db
@@ -122,5 +124,9 @@ poetry run chronicle ingest .\exports --provider auto --db-path .\.chronicle\chr
 poetry run chronicle stats --db-path .\.chronicle\chronicle.db
 ```
 
-Run WP-1.3.3 when the goal is completing Claude export coverage for project
-metadata such as `CAR GUI`.
+Prepare the WP-1.5/WP-1.6 handoff for:
+
+- config YAML defaults;
+- explicit init command for `.chronicle/` and export folders;
+- read-only `scan-local` source inventory;
+- one-line `chronicle collect` over local histories and configured exports.

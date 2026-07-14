@@ -684,9 +684,11 @@ def rebuild_fts(conn: sqlite3.Connection) -> None:
                     SELECT group_concat(coalesce(k.tags_json, ''), ' ')
                     FROM knowledge_items AS k
                     WHERE k.conversation_id = c.id
-                ) AS knowledge_tags
+                ) AS knowledge_tags,
+                p.name AS project_name
             FROM conversations AS c
             LEFT JOIN enrichments AS e ON e.conversation_id = c.id
+            LEFT JOIN projects AS p ON p.id = c.project_id
             ORDER BY c.id
             """
         ).fetchall()
@@ -702,7 +704,11 @@ def rebuild_fts(conn: sqlite3.Connection) -> None:
                     row["summary"] or "",
                     " ".join(
                         part
-                        for part in (row["enrichment_tags"], row["knowledge_tags"])
+                        for part in (
+                            row["enrichment_tags"],
+                            row["knowledge_tags"],
+                            row["project_name"],
+                        )
                         if part
                     ),
                     "\n".join(

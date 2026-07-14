@@ -2,7 +2,7 @@
 
 **Repo:** current working repo `mcp-chat-chronicle`; target public repo/PyPI name `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** In development · M0/WP-0.1 and M1/WP-1.1 through WP-1.3.2 accepted; M1/WP-1.4 CLI ingest + stats is next · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)**, **amended by `md/change-order-01.md`** (prototype fast path with Claude Code extractor pulled forward, link-back schema migration, rename to WorkTrail — read both documents). Full reasoning chain in Appendix A. · **Last updated:** 2026-07-12
+**Status:** In development · M0 complete; core ingest/search/open/recent, Claude project metadata handling, and directory ingest sweep accepted; config, scan-local, and collect workflow are the next planned usability layer · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)**, **amended by `md/change-order-01.md`** (prototype fast path with Claude Code extractor pulled forward, link-back schema migration, rename to WorkTrail — read both documents). Full reasoning chain in Appendix A. · **Last updated:** 2026-07-14
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Guiding principle:** *Build the boring useful archive first. Clever live capture, marker joins, and cache forensics are optional later experiments.*
@@ -256,7 +256,8 @@ CO-1    schema migration + importer/extractor link-back touch-ups
 WP-2.1  FTS search + open
 WP-3.1  Claude Code extractor
 PROTOTYPE: search real Claude Code + export history end-to-end
-WP-1.6  collect + scheduling docs
+WP-1.5  scan-local source inventory
+WP-1.6  config defaults + collect + scheduling docs
 then continue with Cursor, MCP, enrichment, release
 ```
 
@@ -306,13 +307,13 @@ Same contract; Claude's export `conversations.json` is a flat array (`uuid`, `na
 
 **WP-1.5 scan-local (read-only discovery).**
 *Objective:* Report what AI-tool data exists on this Windows machine — import nothing.
-*Tasks:* Probe known paths (`~/.claude/projects`, `%APPDATA%\Cursor\User\workspaceStorage`, `%APPDATA%\Code\User\workspaceStorage`, desktop-app cache dirs); output table per §4 with status (found / not configured / experimental); dumb path-existence checks only — no parsing.
-*AC:* Runs in <2 s; never touches file contents beyond existence/mtime; output matches §4 shape. Not on the CO-01 prototype critical path.
+*Tasks:* Probe configured paths plus known defaults (`exports/openai`, `exports/claude`, `~/.codex`, `~/.claude/projects`, `%APPDATA%\Cursor\User\workspaceStorage`, `%APPDATA%\Code\User\workspaceStorage`, desktop-app cache dirs); output a provider/path/status table with status (found / missing / configured / experimental / unsupported); use path-existence, mtime, and shallow signature checks only — no full transcript parsing and no DB writes. Read the config file from WP-1.6 when present, but keep useful defaults when no config exists.
+*AC:* Runs in <2 s on normal workstations; never imports or mutates source data; prints a clear inventory of available histories and missing configured paths; missing sources are notes, not failures. Not on the CO-01 prototype critical path.
 
-**WP-1.6 collect + folder workflow + scheduling docs.**
-*Objective:* The recurring usage loop.
-*Tasks:* `sources` CRUD via CLI (`worktrail source add/list/disable`); `worktrail ingest-folder` sweeps a drop folder for export zips; `worktrail collect` iterates enabled sources → adapters → `ingest_runs`; docs page: one-line **Windows Task Scheduler** setup for nightly `worktrail collect` (no daemon — design constraint §1.6).
-*AC:* Drop two export zips in the folder, run `collect` twice → second run adds 0; a disabled source is skipped with a note.
+**WP-1.6 config defaults + collect workflow + scheduling docs.**
+*Objective:* Make the recurring usage loop one command.
+*Tasks:* Add a YAML config file for project defaults; define default DB path (`.chronicle/chronicle.db`), exports root (`exports`), default export subdirectories (`exports/openai`, `exports/claude`), and local native sources (`%USERPROFILE%\.codex`, `%USERPROFILE%\.claude\projects`) with enable flags. Include an `engines`/`enabled_sources` section so the user can state which chat engines they use or want support for; this drives `scan-local` and future download/help UX, not parser behavior. Add an explicit init command (`chronicle init` or `chronicle config init`) that creates `.chronicle/`, `exports/`, `exports/openai/`, and `exports/claude/` and writes a starter config; package install must not create user folders. `chronicle collect` reads config and ingests all enabled local sources plus all supported sources under the configured exports root using existing ingest/adapters and idempotent DB writes. `scan-local` should show the same configured/default source inventory read-only. Document one-line **Windows Task Scheduler** setup for recurring `chronicle collect` (no daemon — design constraint §1.6).
+*AC:* Fresh checkout can run init and get the expected directories/config; `collect` loads configured local stores and all supported exports under the configured root; rerunning `collect` against unchanged data adds 0 conversations; missing configured paths are skipped with a note; CLI `--db-path` still overrides env/config/default; no private export/DB data is committed.
 
 ### M2 — v1 search (first "wow")
 **WP-2.1 FTS5 search + open.**
@@ -405,9 +406,9 @@ The story arc: *v1 proves the boring archive; v2 makes it intelligent — and me
 **V2-3 `worktrail chat` — agentic RAG over the archive, fully offline.** A local model in a tool-calling loop over the **same retrieval API** used by the CLI and MCP server (one retrieval layer, three consumers). Iterative: model decides queries, reads hits, refines (search "CORS" → read snippet → search the error string it found), answers with conversation-id citations. Bench extension: "agentic loop competence" of 3–4B models — which small models can drive a tool loop without derailing (underexplored; strong article material).
 
 ### Post-v1 backlog (unscheduled — timeboxed spikes only if pulled forward)
-In rough priority order: **VS Code/Copilot Chat extractor** (if practical) · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
+In rough priority order: **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
 
-**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo. After that: WP-1.6 collection loop, then Cursor/Codex follow-ups as needed, MCP recall within two weeks of WP-2.1 acceptance, M5 enrichment + benchmark, and v0.1 release/publish polish.
+**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo. After Claude project metadata validation, add WP-1.5/WP-1.6 usability polish (source inventory, YAML defaults, init, collect), then Cursor/Codex follow-ups as needed, MCP recall within two weeks of WP-2.1 acceptance, M5 enrichment + benchmark, and v0.1 release/publish polish.
 
 ---
 

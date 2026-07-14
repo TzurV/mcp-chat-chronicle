@@ -108,6 +108,73 @@ def test_ingest_auto_detects_claude_and_inserts_conversations_and_messages(
     assert _count_rows(db_path, "messages") == 2
 
 
+def test_ingest_claude_project_metadata_links_and_searches_project_name(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    source = FIXTURES / "claude" / "project_linked"
+
+    first = _invoke_ingest(source, db_path)
+    second = _invoke_ingest(source, db_path)
+    search = runner.invoke(
+        app,
+        ["search", "CAR GUI", "--provider", "claude", "--db-path", str(db_path)],
+    )
+
+    assert first.exit_code == 0, first.stdout
+    assert "provider: claude" in first.stdout
+    assert "conversations seen: 1" in first.stdout
+    assert "parse errors: 1" in first.stdout
+    assert second.exit_code == 0, second.stdout
+    assert "added: 0  updated: 0  skipped: 1" in second.stdout
+    assert _count_rows(db_path, "projects") == 1
+    with connect(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT c.project_id, p.name
+            FROM conversations AS c
+            LEFT JOIN projects AS p ON p.id = c.project_id
+            WHERE c.provider_conv_id = 'conv-project-linked-1'
+            """
+        ).fetchone()
+    assert row["project_id"] is not None
+    assert row["name"] == "CAR GUI"
+    assert search.exit_code == 0, search.stdout
+    assert "CAR GUI" in search.stdout
+    assert "Linked Claude project chat" in search.stdout
+
+
+def test_ingest_claude_project_metadata_without_reference_does_not_guess_link(
+    tmp_path: Path,
+) -> None:
+    db_path = _db_path(tmp_path)
+    source = FIXTURES / "claude" / "project_unlinked"
+
+    result = _invoke_ingest(source, db_path)
+    search = runner.invoke(
+        app,
+        [
+            "search",
+            "Standalone Claude Project",
+            "--provider",
+            "claude",
+            "--db-path",
+            str(db_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert _count_rows(db_path, "projects") == 1
+    with connect(db_path) as conn:
+        project_id = conn.execute(
+            "SELECT project_id FROM conversations WHERE provider_conv_id = ?",
+            ("conv-project-unlinked-1",),
+        ).fetchone()[0]
+    assert project_id is None
+    assert search.exit_code == 0, search.stdout
+    assert "No results" in search.stdout
+
+
 def test_ingest_auto_detects_openai_codex_jsonl_and_inserts_conversation(
     tmp_path: Path,
 ) -> None:

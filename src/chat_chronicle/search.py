@@ -317,10 +317,16 @@ def _search_phrase_conversations(
                 WHERE m_phrase.conversation_id = c.id
                   AND instr(lower(coalesce(m_phrase.body, '')), lower(?)) > 0
             )
+            OR EXISTS (
+                SELECT 1
+                FROM projects AS p_phrase
+                WHERE p_phrase.id = c.project_id
+                  AND instr(lower(coalesce(p_phrase.name, '')), lower(?)) > 0
+            )
         )
         """
     ]
-    where_params: list[object] = [query, query]
+    where_params: list[object] = [query, query, query]
     if provider:
         clauses.append("c.provider = ?")
         where_params.append(provider)
@@ -469,9 +475,11 @@ def _fallback_snippet(
                 SELECT group_concat(coalesce(k.tags_json, ''), ' ')
                 FROM knowledge_items AS k
                 WHERE k.conversation_id = c.id
-            ) AS knowledge_tags
+            ) AS knowledge_tags,
+            p.name AS project_name
         FROM conversations AS c
         LEFT JOIN enrichments AS e ON e.conversation_id = c.id
+        LEFT JOIN projects AS p ON p.id = c.project_id
         WHERE c.id = ?
         """,
         (conversation_id,),
@@ -488,6 +496,7 @@ def _fallback_snippet(
             row["message_body"],
             row["knowledge_body"],
             row["knowledge_tags"],
+            row["project_name"],
         )
         if part
     )

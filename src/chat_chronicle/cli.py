@@ -1027,6 +1027,13 @@ def _load_conversations(provider: str, path: Path) -> Any:
 
 
 def _assign_project_ids(conn: sqlite3.Connection, result: Any) -> None:
+    projects = getattr(result, "projects", None)
+    if isinstance(projects, list):
+        for project in projects:
+            name = getattr(project, "name", None)
+            if isinstance(name, str) and name:
+                get_or_create_project(conn, name=name)
+
     project_hints = getattr(result, "project_hints", None)
     if not isinstance(project_hints, dict) or not project_hints:
         return

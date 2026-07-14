@@ -48,9 +48,25 @@ class ClaudeImportError(BaseModel):
     detail: str | None = None
 
 
+class ClaudeProjectMetadata(BaseModel):
+    """Project metadata parsed from ``projects/*.json`` in a Claude export."""
+
+    uuid: str
+    name: str
+
+
+class ClaudeProjectHint(BaseModel):
+    """Reliable project link for a parsed conversation."""
+
+    name: str
+    root_path: str | None = None
+
+
 class ClaudeImportResult(BaseModel):
     conversations: list[Conversation] = Field(default_factory=list)
     errors: list[ClaudeImportError] = Field(default_factory=list)
+    projects: list[ClaudeProjectMetadata] = Field(default_factory=list)
+    project_hints: dict[str, ClaudeProjectHint] = Field(default_factory=dict)
 
 
 class _ErrorSink:
@@ -88,12 +104,20 @@ def load_conversations(source: Path | str) -> ClaudeImportResult:
         if not candidate.is_file():
             errors.add("conversations_json_not_found", detail=str(candidate))
             return ClaudeImportResult(errors=errors.errors)
-        return _parse_json_text(candidate.read_text(encoding="utf-8"), str(candidate))
+        return _parse_source_payload(
+            candidate.read_text(encoding="utf-8"),
+            str(candidate),
+            _load_project_records_from_directory(path),
+        )
 
     if zipfile.is_zipfile(path):
         return _parse_zip(path)
 
-    return _parse_json_text(path.read_text(encoding="utf-8"), str(path))
+    return _parse_source_payload(
+        path.read_text(encoding="utf-8"),
+        str(path),
+        _load_project_records_from_directory(path.parent),
+    )
 
 
 def _parse_zip(path: Path) -> ClaudeImportResult:
@@ -104,7 +128,8 @@ def _parse_zip(path: Path) -> ClaudeImportResult:
             errors.add("conversations_json_not_found", detail=str(path))
             return ClaudeImportResult(errors=errors.errors)
         raw = archive.read(member).decode("utf-8")
-    return _parse_json_text(raw, f"{path}::{member}")
+        project_records = _load_project_records_from_zip(archive)
+    return _parse_source_payload(raw, f"{path}::{member}", project_records)
 
 
 def _find_conversations_member(archive: zipfile.ZipFile) -> str | None:
@@ -127,6 +152,35 @@ def _parse_json_text(raw: str, origin: str) -> ClaudeImportResult:
             errors=[ClaudeImportError(error="invalid_json", detail=f"{origin}: {exc}")]
         )
     return parse_conversations_json(data)
+
+
+def _parse_source_payload(
+    raw: str,
+    origin: str,
+    project_records: list[tuple[str, object]],
+) -> ClaudeImportResult:
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        project_result = parse_projects(project_records)
+        return ClaudeImportResult(
+            projects=project_result.projects,
+            errors=[
+                *project_result.errors,
+                ClaudeImportError(error="invalid_json", detail=f"{origin}: {exc}"),
+            ],
+        )
+
+    result = parse_conversations_json(data)
+    project_result = parse_projects(project_records)
+    result.projects = project_result.projects
+    result.errors.extend(project_result.errors)
+    result.project_hints = _project_hints_for_conversations(
+        data,
+        result.conversations,
+        project_result.projects,
+    )
+    return result
 
 
 def parse_conversations_json(data: object) -> ClaudeImportResult:
@@ -152,6 +206,21 @@ def parse_conversations_json(data: object) -> ClaudeImportResult:
             conversations.append(conversation)
 
     return ClaudeImportResult(conversations=conversations, errors=errors)
+
+
+def parse_projects(project_records: list[tuple[str, object]]) -> ClaudeImportResult:
+    """Parse decoded Claude ``projects/*.json`` records."""
+    projects: list[ClaudeProjectMetadata] = []
+    errors: list[ClaudeImportError] = []
+
+    for origin, record in project_records:
+        project = _parse_project(record, origin)
+        if isinstance(project, ClaudeProjectMetadata):
+            projects.append(project)
+        else:
+            errors.append(project)
+
+    return ClaudeImportResult(projects=projects, errors=errors)
 
 
 def _parse_conversation(record: object, index: int, errors: _ErrorSink) -> Conversation | None:
@@ -192,6 +261,112 @@ def _parse_conversation(record: object, index: int, errors: _ErrorSink) -> Conve
         updated_at=updated_at,
         messages=messages,
     )
+
+
+def _parse_project(record: object, origin: str) -> ClaudeProjectMetadata | ClaudeImportError:
+    if not isinstance(record, dict):
+        return ClaudeImportError(
+            record_id=origin,
+            error="invalid_project_record",
+            detail=f"expected an object, got {type(record).__name__}",
+        )
+
+    project_uuid = record.get("uuid")
+    if not isinstance(project_uuid, str) or not project_uuid:
+        return ClaudeImportError(
+            record_id=origin,
+            error="missing_project_uuid",
+            detail="project has no usable string 'uuid'",
+        )
+
+    name = record.get("name")
+    if not isinstance(name, str) or not name:
+        return ClaudeImportError(
+            record_id=project_uuid,
+            error="missing_project_name",
+            detail="project has no usable string 'name'",
+        )
+
+    return ClaudeProjectMetadata(uuid=project_uuid, name=name)
+
+
+def _load_project_records_from_directory(path: Path) -> list[tuple[str, object]]:
+    projects_dir = path / "projects"
+    if not projects_dir.is_dir():
+        return []
+
+    records: list[tuple[str, object]] = []
+    for project_path in sorted(projects_dir.glob("*.json")):
+        try:
+            records.append(
+                (
+                    str(project_path),
+                    json.loads(project_path.read_text(encoding="utf-8")),
+                )
+            )
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            records.append((str(project_path), {"uuid": None, "name": None, "_error": str(exc)}))
+    return records
+
+
+def _load_project_records_from_zip(archive: zipfile.ZipFile) -> list[tuple[str, object]]:
+    records: list[tuple[str, object]] = []
+    for member in sorted(
+        name
+        for name in archive.namelist()
+        if not name.endswith("/") and name.startswith("projects/") and Path(name).suffix == ".json"
+    ):
+        try:
+            records.append((member, json.loads(archive.read(member).decode("utf-8"))))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            records.append((member, {"uuid": None, "name": None, "_error": str(exc)}))
+    return records
+
+
+def _project_hints_for_conversations(
+    raw_data: object,
+    conversations: list[Conversation],
+    projects: list[ClaudeProjectMetadata],
+) -> dict[str, ClaudeProjectHint]:
+    if not isinstance(raw_data, list) or not projects:
+        return {}
+
+    projects_by_uuid = {project.uuid: project for project in projects}
+    hints: dict[str, ClaudeProjectHint] = {}
+    by_id = {conversation.provider_conv_id: conversation for conversation in conversations}
+    for record in raw_data:
+        if not isinstance(record, dict):
+            continue
+        conv_id = record.get("uuid")
+        if not isinstance(conv_id, str) or conv_id not in by_id:
+            continue
+        project_uuid = _extract_project_uuid(record, projects_by_uuid)
+        if project_uuid is None:
+            continue
+        project = projects_by_uuid[project_uuid]
+        hints[conv_id] = ClaudeProjectHint(name=project.name)
+    return hints
+
+
+def _extract_project_uuid(
+    record: dict[str, Any],
+    projects_by_uuid: dict[str, ClaudeProjectMetadata],
+) -> str | None:
+    """Return an exact project UUID reference, never a guessed project name match."""
+    for key in ("project_uuid", "project_id", "projectId", "projectUUID"):
+        value = record.get(key)
+        if isinstance(value, str) and value in projects_by_uuid:
+            return value
+
+    project = record.get("project")
+    if isinstance(project, str) and project in projects_by_uuid:
+        return project
+    if isinstance(project, dict):
+        for key in ("uuid", "id", "project_uuid", "project_id", "projectId"):
+            value = project.get(key)
+            if isinstance(value, str) and value in projects_by_uuid:
+                return value
+    return None
 
 
 def _resolve_updated_at(

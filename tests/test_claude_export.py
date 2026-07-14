@@ -110,6 +110,48 @@ def test_realistic_export_normalizes_timestamps_to_utc() -> None:
         assert message.created_at.tzinfo is UTC
 
 
+# --- project metadata -----------------------------------------------------
+
+
+def test_load_conversations_parses_project_metadata_from_directory() -> None:
+    result = load_conversations(_fixture_path("project_linked").parent)
+
+    assert [project.name for project in result.projects] == ["CAR GUI"]
+    assert "missing_project_name" in _error_codes(result)
+
+
+def test_project_uuid_reference_creates_reliable_project_hint() -> None:
+    result = load_conversations(_fixture_path("project_linked").parent)
+
+    assert result.project_hints["conv-project-linked-1"].name == "CAR GUI"
+
+
+def test_project_metadata_without_conversation_reference_does_not_guess_link() -> None:
+    result = load_conversations(_fixture_path("project_unlinked").parent)
+
+    assert [project.name for project in result.projects] == ["Standalone Claude Project"]
+    assert result.project_hints == {}
+    assert _only(result).provider_conv_id == "conv-project-unlinked-1"
+
+
+def test_load_conversations_parses_project_metadata_from_zip(tmp_path: Path) -> None:
+    archive_path = tmp_path / "claude-project-export.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.write(
+            _fixture_path("project_linked"),
+            "conversations.json",
+        )
+        archive.write(
+            FIXTURES / "project_linked" / "projects" / "project-linked-uuid.json",
+            "projects/project-linked-uuid.json",
+        )
+
+    result = load_conversations(archive_path)
+
+    assert [project.name for project in result.projects] == ["CAR GUI"]
+    assert result.project_hints["conv-project-linked-1"].name == "CAR GUI"
+
+
 # --- content extraction ---------------------------------------------------
 
 

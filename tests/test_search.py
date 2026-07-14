@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from chat_chronicle.db import connect, rebuild_fts, upsert_conversation
+from chat_chronicle.db import connect, get_or_create_project, rebuild_fts, upsert_conversation
 from chat_chronicle.models import Conversation, Message
 from chat_chronicle.search import (
     get_conversation_detail,
@@ -28,11 +28,13 @@ def _conversation(
     resume_hint: str | None = None,
     created_at: datetime | None = None,
     set_updated_at: bool = True,
+    project_id: int | None = None,
 ) -> Conversation:
     created_at = created_at or updated_at
     return Conversation(
         provider=provider,
         provider_conv_id=provider_conv_id,
+        project_id=project_id,
         title=title,
         url=url,
         origin_path=origin_path,
@@ -115,6 +117,31 @@ def test_provider_since_until_and_tag_filters(tmp_path: Path) -> None:
     assert {result.provider for result in since_results} == {"claude"}
     assert {result.provider for result in until_results} == {"chatgpt"}
     assert [result.conversation_id for result in tag_results] == [chatgpt.conversation_id]
+
+
+def test_search_finds_linked_project_name_without_message_match(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        project_id = get_or_create_project(conn, name="CAR GUI")
+        inserted = upsert_conversation(
+            conn,
+            None,
+            _conversation(
+                "project-linked-search",
+                "The transcript mentions panes and commands but not the project label.",
+                provider="claude",
+                title="Window layout discussion",
+                url="https://claude.ai/chat/project-linked-search",
+                project_id=project_id,
+            ),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "CAR GUI", provider="claude")
+        phrase_results = search_conversations(conn, "CAR GUI", provider="claude", phrase=True)
+
+    assert [result.conversation_id for result in results] == [inserted.conversation_id]
+    assert "CAR GUI" in results[0].snippet
+    assert [result.conversation_id for result in phrase_results] == [inserted.conversation_id]
 
 
 def test_default_search_remains_broad_token_search(tmp_path: Path) -> None:
