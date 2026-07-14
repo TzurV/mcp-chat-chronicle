@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from typer.main import get_command
 from typer.testing import CliRunner
 
 import chat_chronicle.cli as cli_module
@@ -346,14 +347,18 @@ def test_chronicle_help_includes_recent_command() -> None:
 
 
 def test_search_help_documents_phrase_option() -> None:
-    # Typer/Rich renders --help through its own console; on a narrow terminal
-    # (the 80-col fallback used under CI) option names wrap and break substring
-    # checks. Pin a wide width via COLUMNS so the help text is stable.
-    result = runner.invoke(app, ["search", "--help"], env={"COLUMNS": "200"})
+    # Inspect the Click command directly rather than the rendered --help text.
+    # Typer/Rich wraps and truncates option names and help strings to the
+    # terminal width (an 80-col no-TTY fallback under CI), which makes
+    # substring assertions on the printed help flaky across environments and
+    # Rich versions. Introspecting the command is deterministic.
+    search_command = get_command(app).get_command(None, "search")
+    phrase_option = next(
+        param for param in search_command.params if "--phrase" in getattr(param, "opts", [])
+    )
 
-    assert result.exit_code == 0, result.stdout
-    assert "--phrase" in result.stdout
-    assert "exact phrase" in result.stdout
+    assert phrase_option is not None
+    assert "exact phrase" in (phrase_option.help or "")
 
 
 def test_open_web_row_prints_url_and_calls_browser_helper(monkeypatch, tmp_path: Path) -> None:
