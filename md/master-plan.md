@@ -2,7 +2,7 @@
 
 **Repo:** current working repo `mcp-chat-chronicle`; target public repo/PyPI name `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** In development · M0 complete; core ingest/search/open/recent, Claude project metadata handling, and directory ingest sweep accepted; config, scan-local, and collect workflow are the next planned usability layer · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)**, **amended by `md/change-order-01.md`** (prototype fast path with Claude Code extractor pulled forward, link-back schema migration, rename to WorkTrail — read both documents). Full reasoning chain in Appendix A. · **Last updated:** 2026-07-14
+**Status:** In development · M0 complete; core ingest/search/open/recent, Claude project metadata handling, directory ingest sweep, config/init/collect, scan-local source inventory, and search punctuation hardening accepted · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)**, **amended by `md/change-order-01.md`** (prototype fast path with Claude Code extractor pulled forward, link-back schema migration, rename to WorkTrail — read both documents). Full reasoning chain in Appendix A. · **Last updated:** 2026-07-14
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Guiding principle:** *Build the boring useful archive first. Clever live capture, marker joins, and cache forensics are optional later experiments.*
@@ -258,7 +258,8 @@ WP-3.1  Claude Code extractor
 PROTOTYPE: search real Claude Code + export history end-to-end
 WP-1.5  scan-local source inventory
 WP-1.6  config defaults + collect + scheduling docs
-then continue with Cursor, MCP, enrichment, release
+WP-2.3.2 search FTS special-character escaping
+then continue with owner smoke, Cursor, MCP, enrichment, release
 ```
 
 Accepted work is not redone; the schema amendments arrive as a forward migration before WP-2.1.
@@ -412,7 +413,7 @@ The story arc: *v1 proves the boring archive; v2 makes it intelligent — and me
 ### Post-v1 backlog (unscheduled — timeboxed spikes only if pulled forward)
 In rough priority order: **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
 
-**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo. After Claude project metadata validation, add WP-1.5/WP-1.6 usability polish (source inventory, YAML defaults, init, collect), then Cursor/Codex follow-ups as needed, MCP recall within two weeks of WP-2.1 acceptance, M5 enrichment + benchmark, and v0.1 release/publish polish.
+**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo. Claude project metadata, WP-1.5/WP-1.6 usability polish (source inventory, YAML defaults, init, collect), and WP-2.3.2 search punctuation hardening are accepted. Next: finish owner smoke, then choose Cursor/Codex follow-ups as needed, MCP recall, M5 enrichment + benchmark, and v0.1 release/publish polish.
 
 ---
 

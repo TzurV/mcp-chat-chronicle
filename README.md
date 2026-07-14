@@ -2,7 +2,7 @@
 
 *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-> **Status: M1 in progress.** The local DB, official export importers, local coding-agent extractors, single-source and parent-folder ingest, stats, search, open, and recent-activity CLI paths are implemented. Claude project metadata linking remains a known follow-up. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
+> **Status: M1 in progress.** The local DB, official export importers, local coding-agent extractors, single-source and parent-folder ingest, config/init/collect, scan-local inventory, stats, search, open, and recent-activity CLI paths are implemented. Claude project metadata is parsed and linked when reliable conversation references exist; real exports may contain standalone project rows that cannot be safely joined. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
 
 ## Why
 
@@ -160,6 +160,7 @@ C:\work\Github\mcp-chat-chronicle\.chronicle\chronicle.db
 ```bash
 chronicle init                                         # create .chronicle/, config, DB, export folders
 chronicle collect                                      # ingest all enabled configured sources
+chronicle scan-local                                   # read-only source inventory
 chronicle ingest path/to/export.zip --provider auto    # ingest one supported source
 chronicle ingest path/to/exports --provider auto       # sweep a parent folder for supported sources
 chronicle stats                                        # counts per source, last runs
@@ -186,7 +187,7 @@ poetry run chronicle ingest .\exports\claude --provider claude --db-path .\.chro
 poetry run chronicle recent -n 10 --provider claude --db-path .\.chronicle\chronicle.db
 ```
 
-`chronicle search` uses broad FTS5 token search by default. For an exact phrase such as `YOU are the MANAGER`, use:
+`chronicle search` uses broad FTS5 token search by default. Ordinary punctuation in broad queries is treated as safe user text, so inputs such as `scan-local`, `provider:openai_codex`, and path-like strings should return results or `No results` rather than SQLite FTS syntax errors. For exact hyphen/phrase matching such as `YOU are the MANAGER`, use:
 
 ```powershell
 poetry run chronicle search --phrase "YOU are the MANAGER" --provider openai_codex --db-path .\.chronicle\chronicle.db
@@ -196,10 +197,10 @@ Search is case-insensitive for normal usage. Phrase mode matches the exact word 
 
 `chronicle recent` supports `--provider`, `--since`, `--until`, and `--db-path`. If `-n/--limit` is omitted, it shows up to 10 rows and prints a note explaining how to increase the limit.
 
-The following command remains planned for later source-management work:
+`chronicle scan-local` is read-only. It reports configured/default source locations and status without importing data, creating a database, or parsing transcript bodies:
 
-```bash
-chronicle scan-local                                   # read-only: what exists on this machine?
+```powershell
+poetry run chronicle scan-local
 ```
 
 ## Stack, and what we deliberately did not choose

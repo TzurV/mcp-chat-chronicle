@@ -134,6 +134,79 @@ def test_search_cli_does_not_print_duplicate_plain_result_rows(tmp_path: Path) -
     assert _plain_result_lines(result.stdout) == []
 
 
+def test_search_cli_hyphenated_query_does_not_crash(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    hit_id = _insert_search_conversation(
+        db_path,
+        "cli-scan-local",
+        "the chronicle scan-local command reports local sources",
+        title="Scan local sources",
+    )
+
+    result = runner.invoke(app, ["search", "scan-local", "--db-path", str(db_path)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "Invalid search query" not in result.stdout
+    assert "Invalid search query" not in result.stderr
+    assert str(hit_id) in result.stdout
+
+
+def test_search_cli_fts_special_characters_do_not_crash(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    _insert_search_conversation(
+        db_path,
+        "cli-special-chars",
+        "ordinary indexed body text for the special-character smoke",
+    )
+
+    for query in [
+        "provider:openai_codex",
+        '"scan-local"',
+        "(scan-local)",
+        r"C:\Users\tzurv\.codex",
+        "scan/local",
+    ]:
+        result = runner.invoke(app, ["search", query, "--db-path", str(db_path)])
+        assert result.exit_code == 0, f"{query!r}: {result.stdout}"
+        assert "Invalid search query" not in result.stdout
+        assert "Invalid search query" not in result.stderr
+
+
+def test_search_cli_punctuation_only_query_reports_no_results(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    _insert_search_conversation(db_path, "cli-punct-only", "some indexed body text")
+
+    result = runner.invoke(app, ["search", "()", "--db-path", str(db_path)])
+
+    assert result.exit_code == 0, result.stdout
+    assert "No results" in result.stdout
+    assert "Invalid search query" not in result.stdout
+    assert "Invalid search query" not in result.stderr
+
+
+def test_search_cli_phrase_hyphenated_query_stays_exact(tmp_path: Path) -> None:
+    db_path = _db_path(tmp_path)
+    exact_id = _insert_search_conversation(
+        db_path,
+        "cli-phrase-hyphen-exact",
+        "run the scan-local command to inventory sources",
+    )
+    _insert_search_conversation(
+        db_path,
+        "cli-phrase-hyphen-partial",
+        "we only scan the local disk, no hyphenated token here",
+    )
+
+    result = runner.invoke(
+        app,
+        ["search", "--phrase", "scan-local", "--db-path", str(db_path)],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert str(exact_id) in result.stdout
+    assert "cli-phrase-hyphen-partial" not in result.stdout
+
+
 def test_search_cli_filters_and_limit_validation(tmp_path: Path) -> None:
     db_path = _db_path(tmp_path)
     _ingest(db_path, FIXTURES / "chatgpt" / "minimal" / "conversations.json")

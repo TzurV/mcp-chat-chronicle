@@ -8,11 +8,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | --- | --- |
 | Date | 2026-07-14 |
 | Phase | M1 in progress |
-| Last accepted work package | WP-1.6 Config defaults + collect workflow |
-| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1, WP-1.3.3, WP-1.4.1, WP-1.6, WP-2.2, WP-2.3, and WP-2.3.1 accepted; WP-1.5 handoff ready |
-| Next action | Run WP-1.5 scan-local source inventory, then validate scan-local config reuse against accepted WP-1.6 config models |
+| Last accepted work package | WP-2.3.2 search FTS special-character escaping |
+| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1, WP-1.3.3, WP-1.4.1, WP-1.5, WP-1.6, WP-2.2, WP-2.3, WP-2.3.1, and WP-2.3.2 accepted |
+| Next action | Resume prototype owner smoke across `init`, `scan-local`, `collect`, `stats`, `recent`, `search`, and `open`; then decide whether to schedule MCP recall, Cursor extractor, source-management polish, or release/rename preparation |
 | Current branch | `main` |
-| Last known commit | `0c583fe Link Claude project metadata` |
+| Last known commit | Pending cleanup commit after WP-1.5 and WP-2.3.2 acceptance |
 
 ## Work Package Ledger
 
@@ -33,10 +33,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-2.2 | Recent active chats CLI | Accepted | `md/handoffs/WP-2.2-recent-active-chats-cli.md` | `md/handoffs/reports/WP-2.2-completion-report.md` | `md/handoffs/reports/WP-2.2-validation-review.md` | Adds accepted `chronicle recent -n <N>` sorted by last activity date with provider/date filters and ID-Date-Provider-Title-URL table. Post-acceptance polish removes duplicate plain rows and adds a default-limit hint when `-n/--limit` is omitted. |
 | WP-2.3 | Search phrase mode + query guidance | Accepted | `md/handoffs/WP-2.3-search-phrase-query-guidance.md` | `md/handoffs/reports/WP-2.3-completion-report.md` | `md/handoffs/reports/WP-2.3-validation-review.md` | Accepted explicit `--phrase` mode and guidance for noisy multi-word broad-token searches. Private DB smoke returned conversation `673`; copied-DB Codex idempotency check did not duplicate records. |
 | WP-2.3.1 | Search result UX polish | Accepted | `md/handoffs/WP-2.3.1-search-result-ux-polish.md` | `md/handoffs/reports/WP-2.3.1-completion-report.md` | `md/handoffs/reports/WP-2.3.1-validation-review.md` | Accepted phrase ordering by title match, newest activity, then id descending; duplicate default `result ...` rows removed while broad BM25 search and query guidance remain intact. |
+| WP-2.3.2 | Search FTS special-character escaping | Accepted | `md/handoffs/WP-2.3.2-search-fts-special-character-escaping.md` | `md/handoffs/reports/WP-2.3.2-completion-report.md` | `md/handoffs/reports/WP-2.3.2-validation-review.md` | Default broad search now treats ordinary punctuation as safe user text. Owner smoke command `chronicle search "scan-local"` no longer fails with `Invalid search query: no such column: local`; `--phrase` remains exact. |
 | WP-3.1 | Claude Code extractor | Accepted | `md/handoffs/WP-3.1-claude-code-extractor.md` | `md/handoffs/reports/WP-3.1-completion-report.md` | `md/handoffs/reports/WP-3.1-validation-review.md` | Accepted with WP-3.1.1 addendum. Concrete `claude_code` extractor, ingest wiring, project/link-back fields, synthetic fixtures, memo, and CLI smoke complete. |
 | WP-3.1.1 | Claude Code RS-2 format hardening | Accepted | `md/handoffs/WP-3.1.1-claude-code-rs2-format-hardening.md` | `md/handoffs/reports/WP-3.1.1-completion-report.md` | `md/handoffs/reports/WP-3.1.1-validation-review.md` | File-scoped Claude Code identity, `ai-title`, seven record types, `uuid`/`parentUuid`, sidechain, and same-session multi-file fixtures accepted. No broader RS-2 backlog scope approved. |
 | Prototype | Real-history search demo | Planned | Pending | Pending | Pending | Search real Claude Code history plus at least one ingested export end-to-end. |
-| WP-1.5 | scan-local source inventory | Handoff ready | `md/handoffs/WP-1.5-scan-local-source-inventory.md` | `md/handoffs/reports/WP-1.5-completion-report.md` | Pending | Read-only discovery of configured/default histories: exports root, OpenAI/Claude export folders, OpenAI Codex local store, Claude Code projects, and future local-store probes. No DB writes or full transcript parsing. |
+| WP-1.5 | scan-local source inventory | Accepted | `md/handoffs/WP-1.5-scan-local-source-inventory.md` | `md/handoffs/reports/WP-1.5-completion-report.md` | `md/handoffs/reports/WP-1.5-validation-review.md` | Read-only inventory accepted for configured/default histories: exports root, OpenAI/Claude export folders, OpenAI Codex local store, Claude Code projects, and planned Cursor/Copilot paths. No DB writes or full transcript parsing. |
 | WP-1.6 | config defaults + collect workflow + scheduling docs | Accepted | `md/handoffs/WP-1.6-config-defaults-collect-workflow.md` | `md/handoffs/reports/WP-1.6-completion-report.md` | `md/handoffs/reports/WP-1.6-validation-review.md` | Accepted after rework: config-aware DB precedence applies to all DB-opening commands, `chronicle init`/`collect` are functional, YAML defaults and engine-interest settings are present, and README includes optional Task Scheduler docs. |
 
 ## Research Artifact Ledger
@@ -100,6 +101,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 | CO-1 schema migration risk | CO-1 executor | Mitigated | Schema v2 migration accepted; source uniqueness now enforced by a DB-level partial unique index. |
 | Claude standalone project metadata | WP-1.3.3 / future schema follow-up | Known limitation | Real Claude exports may include `projects/*.json` rows with no reliable conversation reference. Project rows are stored, but search only returns conversations linked by exact project UUID references. |
 | WP-2.1 real-archive performance | Prototype validation | Open | Synthetic performance smoke passed on 350 conversations; master-plan p95 target on a larger real archive remains to be measured during prototype validation. |
+| Default FTS special-character handling | WP-2.3.2 executor | Mitigated | Default broad search now sanitizes user text before FTS5 `MATCH`; `scan-local` returns results instead of parser errors while `--phrase` remains exact. |
 | Rename to WorkTrail | Release polish / pre-public | Open | Product name is WorkTrail; target repo/PyPI `worktrail-ai`, CLI `worktrail`. Rename before first public push. |
 
 ## Source And Export Observations
@@ -109,25 +111,23 @@ If Poetry reports another project environment, the executor must stop and fix th
 | ChatGPT/OpenAI official export | Received and compatibility accepted | Owner ZIP is under `exports/openai` and uses the current split layout (`conversations-000.json` ... `conversations-004.json`) with 422 records. WP-1.2.1 accepted direct ingest and auto-detection; PM smoke produced 422 conversations and 5,166 messages with 92 non-text part warnings. |
 | Claude official export | Ingested; project metadata limitation characterized | Claude provider has 13 conversations in the repo-local DB. WP-1.3.3 parses 30 project metadata rows, including `CAR GUI`, and links/searches project names only when exact project UUID references exist. The owner real export has no project-like conversation keys, so `CAR GUI` cannot safely return Claude conversations without guessing. |
 | Research records | Recorded | `md/research/` now holds research-spike records for history data retrieval methods and current source-access status. |
-| Source listing utility | Planned as WP-1.5 | `stats` lists already-ingested sources. `scan-local` should list available histories before ingest, using configured/default paths and read-only checks. |
-| Config defaults | Planned as WP-1.6 | Use YAML to define `.chronicle/chronicle.db`, `exports`, `exports/openai`, `exports/claude`, `%USERPROFILE%\.codex`, and `%USERPROFILE%\.claude\projects`. Installation must not mutate folders; an explicit init command should create directories/config. |
-| Engine interest settings | Planned as WP-1.6 | Config YAML should include which engines/sources the user uses or wants support for. This should drive scan/help/collect defaults, not parser behavior. |
-| One-line loader | Planned as WP-1.6 | `chronicle collect` should ingest enabled local stores and all supported sources under the configured exports root with idempotent reruns. |
+| Source listing utility | Accepted as WP-1.5 | `scan-local` lists available configured/default histories before ingest using read-only checks. `stats` continues to list already-ingested sources. |
+| Config defaults | Accepted as WP-1.6 | YAML config defines `.chronicle/chronicle.db`, `exports`, `exports/openai`, `exports/claude`, `%USERPROFILE%\.codex`, and `%USERPROFILE%\.claude\projects`. Installation does not mutate folders; explicit `chronicle init` creates directories/config. |
+| Engine interest settings | Accepted as WP-1.6 | Config YAML records which engines/sources the user uses or wants support for. This drives scan/help/collect defaults, not parser behavior. |
+| One-line loader | Accepted as WP-1.6 | `chronicle collect` ingests enabled local stores and supported sources under the configured exports root with idempotent reruns. |
 
 ## Next Action
 
-Recommended owner smoke for accepted WP-1.4.1 remains:
+Resume owner smoke:
 
 ```powershell
-poetry run chronicle ingest .\exports --provider auto --db-path .\.chronicle\chronicle.db
-poetry run chronicle ingest .\exports --provider auto --db-path .\.chronicle\chronicle.db
-poetry run chronicle stats --db-path .\.chronicle\chronicle.db
+poetry run chronicle init
+poetry run chronicle scan-local
+poetry run chronicle collect
+poetry run chronicle stats
+poetry run chronicle recent -n 10
+poetry run chronicle search "scan-local"
+poetry run chronicle search --phrase "YOU are the MANAGER"
 ```
 
-Run the handoff-ready WP-1.5 source inventory task:
-
-- `md/handoffs/WP-1.5-scan-local-source-inventory.md`
-
-WP-1.6 is accepted. Run the handoff-ready WP-1.5 source inventory task next:
-
-- `md/handoffs/WP-1.5-scan-local-source-inventory.md`
+After smoke, choose the next planning track: MCP recall, Cursor extractor, source-management polish, or release/rename preparation.

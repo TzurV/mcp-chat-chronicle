@@ -43,6 +43,7 @@ from chat_chronicle.db import (
     upsert_conversation,
 )
 from chat_chronicle.models import IngestRunSummary
+from chat_chronicle.scan import SourceInventoryRow, scan_sources
 from chat_chronicle.search import (
     ConversationDetail,
     RecentConversation,
@@ -677,9 +678,46 @@ def _print_collect_report(report: CollectReport, db_path: Path | None) -> None:
 
 
 @app.command("scan-local")
-def scan_local() -> None:
+def scan_local(
+    root: Annotated[
+        Path | None,
+        typer.Option(
+            "--root",
+            help="Exports root to scan for openai/ and claude/ folders.",
+        ),
+    ] = None,
+) -> None:
     """Report, read-only, which AI-tool data stores exist on this machine."""
-    _not_implemented("scan-local", "WP-1.5")
+    base_dir = Path.cwd()
+    config = default_config()
+    config_path = default_config_path(base_dir)
+    if config_path.exists():
+        try:
+            config = load_config(config_path)
+        except ConfigError as exc:
+            _fail(str(exc))
+
+    rows = scan_sources(config=config, base_dir=base_dir, exports_root=root)
+    _print_scan_local_report(rows)
+
+
+def _print_scan_local_report(rows: list[SourceInventoryRow]) -> None:
+    table = Table(title="Local source inventory")
+    table.add_column("Provider")
+    table.add_column("Kind")
+    table.add_column("Path", overflow="fold")
+    table.add_column("Status")
+    table.add_column("Notes", overflow="fold")
+
+    for row in rows:
+        table.add_row(
+            Text(row.provider),
+            Text(row.kind),
+            Text(str(row.path)),
+            Text(row.status),
+            Text(row.notes),
+        )
+    console.print(table)
 
 
 @app.command()

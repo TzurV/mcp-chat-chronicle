@@ -91,8 +91,15 @@ def search_conversations(
             limit=limit,
         )
 
+    match_query = _build_broad_match_query(normalized_query)
+    if match_query is None:
+        # The query is pure punctuation/control syntax with no searchable
+        # terms. Treat this as a friendly no-results case rather than passing
+        # syntax through to FTS5, which would raise a parser error.
+        return []
+
     clauses = ["chat_fts MATCH ?"]
-    params: list[object] = [normalized_query]
+    params: list[object] = [match_query]
     if provider:
         clauses.append("c.provider = ?")
         params.append(provider)
@@ -413,6 +420,32 @@ def _normalize_date_filter(value: str | None, *, end_of_day: bool) -> str | None
     except ValueError as exc:
         raise ValueError(f"Invalid date filter: {value}") from exc
     return stripped
+
+
+def _build_broad_match_query(query: str) -> str | None:
+    """Build a safe FTS5 ``MATCH`` expression from raw user text.
+
+    Default broad search treats the query as plain text, not FTS5 syntax.
+    Reserved characters such as ``-`` (column filter / ``NOT``), ``:`` (column
+    filter), ``()`` (grouping), ``*`` (prefix), and ``"`` (phrase) otherwise
+    crash the parser with ``no such column`` or ``syntax error`` when they
+    appear in ordinary input like ``scan-local`` or ``C:\\Users\\tzurv``.
+
+    Each searchable term is extracted and emitted as a double-quoted FTS5
+    string literal, so a term is never interpreted as an operator or column
+    reference. Terms are joined with spaces, giving FTS5's implicit-AND broad
+    match. Hyphenated words such as ``scan-local`` split into independent
+    ``scan`` and ``local`` terms; exact hyphen matching remains the job of
+    ``--phrase``. Returns ``None`` when the query has no searchable terms.
+    """
+    terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
+    if not terms:
+        return None
+    # Double up any embedded quotes to keep each literal well-formed. The
+    # ``\w`` token class cannot contain a double quote, so this is defensive
+    # rather than reachable, and it keeps the escaping contract explicit.
+    quoted = [f'"{term.replace(chr(34), chr(34) * 2)}"' for term in terms]
+    return " ".join(quoted)
 
 
 def _query_terms(query: str) -> list[str]:

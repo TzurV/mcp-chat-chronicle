@@ -384,6 +384,89 @@ def test_phrase_search_handles_embedded_quotes(tmp_path: Path) -> None:
     assert [result.conversation_id for result in results] == [exact.conversation_id]
 
 
+def test_broad_search_handles_hyphenated_term_as_plain_text(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        hit = upsert_conversation(
+            conn,
+            None,
+            _conversation("hyphen-hit", "the chronicle scan-local command runs read-only"),
+        )
+        upsert_conversation(
+            conn,
+            None,
+            _conversation("hyphen-miss", "unrelated body about docker networking only"),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "scan-local")
+
+    assert [result.conversation_id for result in results] == [hit.conversation_id]
+    assert "scan-local" in results[0].snippet
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "scan-local",
+        "provider:openai_codex",
+        '"scan-local"',
+        "(scan-local)",
+        r"C:\Users\tzurv\.codex",
+        "scan/local",
+    ],
+)
+def test_broad_search_does_not_raise_on_fts_special_characters(
+    tmp_path: Path, query: str
+) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        upsert_conversation(
+            conn,
+            None,
+            _conversation("special-chars", "some ordinary body text for indexing"),
+        )
+        rebuild_fts(conn)
+
+        # Must not raise sqlite3.OperationalError; broad search treats the
+        # query as plain text, so unmatched punctuation yields no results
+        # rather than an FTS5 parser error.
+        results = search_conversations(conn, query)
+
+    assert isinstance(results, list)
+
+
+def test_broad_search_punctuation_only_query_returns_no_results(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        upsert_conversation(
+            conn,
+            None,
+            _conversation("punct-only", "body text that will not be matched"),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "()")
+
+    assert results == []
+
+
+def test_broad_search_still_matches_multiple_tokens(tmp_path: Path) -> None:
+    with connect(tmp_path / "chronicle.db") as conn:
+        both = upsert_conversation(
+            conn,
+            None,
+            _conversation("both-tokens", "docker bridge configuration notes"),
+        )
+        upsert_conversation(
+            conn,
+            None,
+            _conversation("one-token", "docker only, nothing else relevant here"),
+        )
+        rebuild_fts(conn)
+
+        results = search_conversations(conn, "docker bridge")
+
+    assert [result.conversation_id for result in results] == [both.conversation_id]
+
+
 def test_broad_search_hint_detection() -> None:
     assert should_show_broad_search_hint("YOU are the MANAGER")
     assert not should_show_broad_search_hint("manager")
