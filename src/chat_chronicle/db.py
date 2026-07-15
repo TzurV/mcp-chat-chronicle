@@ -13,7 +13,7 @@ from typing import Any
 
 from chat_chronicle.models import Conversation, IngestRunSummary, Message, UpsertResult
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 DB_ENV_VAR = "CHAT_CHRONICLE_DB"
 
 
@@ -76,12 +76,81 @@ def migrate(conn: sqlite3.Connection) -> None:
 
     if version < 1:
         _create_schema_v2(conn)
+        _migrate_v3(conn)
         conn.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
         conn.commit()
         return
 
     if version < 2:
         _migrate_v2(conn)
+        version = 2
+    if version < 3:
+        _migrate_v3(conn)
+    else:
+        _ensure_ai_cache_index(conn)
+
+
+def _migrate_v3(conn: sqlite3.Connection) -> None:
+    """Add append-only, reproducible AI task attempts without changing core data."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS ai_task_results (
+            id INTEGER PRIMARY KEY,
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            task_name TEXT NOT NULL,
+            task_version TEXT NOT NULL,
+            conversation_input_hash TEXT NOT NULL,
+            prompt_hash TEXT NOT NULL,
+            task_config_hash TEXT NOT NULL,
+            output_schema_name TEXT NOT NULL,
+            output_schema_version TEXT NOT NULL,
+            model_profile TEXT NOT NULL,
+            model_config_hash TEXT NOT NULL,
+            actual_provider TEXT,
+            actual_model TEXT,
+            result_json TEXT,
+            status TEXT NOT NULL CHECK(status IN ('success','failed')),
+            error TEXT,
+            started_at TEXT NOT NULL,
+            completed_at TEXT NOT NULL,
+            latency_ms INTEGER,
+            usage_json TEXT,
+            selection_json TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_ai_task_results_conversation_task_status
+            ON ai_task_results(conversation_id, task_name, status, completed_at);
+        PRAGMA user_version = 3;
+        """
+    )
+    _ensure_ai_cache_index(conn)
+    conn.commit()
+
+
+def _ensure_ai_cache_index(conn: sqlite3.Connection) -> None:
+    existing = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+        ("idx_ai_task_result_cache",),
+    ).fetchone()
+    required = (
+        "task_name",
+        "task_version",
+        "prompt_hash",
+        "output_schema_version",
+        "model_profile",
+    )
+    if existing is not None and all(name in (existing["sql"] or "") for name in required):
+        return
+    conn.execute("DROP INDEX IF EXISTS idx_ai_task_result_cache")
+    conn.execute(
+        """
+        CREATE INDEX idx_ai_task_result_cache ON ai_task_results(
+            conversation_id, task_name, task_version, conversation_input_hash,
+            prompt_hash, task_config_hash, output_schema_name, output_schema_version,
+            model_profile, model_config_hash, status
+        )
+        """
+    )
+    conn.commit()
 
 
 def _create_schema_v2(conn: sqlite3.Connection) -> None:
@@ -298,9 +367,7 @@ def _dedupe_sources_for_unique_index(conn: sqlite3.Connection) -> None:
             [(keep_id, source_id) for source_id in duplicate_ids],
         )
         conn.execute(
-            "DELETE FROM sources WHERE id IN ({})".format(
-                ",".join("?" for _ in duplicate_ids)
-            ),
+            "DELETE FROM sources WHERE id IN ({})".format(",".join("?" for _ in duplicate_ids)),
             duplicate_ids,
         )
 
@@ -340,10 +407,7 @@ def _add_column_if_missing(
     column: str,
     definition: str,
 ) -> None:
-    columns = {
-        row["name"]
-        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
-    }
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
@@ -712,14 +776,111 @@ def rebuild_fts(conn: sqlite3.Connection) -> None:
                         if part
                     ),
                     "\n".join(
-                        part
-                        for part in (row["message_body"], row["knowledge_body"])
-                        if part
+                        part for part in (row["message_body"], row["knowledge_body"]) if part
                     ),
                 )
                 for row in rows
             ],
         )
+
+
+def find_ai_cache_hit(
+    conn: sqlite3.Connection,
+    conversation_id: int,
+    task_name: str,
+    task_version: str,
+    input_hash: str,
+    prompt_hash: str,
+    task_hash: str,
+    schema_name: str,
+    schema_version: str,
+    model_profile: str,
+    model_hash: str,
+) -> sqlite3.Row | None:
+    return conn.execute(
+        """
+        SELECT id, result_json, actual_provider, actual_model FROM ai_task_results
+        WHERE conversation_id = ? AND task_name = ? AND task_version = ?
+          AND conversation_input_hash = ? AND prompt_hash = ?
+          AND task_config_hash = ? AND output_schema_name = ?
+          AND output_schema_version = ? AND model_profile = ?
+          AND model_config_hash = ? AND status = 'success'
+        ORDER BY id DESC LIMIT 1
+        """,
+        (
+            conversation_id,
+            task_name,
+            task_version,
+            input_hash,
+            prompt_hash,
+            task_hash,
+            schema_name,
+            schema_version,
+            model_profile,
+            model_hash,
+        ),
+    ).fetchone()
+
+
+def record_ai_task_result(
+    conn: sqlite3.Connection,
+    *,
+    conversation_id: int,
+    task_name: str,
+    task_version: str,
+    input_hash: str,
+    prompt_hash: str,
+    task_hash: str,
+    schema_name: str,
+    schema_version: str,
+    model_profile: str,
+    model_hash: str,
+    actual_provider: str | None,
+    actual_model: str | None,
+    result: dict[str, Any] | None,
+    status: str,
+    error: str | None,
+    latency_ms: int,
+    usage: dict[str, Any] | None,
+    selection: dict[str, Any],
+    started_at: str,
+    completed_at: str,
+) -> int:
+    with conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO ai_task_results (
+                conversation_id, task_name, task_version, conversation_input_hash,
+                prompt_hash, task_config_hash, output_schema_name, output_schema_version,
+                model_profile, model_config_hash, actual_provider, actual_model,
+                result_json, status, error, started_at, completed_at, latency_ms,
+                usage_json, selection_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                conversation_id,
+                task_name,
+                task_version,
+                input_hash,
+                prompt_hash,
+                task_hash,
+                schema_name,
+                schema_version,
+                model_profile,
+                model_hash,
+                actual_provider,
+                actual_model,
+                _json_dumps(result) if result is not None else None,
+                status,
+                error,
+                started_at,
+                completed_at,
+                latency_ms,
+                _json_dumps(usage) if usage else None,
+                _json_dumps(selection),
+            ),
+        )
+        return int(cursor.lastrowid)
 
 
 def _clear_fts(conn: sqlite3.Connection) -> None:

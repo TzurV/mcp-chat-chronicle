@@ -7,10 +7,10 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Field | Status |
 | --- | --- |
 | Date | 2026-07-15 |
-| Phase | Core real-history prototype accepted; M5 configurable AI-task foundation next |
-| Last accepted delivery | Real-history prototype owner smoke; last accepted WP is WP-2.3.2 search FTS special-character escaping |
-| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; Cursor deferred; M4 MCP not started; WP-5.1 handoff ready |
-| Next action | Execute WP-5.1; prepare a privacy-safe accepted-prototype progress post for Friday, 17 July 2026; keep WP-5.1.1 semantics pending owner discussion |
+| Phase | Core real-history prototype and M5 configurable AI-task foundation accepted; production task catalog next |
+| Last accepted delivery | WP-5.1 YAML AI-task runner + LiteLLM model configuration |
+| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; Cursor deferred; M4 MCP not started; WP-5.1 accepted after two rework cycles; WP-5.1.1 handoff ready; WP-5.1.2 remains gated by production task acceptance |
+| Next action | Execute and validate WP-5.1.1 from the approved handoff; keep WP-5.1.2 blocked until WP-5.1.1 acceptance |
 | Current branch | `main` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -39,7 +39,9 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Prototype | Real-history search demo | Accepted by owner smoke | N/A | Owner CLI evidence in PM thread | N/A | Real ChatGPT, Claude, OpenAI Codex, and Claude Code histories are present in the private repo-local DB. Stats, recent, broad/phrase search, ChatGPT URL open, and local Codex transcript rendering were exercised successfully; no private data is tracked. |
 | WP-1.5 | scan-local source inventory | Accepted | `md/handoffs/WP-1.5-scan-local-source-inventory.md` | `md/handoffs/reports/WP-1.5-completion-report.md` | `md/handoffs/reports/WP-1.5-validation-review.md` | Read-only inventory accepted for configured/default histories: exports root, OpenAI/Claude export folders, OpenAI Codex local store, Claude Code projects, and planned Cursor/Copilot paths. No DB writes or full transcript parsing. |
 | WP-1.6 | config defaults + collect workflow + scheduling docs | Accepted | `md/handoffs/WP-1.6-config-defaults-collect-workflow.md` | `md/handoffs/reports/WP-1.6-completion-report.md` | `md/handoffs/reports/WP-1.6-validation-review.md` | Accepted after rework: config-aware DB precedence applies to all DB-opening commands, `chronicle init`/`collect` are functional, YAML defaults and engine-interest settings are present, and README includes optional Task Scheduler docs. |
-| WP-5.1 | YAML AI-task runner + LiteLLM model configuration | Handoff ready | `md/handoffs/WP-5.1-yaml-ai-task-runner-litellm.md` | `md/handoffs/reports/WP-5.1-completion-report.md` | Pending | Foundation only: external task/model YAML, generic CLI dispatch, schema v3 task-result provenance/cache, local-first privacy gate, and mocked validation. Production task semantics remain WP-5.1.1. |
+| WP-5.1 | YAML AI-task runner + LiteLLM model configuration | Accepted | `md/handoffs/WP-5.1-yaml-ai-task-runner-litellm.md` | `md/handoffs/reports/WP-5.1-completion-report.md` | `md/handoffs/reports/WP-5.1-validation-acceptance.md` | Accepted after two rework cycles: installed resources, exact cache/provenance identity, actionable failures, provider schema propagation, dry-run provenance/cache counts, full acceptance matrix, and effective model-profile/task generation precedence. Production task semantics remain WP-5.1.1. |
+| WP-5.1.1 | Initial conversation-intelligence task catalog | Handoff ready | `md/handoffs/WP-5.1.1-initial-conversation-intelligence-tasks.md` | `md/handoffs/reports/WP-5.1.1-completion-report.md` | Pending | Four independent tasks are specified: summary with application-owned dates, whole-conversation work-mode classification, recent meaningful last activity, and suggestion-only title assessment. Synthetic-only implementation precedes WP-5.1.2 real-data references. |
+| WP-5.1.2 | Real-data teacher-reference corpus | Planned; dependency gated | `md/handoffs/WP-5.1.2-real-data-teacher-reference-corpus.md` | `md/handoffs/reports/WP-5.1.2-completion-report.md` | Pending | Build a private 30-conversation pilot then 300-conversation corpus across all four WP-5.1.1 tasks using GPT-5.6 Sol and Claude Fable 5 teacher references. No human review in this phase; unresolved disagreements are labeled and excluded from primary scores. Depends on accepted WP-5.1 and completed WP-5.1.1 contracts. |
 
 ## Research Artifact Ledger
 
@@ -65,7 +67,9 @@ These are not approved scope. They are recorded from RS-2 for future change-orde
 | History download helper | Owner discussion | Proposed only | Future tool to help download histories from chat providers when supported by documented/exportable flows or safe provider-specific automation. Config YAML should record which engines the user uses or wants supported, but download automation is not part of WP-1.5/WP-1.6 unless explicitly scheduled. |
 | Gemini Takeout/My Activity importer | Owner export note | Proposed only | Gemini chat text should be obtained through Google Takeout by selecting **My Activity**, filtering included activity to **Gemini Apps** / **Gemini Apps Activity**, then inspecting `My Activity/Gemini Apps/MyActivity.html` after ZIP extraction. Selecting the plain "Gemini" product may export only metadata such as custom Gems. Verify real archive shape before parser work. |
 | YAML-driven AI task runner | Owner AI-feature discussion | Approved for M5 planning | Use `poetry run chronicle --ai-task <name> ...`; `<name>` resolves from `.chronicle/ai-tasks.yaml`. Prompts/task policy are external, output schemas and safety controls remain code-owned, and models are aliases from `.chronicle/ai-models.yaml` through a thin LiteLLM-backed client. Local service profiles are default; remote development/evaluation profiles require explicit authorization. |
-| Initial conversation-intelligence tasks | Owner AI-feature discussion | Approved for M5 planning; details pending | First catalog: summary with DB-derived start/last-active dates, manager/executor/one-off classification, last-activity summary from recent meaningful turns, and title assessment with suggestion only. Taxonomy and detailed quality rules must be agreed before the WP-5.1.1 handoff. |
+| Initial conversation-intelligence tasks | Owner AI-feature discussion | Approved; WP-5.1.1 handoff ready | First catalog: summary with DB-derived start/last-active dates, whole-conversation work-mode classification, last-activity summary from recent meaningful turns, and title assessment with suggestion only. Detailed task semantics, selectors, schemas, evidence rules, and acceptance criteria are fixed in the WP-5.1.1 handoff. |
+| Real-data teacher-reference corpus | Owner evaluation discussion | Approved as WP-5.1.2; dependency gated | Use the real private DB through a read-only connection; keep canonical corpus/reference data under git-ignored `.chronicle/eval/`; generate dual frontier-model silver references for all four tasks; no human review in this phase. A 30-conversation pilot gates expansion to a deterministic 300-conversation corpus. |
+| Host-bundled local-model benchmark adapters | Owner local-model survey | Proposed only | Edge Phi-4-mini/Aion and Chrome Gemini Nano are browser JavaScript APIs, not LiteLLM HTTP profiles. Evaluate later through dedicated adapters. Phi Silica remains the WP-5.4 Windows App SDK spike. Foundry Local needs no new adapter because it offers an OpenAI-compatible endpoint. |
 
 ## Accepted Evidence Snapshot
 
@@ -107,6 +111,8 @@ If Poetry reports another project environment, the executor must stop and fix th
 | WP-2.1 real-archive performance | Prototype validation | Open | Synthetic performance smoke passed on 350 conversations; master-plan p95 target on a larger real archive remains to be measured during prototype validation. |
 | Default FTS special-character handling | WP-2.3.2 executor | Mitigated | Default broad search now sanitizes user text before FTS5 `MATCH`; `scan-local` returns results instead of parser errors while `--phrase` remains exact. |
 | Rename to WorkTrail | Release polish / pre-public | Open | Product name is WorkTrail; target repo/PyPI `worktrail-ai`, CLI `worktrail`. Rename before first public push. |
+| Teacher-reference validity | WP-5.1.2 / WP-5.2 | Open by design | No human adjudication is planned. References are silver, not ground truth; retain teacher provenance and disagreement states, exclude unresolved cases from primary scores, and publish coverage/agreement alongside model results. |
+| Remote evaluation retention and cost | WP-5.1.2 executor | Controlled by handoff | Owner authorizes bounded remote teacher generation from the real archive for this WP. Require a privacy-safe dry-run manifest, secret quarantine, provider/model allowlist, retention acknowledgement, explicit remote flags, and configured case/token/cost ceilings before transmission. |
 
 ## Source And Export Observations
 
@@ -123,7 +129,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Execute WP-5.1 from `md/handoffs/WP-5.1-yaml-ai-task-runner-litellm.md` and return the required detailed completion report.
-2. Keep WP-5.1.1 pending until the owner finalizes classification scope, recent-turn selection, summary form, and title-quality rules.
-3. By Friday, 17 July 2026, prepare a privacy-safe progress post from the already accepted real-history prototype. WP-5.1 may be described as next/in progress, not complete unless PM validation has accepted its report.
+1. Execute and PM-validate WP-5.1.1 classification, recent-activity, summary, and title-assessment tasks from the approved handoff.
+2. After WP-5.1.1 acceptance, execute the 30-conversation WP-5.1.2 pilot; expand to 300 only after its automated quality, privacy, and configured cost gates pass.
+3. By Friday, 17 July 2026, prepare a privacy-safe progress post from the accepted real-history prototype and accepted configurable AI-task foundation; do not claim the four production tasks are implemented.
 4. Schedule Gemini format inspection/import only after a real Google Takeout archive is available. Cursor remains deferred; MCP and rename/release remain later tracks.

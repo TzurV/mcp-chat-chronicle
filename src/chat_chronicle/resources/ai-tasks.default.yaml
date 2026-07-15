@@ -1,0 +1,20 @@
+version: 1
+tasks:
+  example-task:
+    enabled: false
+    version: "1"
+    description: "Disabled privacy-safe example; production tasks arrive in WP-5.1.1."
+    model_profile: service-local
+    input_selector: full-conversation
+    output_schema: example-result-v1
+    system_prompt: |
+      Return JSON with one string field named result.
+    user_prompt: |
+      Process this synthetic or explicitly selected conversation:\n{transcript}
+    # Optional per-field overrides; omitted fields inherit the model profile.
+    generation:
+      temperature: 0
+      max_tokens: 500
+    depends_on: []
+    max_input_chars: 50000
+    recent_message_count: 20

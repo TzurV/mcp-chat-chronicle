@@ -87,6 +87,8 @@ def test_init_creates_chronicle_config_db_and_export_folders(project_dir: Path) 
 
     assert result.exit_code == 0, result.stdout
     assert (project_dir / ".chronicle" / "config.yaml").is_file()
+    assert (project_dir / ".chronicle" / "ai-tasks.yaml").is_file()
+    assert (project_dir / ".chronicle" / "ai-models.yaml").is_file()
     assert (project_dir / ".chronicle" / "chronicle.db").is_file()
     assert (project_dir / "exports" / "openai").is_dir()
     assert (project_dir / "exports" / "claude").is_dir()
@@ -127,13 +129,31 @@ def test_init_force_overwrites_existing_config(project_dir: Path) -> None:
     assert "hand-edited marker" not in config_path.read_text(encoding="utf-8")
 
 
+def test_init_preserves_and_force_overwrites_ai_catalogs(project_dir: Path) -> None:
+    first = runner.invoke(app, ["init"])
+    assert first.exit_code == 0, first.stdout
+    tasks = project_dir / ".chronicle" / "ai-tasks.yaml"
+    models = project_dir / ".chronicle" / "ai-models.yaml"
+    tasks.write_text("# hand-edited task marker\n", encoding="utf-8")
+    models.write_text("# hand-edited model marker\n", encoding="utf-8")
+
+    kept = runner.invoke(app, ["init"])
+    assert kept.exit_code == 0, kept.stdout
+    assert "hand-edited task marker" in tasks.read_text("utf-8")
+    assert "hand-edited model marker" in models.read_text("utf-8")
+
+    overwritten = runner.invoke(app, ["init", "--force"])
+    assert overwritten.exit_code == 0, overwritten.stdout
+    assert "hand-edited task marker" not in tasks.read_text("utf-8")
+    assert "hand-edited model marker" not in models.read_text("utf-8")
+
+
 def test_init_preserves_existing_db_file(project_dir: Path) -> None:
     db_path = project_dir / ".chronicle" / "chronicle.db"
     db_path.parent.mkdir(parents=True)
     with connect(db_path) as conn:
         conn.execute(
-            "INSERT INTO sources (source_type, provider) VALUES "
-            "('manual_entry', 'marker')"
+            "INSERT INTO sources (source_type, provider) VALUES " "('manual_entry', 'marker')"
         )
         conn.commit()
 
@@ -142,9 +162,9 @@ def test_init_preserves_existing_db_file(project_dir: Path) -> None:
     assert result.exit_code == 0, result.stdout
     assert "database, kept" in result.stdout
     with connect(db_path) as conn:
-        markers = conn.execute(
-            "SELECT count(*) FROM sources WHERE provider = 'marker'"
-        ).fetchone()[0]
+        markers = conn.execute("SELECT count(*) FROM sources WHERE provider = 'marker'").fetchone()[
+            0
+        ]
     assert int(markers) == 1
 
 

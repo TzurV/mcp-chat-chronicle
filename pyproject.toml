@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-enrich = ["openai (>=1.30,<2.0)"]
+enrich = ["litellm (>=1.74,<2.0)"]
 mcp = ["fastmcp (>=2.0,<4.0)"]
 
 [project.urls]
@@ -33,6 +33,7 @@ chronicle = "chat_chronicle.cli:app"
 
 [tool.poetry]
 packages = [{ include = "chat_chronicle", from = "src" }]
+include = [{ path = "src/chat_chronicle/resources/*.yaml", format = ["sdist", "wheel"] }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2"

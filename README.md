@@ -40,6 +40,8 @@ files or folders; `init` does. It creates, if missing:
 ```text
 .chronicle/
 .chronicle/config.yaml        # generated, git-ignored local config
+.chronicle/ai-tasks.yaml      # external AI task prompts and policy
+.chronicle/ai-models.yaml     # external model/provider profiles
 .chronicle/chronicle.db       # DB schema is initialized only if the file is new
 exports/
 exports/openai/
@@ -168,7 +170,51 @@ chronicle search "docker network"                      # FTS5, ranked, snippets
 chronicle search --phrase "YOU are the MANAGER"        # exact phrase search
 chronicle open <result-id>                             # deep link or transcript view
 chronicle recent -n 20                                 # recent active chats by last activity date
+chronicle --ai-task list                               # discover configured optional AI tasks
 ```
+
+## Optional YAML-defined AI tasks
+
+Install the optional LiteLLM-backed layer explicitly; the base archive and all
+normal commands have no AI dependency and make no model calls:
+
+```powershell
+poetry install -E enrich
+poetry run chronicle init
+poetry run chronicle --ai-task list
+poetry run chronicle --ai-task example-task --conversation-id 1 --dry-run
+```
+
+`init` copies the tracked privacy-safe templates `ai-tasks.default.yaml` and
+`ai-models.default.yaml` to `.chronicle/ai-tasks.yaml` and
+`.chronicle/ai-models.yaml`. Existing local catalogs are kept unless `--force`
+is explicitly supplied. Prompts/tasks and model profiles are separate,
+strictly validated YAML files. The included example task is disabled and the
+local LM Studio profile uses a loopback endpoint plus the
+`CHRONICLE_LOCAL_MODEL` environment variable.
+
+For isolated automation or testing, `CHAT_CHRONICLE_AI_CONFIG_DIR` may point at
+the directory containing `ai-tasks.yaml` and `ai-models.yaml`; normal use keeps
+the default `.chronicle` location. Model profiles request strict JSON-schema
+output by default. A provider known not to support it must explicitly set
+`structured_output: false`, which degrades the provider request to JSON-object
+mode while retaining mandatory client-side Pydantic validation.
+
+Generation precedence is per field: the selected model profile supplies safe
+`temperature` and `max_tokens` defaults, and a task may override either or both
+under its own `generation` mapping. Omitted task fields inherit the profile.
+Chronicle sends and caches the resolved effective values. Changing a profile
+default that is masked by a task override therefore does not cause an identical
+request to be executed again.
+
+Runnable tasks always require one `--conversation-id` or a positive bounded
+`--limit`. Loopback profiles run locally by default; cloud or non-loopback
+profiles are blocked unless that invocation includes `--allow-remote`.
+Successful results resume from a configuration/input-aware cache; `--force`
+appends a fresh auditable attempt. In a mixed batch, individual failures are
+stored and reported while successful conversations continue; the command exits
+nonzero when every selected conversation fails. The four production conversation-
+intelligence tasks are intentionally deferred to WP-5.1.1.
 
 `chronicle ingest` accepts either a single supported source or a parent directory. A parent directory is scanned for supported child sources such as ChatGPT/OpenAI exports, Claude exports, OpenAI Codex local JSONL sessions, and Claude Code project JSONL sessions. Directories that are already valid single sources, such as `$env:USERPROFILE\.codex` or `$env:USERPROFILE\.claude\projects`, still ingest as one source rather than being expanded file by file.
 
@@ -207,7 +253,7 @@ poetry run chronicle scan-local
 
 Python 3.11+ · Poetry · Pydantic v2 · Typer + Rich · stdlib `sqlite3` + FTS5 · pytest · ruff · pre-commit · GitHub Actions (Windows + Ubuntu).
 
-Planned optional extras: `enrich` (YAML-defined AI tasks through LiteLLM, local service profile by default) and `mcp` (FastMCP recall server). The core archive keeps zero mandatory AI dependencies.
+Optional extras: `enrich` (YAML-defined AI tasks through LiteLLM, local service profile by default) and the planned `mcp` layer (FastMCP recall server). The core archive keeps zero mandatory AI dependencies.
 
 Not chosen: **DuckDB** (an analytics engine, wrong fit for text recall) · **Marvin** (native `json_schema` structured output teaches more) · **a browser extension** (fragile; exports and extractors cover the same ground) · **a background daemon** (a one-line Windows Task Scheduler entry suffices).
 

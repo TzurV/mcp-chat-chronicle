@@ -1,0 +1,15 @@
+version: 1
+profiles:
+  service-local:
+    model: ${CHRONICLE_LOCAL_MODEL}
+    api_base: http://127.0.0.1:1234/v1
+    api_key_env: null
+    remote: false
+    timeout: 60
+    retries: 1
+    concurrency: 1
+    structured_output: true
+    # Safe defaults used unless the selected task overrides an individual field.
+    generation:
+      temperature: 0
+      max_tokens: 500

@@ -176,22 +176,19 @@ def test_initialize_database_is_idempotent_and_sets_user_version(tmp_path) -> No
     initialize_database(db_path)
 
     with connect(db_path) as conn:
-        assert get_user_version(conn) == 2
+        assert get_user_version(conn) == 3
 
 
-def test_fresh_database_creates_v2_schema(tmp_path) -> None:
+def test_fresh_database_creates_v3_schema(tmp_path) -> None:
     db_path = tmp_path / "chronicle.db"
 
     initialize_database(db_path)
 
     with connect(db_path) as conn:
-        assert get_user_version(conn) == 2
-        assert "projects" in {
-            row["name"] for row in conn.execute("SELECT name FROM sqlite_master")
-        }
-        assert {"project_id", "origin_path", "resume_hint"} <= _table_columns(
-            conn, "conversations"
-        )
+        assert get_user_version(conn) == 3
+        assert conn.execute("SELECT count(*) FROM ai_task_results").fetchone()[0] == 0
+        assert "projects" in {row["name"] for row in conn.execute("SELECT name FROM sqlite_master")}
+        assert {"project_id", "origin_path", "resume_hint"} <= _table_columns(conn, "conversations")
         conn.execute(
             """
             INSERT INTO sources (source_type, provider, path_or_config)
@@ -200,7 +197,7 @@ def test_fresh_database_creates_v2_schema(tmp_path) -> None:
         )
 
 
-def test_v1_database_migrates_to_v2_and_preserves_rows(tmp_path) -> None:
+def test_v1_database_migrates_to_v3_and_preserves_rows(tmp_path) -> None:
     db_path = tmp_path / "chronicle.db"
     _create_v1_database(db_path)
 
@@ -245,10 +242,8 @@ def test_v1_database_migrates_to_v2_and_preserves_rows(tmp_path) -> None:
         conn.close()
 
     with connect(db_path) as conn:
-        assert get_user_version(conn) == 2
-        assert {"project_id", "origin_path", "resume_hint"} <= _table_columns(
-            conn, "conversations"
-        )
+        assert get_user_version(conn) == 3
+        assert {"project_id", "origin_path", "resume_hint"} <= _table_columns(conn, "conversations")
         assert conn.execute("SELECT count(*) FROM projects").fetchone()[0] == 0
         assert conn.execute("SELECT count(*) FROM conversations").fetchone()[0] == 1
         assert conn.execute("SELECT count(*) FROM messages").fetchone()[0] == 1
@@ -263,9 +258,7 @@ def test_v1_database_migrates_to_v2_and_preserves_rows(tmp_path) -> None:
             "last_seen_at": "2026-01-02T00:00:00Z",
             "last_ingested_at": "2026-01-02T00:05:00Z",
         }
-        assert conn.execute(
-            "SELECT source_id FROM conversations WHERE id = 10"
-        ).fetchone()[0] == 1
+        assert conn.execute("SELECT source_id FROM conversations WHERE id = 10").fetchone()[0] == 1
         assert conn.execute("SELECT source_id FROM ingest_runs WHERE id = 30").fetchone()[0] == 1
         conn.execute(
             """
@@ -506,3 +499,62 @@ def test_rebuild_fts_indexes_message_body(tmp_path) -> None:
             ("needleterm",),
         ).fetchall()
         assert len(rows) == 1
+
+
+def test_v2_database_migrates_to_v3_preserving_legacy_rows_fts_and_foreign_keys(
+    tmp_path,
+) -> None:
+    db_path = tmp_path / "v2.db"
+    _create_v1_database(db_path)
+    raw = sqlite3.connect(db_path)
+    raw.row_factory = sqlite3.Row
+    try:
+        db_module._migrate_v2(raw)
+        raw.executescript(
+            """
+            INSERT INTO sources (id, source_type, provider, path_or_config)
+            VALUES (1, 'official_export', 'chatgpt', 'synthetic');
+            INSERT INTO conversations (
+                id, source_id, provider, provider_conv_id, title,
+                created_at, updated_at, message_count, content_hash
+            ) VALUES (
+                10, 1, 'chatgpt', 'synthetic-v2', 'Synthetic legacy',
+                '2026-01-01T00:00:00Z', '2026-01-01T01:00:00Z', 1, 'hash'
+            );
+            INSERT INTO messages (id, conversation_id, role, body, seq)
+            VALUES (20, 10, 'user', 'legacy searchable needle', 0);
+            INSERT INTO enrichments (
+                conversation_id, summary, tags_json, language, model_used, enriched_at
+            ) VALUES (10, 'legacy summary', '["legacy"]', 'en', 'old-model', '2026-01-01');
+            INSERT INTO knowledge_items (
+                id, conversation_id, kind, statement, context, tags_json,
+                model_used, extracted_at
+            ) VALUES (
+                30, 10, 'decision', 'legacy decision', 'context', '["legacy"]',
+                'old-model', '2026-01-01'
+            );
+            """
+        )
+        raw.commit()
+        assert raw.execute("PRAGMA user_version").fetchone()[0] == 2
+    finally:
+        raw.close()
+
+    with connect(db_path) as conn:
+        assert get_user_version(conn) == 3
+        enrichment = conn.execute(
+            "SELECT summary FROM enrichments WHERE conversation_id = 10"
+        ).fetchone()[0]
+        knowledge = conn.execute("SELECT statement FROM knowledge_items WHERE id = 30").fetchone()[
+            0
+        ]
+        assert enrichment == "legacy summary"
+        assert knowledge == "legacy decision"
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        rebuild_fts(conn)
+        assert (
+            conn.execute("SELECT count(*) FROM chat_fts WHERE chat_fts MATCH 'needle'").fetchone()[
+                0
+            ]
+            == 1
+        )

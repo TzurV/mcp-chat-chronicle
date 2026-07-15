@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sqlite3
 import webbrowser
 import zipfile
 from dataclasses import dataclass, field
+from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -18,6 +20,18 @@ from rich.text import Text
 
 from chat_chronicle import __version__
 from chat_chronicle.adapters import chatgpt_export, claude_code, claude_export, openai_codex
+from chat_chronicle.ai import inspect_cache, run_task
+from chat_chronicle.ai_config import (
+    AI_MODELS_TEMPLATE,
+    AI_TASKS_TEMPLATE,
+    AIConfigError,
+    ai_config_paths,
+    is_remote_profile,
+    load_model_catalog,
+    load_task_catalog,
+    resolve_model,
+    validate_catalog_references,
+)
 from chat_chronicle.collect import CollectHooks, CollectReport
 from chat_chronicle.collect import collect as run_collect
 from chat_chronicle.config import (
@@ -58,6 +72,7 @@ app = typer.Typer(
     name="chronicle",
     help="A local-first, searchable archive of your AI conversations.",
     no_args_is_help=True,
+    invoke_without_command=True,
     add_completion=False,
 )
 console = Console()
@@ -164,6 +179,7 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: Annotated[
         bool,
         typer.Option(
@@ -173,8 +189,210 @@ def main(
             is_eager=True,
         ),
     ] = False,
+    ai_task: Annotated[
+        str | None, typer.Option("--ai-task", help="List or run a YAML-defined AI task.")
+    ] = None,
+    conversation_id: Annotated[int | None, typer.Option("--conversation-id")] = None,
+    limit: Annotated[int | None, typer.Option("--limit", min=1)] = None,
+    provider: Annotated[str | None, typer.Option("--provider")] = None,
+    since: Annotated[str | None, typer.Option("--since")] = None,
+    until: Annotated[str | None, typer.Option("--until")] = None,
+    model_profile: Annotated[str | None, typer.Option("--model-profile")] = None,
+    db_path: Annotated[Path | None, typer.Option("--db-path")] = None,
+    force: Annotated[bool, typer.Option("--force")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    allow_remote: Annotated[bool, typer.Option("--allow-remote")] = False,
 ) -> None:
     """A local-first, searchable archive of your AI conversations."""
+    if ai_task is None:
+        if (
+            any(
+                value is not None
+                for value in (
+                    conversation_id,
+                    limit,
+                    provider,
+                    since,
+                    until,
+                    model_profile,
+                    db_path,
+                )
+            )
+            or force
+            or dry_run
+            or allow_remote
+        ):
+            _fail("AI root options require --ai-task and cannot modify normal subcommands")
+        return
+    if ctx.invoked_subcommand is not None:
+        _fail("--ai-task cannot be combined with a normal subcommand")
+    _run_ai_cli(
+        ai_task,
+        conversation_id,
+        limit,
+        provider,
+        since,
+        until,
+        model_profile,
+        db_path,
+        force,
+        dry_run,
+        allow_remote,
+    )
+
+
+def _run_ai_cli(
+    task_name: str,
+    conversation_id: int | None,
+    limit: int | None,
+    provider: str | None,
+    since: str | None,
+    until: str | None,
+    model_override: str | None,
+    db_path: Path | None,
+    force: bool,
+    dry_run: bool,
+    allow_remote: bool,
+) -> None:
+    tasks_path, models_path = ai_config_paths()
+    try:
+        tasks = load_task_catalog(tasks_path)
+        models = load_model_catalog(models_path)
+        validate_catalog_references(tasks, models, tasks_path)
+    except AIConfigError as exc:
+        _fail(str(exc))
+    if task_name == "list":
+        if (
+            any(
+                value is not None
+                for value in (
+                    conversation_id,
+                    limit,
+                    provider,
+                    since,
+                    until,
+                    model_override,
+                    db_path,
+                )
+            )
+            or force
+            or dry_run
+            or allow_remote
+        ):
+            _fail("--ai-task list does not accept execution or selection options")
+        console.print("AI tasks")
+        for name, task in tasks.tasks.items():
+            state = "enabled" if task.enabled else "disabled"
+            console.print(f"{name}: {state}; model={task.model_profile}; {task.description}")
+        console.print("Model profiles")
+        for name, profile in models.profiles.items():
+            locality = "remote" if is_remote_profile(profile) else "local"
+            console.print(f"{name}: {locality}")
+        return
+    if conversation_id is None and limit is None:
+        _fail("A runnable AI task requires --conversation-id or an explicit positive --limit")
+    if conversation_id is not None and limit is not None:
+        _fail("Use either --conversation-id or --limit, not both")
+    if conversation_id is not None and any(value for value in (provider, since, until)):
+        _fail("Provider/date filters apply only to bounded --limit selection")
+    task = tasks.tasks.get(task_name)
+    if task is None or not task.enabled:
+        _fail(f"Unknown or disabled AI task '{task_name}'")
+    profile_name = model_override or task.model_profile
+    profile_config = models.profiles.get(profile_name)
+    if profile_config is None:
+        _fail(f"Task '{task_name}' references unknown model profile '{profile_name}'")
+    remote = is_remote_profile(profile_config)
+    if remote and not allow_remote:
+        _fail("Remote AI profile blocked; pass --allow-remote for this invocation")
+    try:
+        resolved_model = resolve_model(profile_config)["model"]
+    except AIConfigError as exc:
+        _fail(str(exc))
+    effective_db = _resolve_effective_db_path(db_path)
+    try:
+        with connect(effective_db) as conn:
+            if conversation_id is not None:
+                exists = conn.execute(
+                    "SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)
+                ).fetchone()
+                if exists is None:
+                    _fail(f"Conversation {conversation_id} does not exist")
+                ids = [conversation_id]
+            else:
+                selected_rows = list_recent_conversations(
+                    conn,
+                    provider=provider,
+                    since=since,
+                    until=until,
+                    limit=limit or 0,
+                )
+                ids = [row.conversation_id for row in selected_rows]
+            if not ids:
+                _fail("No conversations matched the explicit selection")
+            console.print(f"task: {task_name} v{task.version}")
+            console.print(
+                f"model profile: {profile_name} ({'remote' if remote else 'local'}); "
+                f"resolved model: {resolved_model}"
+            )
+            console.print(f"selected: {len(ids)}; conversation ids: {', '.join(map(str, ids))}")
+            if dry_run:
+                cache = inspect_cache(
+                    conn,
+                    task_name=task_name,
+                    task=task,
+                    profile_name=profile_name,
+                    profile=profile_config,
+                    conversation_ids=ids,
+                )
+                matching_hits = sum(item["status"] == "hit" for item in cache)
+                hits = 0 if force else matching_hits
+                console.print(f"cache hits: {hits}  cache misses: {len(cache) - hits}")
+                if force and matching_hits:
+                    console.print(f"cache bypassed by --force: {matching_hits}")
+                console.print("dry run: no model call made")
+                return
+            results = asyncio.run(
+                run_task(
+                    conn,
+                    task_name=task_name,
+                    task=task,
+                    profile_name=profile_name,
+                    profile=profile_config,
+                    conversation_ids=ids,
+                    force=force,
+                )
+            )
+    except (AIConfigError, ValueError) as exc:
+        _fail(str(exc))
+    counts = {
+        name: sum(item["status"] == name for item in results)
+        for name in ("completed", "cached", "failed")
+    }
+    console.print(
+        f"completed: {counts['completed']}  cached: {counts['cached']}  failed: {counts['failed']}"
+    )
+    for result in results:
+        provenance = ""
+        if result.get("actual_provider") or result.get("actual_model"):
+            provenance = (
+                f"  actual: {result.get('actual_provider') or 'unknown'}/"
+                f"{result.get('actual_model') or 'unknown'}"
+            )
+        console.print(
+            f"result id: {result['id']}  "
+            f"conversation id: {result['conversation_id']}  "
+            f"status: {result['status']}{provenance}"
+        )
+        if result["status"] == "failed":
+            console.print(
+                f"failure: {result.get('error', 'unknown')}: "
+                f"{result.get('detail', 'AI task failed safely')}"
+            )
+    if len(results) == 1 and "result" in results[0]:
+        console.print_json(data=results[0]["result"])
+    if results and all(result["status"] == "failed" for result in results):
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -528,6 +746,21 @@ def init(
         overwrote = target_config.exists()
         target_config.write_text(dump_config_yaml(config), encoding="utf-8")
         created.append(f"{target_config} (config{', overwritten' if overwrote else ''})")
+
+    # AI catalogs are independently editable and follow the same explicit force rule.
+    ai_tasks_path, ai_models_path = ai_config_paths(base_dir)
+    for target, template in (
+        (ai_tasks_path, AI_TASKS_TEMPLATE),
+        (ai_models_path, AI_MODELS_TEMPLATE),
+    ):
+        ensure_dir(target.parent)
+        if target.exists() and not force:
+            existing.append(f"{target} (AI config, kept; use --force to overwrite)")
+        else:
+            overwrote = target.exists()
+            content = files("chat_chronicle.resources").joinpath(template).read_text("utf-8")
+            target.write_text(content, encoding="utf-8")
+            created.append(f"{target} (AI config{', overwritten' if overwrote else ''})")
 
     # 2. Export folders under the configured exports root.
     exports_root = resolve_path(config.paths.exports_root, base_dir)
