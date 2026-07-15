@@ -7,10 +7,10 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Field | Status |
 | --- | --- |
 | Date | 2026-07-15 |
-| Phase | Core real-history prototype and M5 local AI-task execution accepted; prompt calibration next |
+| Phase | Core real-history prototype and M5 local AI-task execution accepted; WP-5.1.4 locally validated, remote CI pending |
 | Last accepted delivery | WP-5.1.3 local LM Studio AI-task smoke and compatibility fix |
-| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; Cursor deferred; M4 MCP not started; WP-5.1, WP-5.1.1, and WP-5.1.3 accepted; all four initial tasks execute through local LM Studio on short real conversations; WP-5.1.2 remains paused |
-| Next action | Calibrate the four AI-task prompts on a small owner-selected real-chat sample, then revise and release WP-5.1.2 |
+| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; Cursor deferred; M4 MCP not started; WP-5.1, WP-5.1.1, and WP-5.1.3 accepted; all four initial tasks execute through local LM Studio on short real conversations; WP-5.1.4 deterministic local validation passes but hosted Windows/Ubuntu confirmation is pending; WP-5.1.2 remains paused |
+| Next action | PM commit WP-5.1.4, owner push, confirm both GitHub Actions OS jobs are green, then calibrate the four AI-task prompts before revising WP-5.1.2 |
 | Current branch | `main` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -43,6 +43,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.1.1 | Initial conversation-intelligence task catalog | Accepted | `md/handoffs/WP-5.1.1-initial-conversation-intelligence-tasks.md` | `md/handoffs/reports/WP-5.1.1-completion-report.md` | `md/handoffs/reports/WP-5.1.1-validation-acceptance.md` | Accepted after one rework cycle. Overview selected IDs now flow structurally; decimal-prefix and quoted-body collisions are covered and false evidence fails validation. The earlier review remains the rework record. |
 | WP-5.1.2 | Real-data teacher-reference corpus | Paused pending prompt calibration and scope revision | `md/handoffs/WP-5.1.2-real-data-teacher-reference-corpus.md` | `md/handoffs/reports/WP-5.1.2-completion-report.md` | Pending | Do not execute the current automation handoff yet. First calibrate the four task prompts and agree whether references are produced through a lighter manual-chat workflow or bounded dual-teacher tooling. |
 | WP-5.1.3 | Local LM Studio AI-task smoke and compatibility fix | Accepted | `md/handoffs/WP-5.1.3-local-lm-studio-ai-task-smoke-fix.md` | `md/handoffs/reports/WP-5.1.3-completion-report.md` | `md/handoffs/reports/WP-5.1.3-validation-review.md` | Accepted after direct LM Studio/LiteLLM isolation and real local smoke. Dedicated `lm_studio/` routing, provider-compatible structural schemas, exact evidence binding, safe diagnostics, context estimates, and realistic tracked timeout policy are in place. |
+| WP-5.1.4 | Windows CI Rich-output wrapping patch | Remote CI confirmation pending | `md/handoffs/WP-5.1.4-windows-ci-rich-output-wrapping.md` | `md/handoffs/reports/WP-5.1.4-completion-report.md` | `md/handoffs/reports/WP-5.1.4-validation-review.md` | Locally accepted after deterministic long-path and 20-column Rich regressions. Test-only patch preserves exit code, task/alias identity, full normalized diagnostic, and no-traceback behavior. Final acceptance requires green hosted Windows and Ubuntu jobs after push. |
 
 ## Research Artifact Ledger
 
@@ -130,7 +131,8 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Execute the private 30-conversation WP-5.1.2 teacher-reference pilot; do not expand to 300 until the handoff's automated quality, privacy, and configured cost gates pass.
-2. After WP-5.1.1 acceptance, execute the 30-conversation WP-5.1.2 pilot; expand to 300 only after its automated quality, privacy, and configured cost gates pass.
-3. By Friday, 17 July 2026, prepare a privacy-safe progress post from accepted work only; do not claim WP-5.1.1 acceptance before PM validation.
-4. Schedule Gemini format inspection/import only after a real Google Takeout archive is available. Cursor remains deferred; MCP and rename/release remain later tracks.
+1. Commit and push locally accepted WP-5.1.4, then confirm both GitHub Actions OS jobs are green before final acceptance.
+2. Calibrate the four accepted AI-task prompts on a small owner-selected real-chat sample and agree the reference workflow.
+3. Revise WP-5.1.2 after calibration; do not execute its current teacher-reference automation handoff yet.
+4. By Friday, 17 July 2026, prepare a privacy-safe progress post from accepted work only; do not claim semantic model quality or benchmark results.
+5. Schedule Gemini format inspection/import only after a real Google Takeout archive is available. Cursor remains deferred; MCP and rename/release remain later tracks.

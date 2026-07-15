@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from rich.console import Console
 from typer.testing import CliRunner
 
 from chat_chronicle.ai import CompletionResponse, run_task
@@ -16,6 +17,19 @@ from chat_chronicle.db import connect, upsert_conversation
 from chat_chronicle.models import Conversation, Message
 
 runner = CliRunner()
+
+
+def _normalized_rendering(output: str) -> str:
+    """Normalize presentation-only whitespace inserted by terminal wrapping."""
+    return " ".join(output.split())
+
+
+def _assert_unknown_model_profile_error(output: str, exit_code: int) -> None:
+    normalized = _normalized_rendering(output)
+    assert exit_code == 1
+    assert "Task 'test-task'" in normalized
+    assert "unknown model profile 'missing-profile'" in normalized
+    assert "Traceback" not in output
 
 
 def _catalogs(base: Path, *, remote: bool = False, enabled: bool = True) -> None:
@@ -176,10 +190,51 @@ def test_unknown_task_model_alias_is_actionable(project: Path) -> None:
         app,
         ["--ai-task", "test-task", "--conversation-id", str(conversation_id), "--dry-run"],
     )
-    assert result.exit_code == 1
-    assert "unknown model profile" in result.output
-    assert "missing-profile" in result.output
-    assert "Traceback" not in result.output
+    _assert_unknown_model_profile_error(result.output, result.exit_code)
+
+
+def test_unknown_task_model_alias_is_actionable_with_long_runner_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = (
+        tmp_path
+        / "Users"
+        / "runneradmin"
+        / "AppData"
+        / "Local"
+        / "Temp"
+        / "pytest-of-runneradmin"
+        / "pytest-123"
+        / "test_unknown_task_model_alias_is_actionable0"
+    )
+    _catalogs(project)
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("CHAT_CHRONICLE_DB", str(project / ".chronicle" / "chronicle.db"))
+    tasks = project / ".chronicle" / "ai-tasks.yaml"
+    data = yaml.safe_load(tasks.read_text("utf-8"))
+    data["tasks"]["test-task"]["model_profile"] = "missing-profile"
+    tasks.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+    result = runner.invoke(app, ["--ai-task", "test-task", "--conversation-id", "1", "--dry-run"])
+
+    assert len(str(tasks)) > 200
+    assert "\n" in result.output
+    _assert_unknown_model_profile_error(result.output, result.exit_code)
+
+
+def test_unknown_task_model_alias_is_actionable_at_narrow_width(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tasks = project / ".chronicle" / "ai-tasks.yaml"
+    data = yaml.safe_load(tasks.read_text("utf-8"))
+    data["tasks"]["test-task"]["model_profile"] = "missing-profile"
+    tasks.write_text(yaml.safe_dump(data), encoding="utf-8")
+    monkeypatch.setattr("chat_chronicle.cli.error_console", Console(stderr=True, width=20))
+
+    result = runner.invoke(app, ["--ai-task", "test-task", "--conversation-id", "1", "--dry-run"])
+
+    assert "unknown model profile" not in result.output
+    _assert_unknown_model_profile_error(result.output, result.exit_code)
 
 
 def test_non_loopback_cannot_claim_local_and_allow_remote_is_ephemeral(
