@@ -2,11 +2,11 @@
 
 ## Status
 
-**Locally accepted; remote GitHub Actions confirmation pending.**
+**Accepted.**
 
-The implementation satisfies the handoff under deterministic local validation and
-is ready for the PM-owned commit. WP-5.1.4 is not finally closed until the committed
-patch is pushed and the real GitHub Actions Windows and Ubuntu jobs both pass.
+The implementation satisfies the handoff under deterministic local validation. The
+PM committed it as `f0ecaf6`, the owner pushed it, and the owner subsequently
+confirmed that the hosted GitHub test passed. The remote closure gate is complete.
 
 ## PM Summary
 
@@ -22,12 +22,11 @@ Windows-runner-shaped path and force a 20-column Rich console.
 
 ## Findings
 
-No blocking implementation finding.
+No blocking finding.
 
-The remaining validation dependency is environmental: the deterministic regressions
-run on any host OS, including Linux, but only a pushed GitHub workflow can confirm
-the exact hosted Windows runner that originally failed. Local green tests are not a
-substitute for that final matrix result.
+The deterministic regressions run on any host OS, including Linux, while the pushed
+GitHub workflow supplied the final hosted-runner confirmation for the environment in
+which the original failure occurred.
 
 ## Scope Review
 
@@ -52,7 +51,7 @@ behavior changed. No skip, `xfail`, retry, OS branch, or CI-only bypass was adde
 | Focused validation | Pass | Unknown-profile tests and 32-test AI configuration/CLI matrix pass independently. |
 | Full validation | Pass | Full local suite passes with 373 tests reported by the executor. |
 | Ruff and diff checks | Pass | Independently clean. |
-| Hosted Windows and Ubuntu jobs | Pending | Requires PM commit, owner push, and GitHub Actions completion. |
+| Hosted GitHub Actions validation | Pass | Owner confirmed the pushed `f0ecaf6` test passed. |
 
 ## Independent Validation
 
@@ -74,20 +73,14 @@ Results:
 - Ruff reported `All checks passed!`;
 - diff validation passed.
 
-## Remote Closure Gate
+## Remote Closure Evidence
 
-After PM commit and owner push:
-
-1. Confirm the GitHub Actions Windows job passes the previously failing test.
-2. Confirm the Ubuntu job also passes, proving the normalization is cross-platform.
-3. Record workflow URL, commit SHA, job names, and final pass/fail status in the
-   ledger without copying runner paths or other unnecessary environment details.
-4. Only then change WP-5.1.4 from `Remote CI confirmation pending` to `Accepted`.
-
-If either job fails, do not stack unrelated work on the patch. Return WP-5.1.4 to
-rework with the exact failing assertion and hosted-runner evidence.
+- Commit: `f0ecaf6 test: harden Rich output assertions in CI`.
+- Owner pushed the commit.
+- Owner confirmed the hosted GitHub test passed.
+- No hosted-runner path or other unnecessary environment detail is retained here.
 
 ## Decision
 
-Approve WP-5.1.4 for PM commit. Keep prompt calibration and WP-5.1.2 paused until
-the pushed commit has a green Windows and Ubuntu matrix.
+Accept WP-5.1.4. Resume manual prompt calibration planning. WP-5.1.2 remains paused
+until the prompt and reference workflow are agreed.

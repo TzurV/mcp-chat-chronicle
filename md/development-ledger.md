@@ -7,10 +7,10 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Field | Status |
 | --- | --- |
 | Date | 2026-07-15 |
-| Phase | Core real-history prototype and M5 local AI-task execution accepted; WP-5.1.4 locally validated, remote CI pending |
+| Phase | Core real-history prototype and M5 local AI-task execution accepted; first-release planning next in a separate thread |
 | Last accepted delivery | WP-5.1.3 local LM Studio AI-task smoke and compatibility fix |
-| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; Cursor deferred; M4 MCP not started; WP-5.1, WP-5.1.1, and WP-5.1.3 accepted; all four initial tasks execute through local LM Studio on short real conversations; WP-5.1.4 deterministic local validation passes but hosted Windows/Ubuntu confirmation is pending; WP-5.1.2 remains paused |
-| Next action | PM commit WP-5.1.4, owner push, confirm both GitHub Actions OS jobs are green, then calibrate the four AI-task prompts before revising WP-5.1.2 |
+| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; Cursor deferred; M4 MCP not started; WP-5.1, WP-5.1.1, WP-5.1.3, and WP-5.1.4 accepted; all four initial tasks execute through local LM Studio on short real conversations; hosted GitHub validation passed; WP-5.1.2 is paused by owner direction; first-release preparation is next |
+| Next action | Open a separate first-release thread using `md/release-1-planning-note.md`; prepare release README and LinkedIn/article scope there, including an owner-approved representation of this manager chat |
 | Current branch | `main` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -41,9 +41,9 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-1.6 | config defaults + collect workflow + scheduling docs | Accepted | `md/handoffs/WP-1.6-config-defaults-collect-workflow.md` | `md/handoffs/reports/WP-1.6-completion-report.md` | `md/handoffs/reports/WP-1.6-validation-review.md` | Accepted after rework: config-aware DB precedence applies to all DB-opening commands, `chronicle init`/`collect` are functional, YAML defaults and engine-interest settings are present, and README includes optional Task Scheduler docs. |
 | WP-5.1 | YAML AI-task runner + LiteLLM model configuration | Accepted | `md/handoffs/WP-5.1-yaml-ai-task-runner-litellm.md` | `md/handoffs/reports/WP-5.1-completion-report.md` | `md/handoffs/reports/WP-5.1-validation-acceptance.md` | Accepted after two rework cycles: installed resources, exact cache/provenance identity, actionable failures, provider schema propagation, dry-run provenance/cache counts, full acceptance matrix, and effective model-profile/task generation precedence. Production task semantics remain WP-5.1.1. |
 | WP-5.1.1 | Initial conversation-intelligence task catalog | Accepted | `md/handoffs/WP-5.1.1-initial-conversation-intelligence-tasks.md` | `md/handoffs/reports/WP-5.1.1-completion-report.md` | `md/handoffs/reports/WP-5.1.1-validation-acceptance.md` | Accepted after one rework cycle. Overview selected IDs now flow structurally; decimal-prefix and quoted-body collisions are covered and false evidence fails validation. The earlier review remains the rework record. |
-| WP-5.1.2 | Real-data teacher-reference corpus | Paused pending prompt calibration and scope revision | `md/handoffs/WP-5.1.2-real-data-teacher-reference-corpus.md` | `md/handoffs/reports/WP-5.1.2-completion-report.md` | Pending | Do not execute the current automation handoff yet. First calibrate the four task prompts and agree whether references are produced through a lighter manual-chat workflow or bounded dual-teacher tooling. |
+| WP-5.1.2 | Real-data teacher-reference corpus | Paused by owner direction | `md/handoffs/WP-5.1.2-real-data-teacher-reference-corpus.md` | `md/handoffs/reports/WP-5.1.2-completion-report.md` | Pending | Do not execute the current automation handoff. Resume only after the first-release workstream and a later owner decision on prompt calibration and reference workflow. |
 | WP-5.1.3 | Local LM Studio AI-task smoke and compatibility fix | Accepted | `md/handoffs/WP-5.1.3-local-lm-studio-ai-task-smoke-fix.md` | `md/handoffs/reports/WP-5.1.3-completion-report.md` | `md/handoffs/reports/WP-5.1.3-validation-review.md` | Accepted after direct LM Studio/LiteLLM isolation and real local smoke. Dedicated `lm_studio/` routing, provider-compatible structural schemas, exact evidence binding, safe diagnostics, context estimates, and realistic tracked timeout policy are in place. |
-| WP-5.1.4 | Windows CI Rich-output wrapping patch | Remote CI confirmation pending | `md/handoffs/WP-5.1.4-windows-ci-rich-output-wrapping.md` | `md/handoffs/reports/WP-5.1.4-completion-report.md` | `md/handoffs/reports/WP-5.1.4-validation-review.md` | Locally accepted after deterministic long-path and 20-column Rich regressions. Test-only patch preserves exit code, task/alias identity, full normalized diagnostic, and no-traceback behavior. Final acceptance requires green hosted Windows and Ubuntu jobs after push. |
+| WP-5.1.4 | Windows CI Rich-output wrapping patch | Accepted | `md/handoffs/WP-5.1.4-windows-ci-rich-output-wrapping.md` | `md/handoffs/reports/WP-5.1.4-completion-report.md` | `md/handoffs/reports/WP-5.1.4-validation-review.md` | Accepted after deterministic long-path and 20-column Rich regressions plus owner-confirmed hosted GitHub pass for `f0ecaf6`. Test-only patch preserves exit code, task/alias identity, full normalized diagnostic, and no-traceback behavior. |
 
 ## Research Artifact Ledger
 
@@ -70,7 +70,8 @@ These are not approved scope. They are recorded from RS-2 for future change-orde
 | Gemini Takeout/My Activity importer | Owner export note | Proposed only | Gemini chat text should be obtained through Google Takeout by selecting **My Activity**, filtering included activity to **Gemini Apps** / **Gemini Apps Activity**, then inspecting `My Activity/Gemini Apps/MyActivity.html` after ZIP extraction. Selecting the plain "Gemini" product may export only metadata such as custom Gems. Verify real archive shape before parser work. |
 | YAML-driven AI task runner | Owner AI-feature discussion | Approved for M5 planning | Use `poetry run chronicle --ai-task <name> ...`; `<name>` resolves from `.chronicle/ai-tasks.yaml`. Prompts/task policy are external, output schemas and safety controls remain code-owned, and models are aliases from `.chronicle/ai-models.yaml` through a thin LiteLLM-backed client. Local service profiles are default; remote development/evaluation profiles require explicit authorization. |
 | Initial conversation-intelligence tasks | Owner AI-feature discussion | Accepted as WP-5.1.1 | First catalog: summary with DB-derived start/last-active dates, whole-conversation work-mode classification, last-activity summary from recent meaningful turns, and title assessment with suggestion only. Real-model semantic quality remains unmeasured until WP-5.1.2/WP-5.2. |
-| Real-data teacher-reference corpus | Owner evaluation discussion | Approved as WP-5.1.2; handoff ready | Create a consistent frozen snapshot through SQLite backup, then use only that local read-only basis under git-ignored `.chronicle/eval/`. Generate dual frontier-model silver references for all four tasks; no human review in this phase. Executor stops at a PM operator checkpoint, after which the owner manually launches bounded remote calls. A 30-conversation pilot gates expansion to 300. |
+| Real-data teacher-reference corpus | Owner evaluation discussion | Paused by owner direction | Preserve the current WP-5.1.2 handoff as planning history, but do not execute snapshot, remote teacher, reconciliation, or expansion work until the owner resumes it after first-release preparation. |
+| First-release preparation | Owner release direction | Planning recorded; execute in separate thread | Use `md/release-1-planning-note.md`. Prepare the current accepted version for first release with a release-quality README and LinkedIn post/article. Include this current manager chat in an owner-approved form; raw transcript publication, redaction, artifact format, rename/version, and release channel remain decisions for the release thread. |
 | Host-bundled local-model benchmark adapters | Owner local-model survey | Proposed only | Edge Phi-4-mini/Aion and Chrome Gemini Nano are browser JavaScript APIs, not LiteLLM HTTP profiles. Evaluate later through dedicated adapters. Phi Silica remains the WP-5.4 Windows App SDK spike. Foundry Local needs no new adapter because it offers an OpenAI-compatible endpoint. |
 
 ## Accepted Evidence Snapshot
@@ -103,7 +104,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 | Item | Owner | Status | Notes |
 | --- | --- | --- | --- |
-| First remote CI run | PM / executor after push | Open | Local validation has passed for accepted WPs; GitHub Actions matrix has not yet run remotely. |
+| First remote CI run | PM / owner | Passed | Owner confirmed hosted GitHub validation passed after WP-5.1.4 commit `f0ecaf6`. |
 | Poetry `VIRTUAL_ENV` hazard | All executor chats | Mitigated procedurally | Documented in `md/agent-operating-notes.md`; add the preflight to each future handoff. |
 | Sandbox launcher failures | PM validation chats | Mitigated procedurally | Use direct `rg`/`Get-Content -Raw`; retry key validation commands with escalation only when the sandbox launcher fails. |
 | Claude real export metadata blocks | WP-1.3.1 executor | Mitigated | Known `thinking`, `tool_use`, and `tool_result` blocks now skip without noisy parser errors. Future benign block types should be added with evidence and synthetic tests. |
@@ -131,8 +132,8 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Commit and push locally accepted WP-5.1.4, then confirm both GitHub Actions OS jobs are green before final acceptance.
-2. Calibrate the four accepted AI-task prompts on a small owner-selected real-chat sample and agree the reference workflow.
-3. Revise WP-5.1.2 after calibration; do not execute its current teacher-reference automation handoff yet.
-4. By Friday, 17 July 2026, prepare a privacy-safe progress post from accepted work only; do not claim semantic model quality or benchmark results.
-5. Schedule Gemini format inspection/import only after a real Google Takeout archive is available. Cursor remains deferred; MCP and rename/release remain later tracks.
+1. Open a separate first-release task/thread and provide `md/release-1-planning-note.md` as initial context.
+2. In that release thread, decide version/name/rename scope, release channel, README acceptance, and LinkedIn post/article deliverables.
+3. Decide how this main manager chat is included, including public/private status, transcript versus case study, redaction, and explicit publication approval.
+4. Keep WP-5.1.2 and WP-5.2 paused until the owner resumes evaluation work.
+5. Keep this thread for main development planning and PM validation rather than release execution.
