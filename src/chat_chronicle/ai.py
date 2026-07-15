@@ -400,14 +400,20 @@ def _bounded_omitted_ids(ids: list[int]) -> tuple[list[int], bool]:
     return ids[:100], len(ids) > 100
 
 
-def _overview_selection(rows: list[sqlite3.Row], budget: int) -> tuple[str, dict[str, Any]]:
+def _overview_selection(
+    rows: list[sqlite3.Row], budget: int
+) -> tuple[str, list[int], dict[str, Any]]:
     rendered_all = [_render_message(row) for row in rows]
     full_text = "\n\n".join(rendered_all)
     if len(full_text) <= budget:
-        return full_text, {
-            "sampling_strategy": "complete",
-            "truncation_details": [],
-        }
+        return (
+            full_text,
+            [int(row["id"]) for row in rows],
+            {
+                "sampling_strategy": "complete",
+                "truncation_details": [],
+            },
+        )
 
     # Reserve the two separators between the three deterministic allocation groups.
     allocatable = max(1, budget - 4)
@@ -455,10 +461,14 @@ def _overview_selection(rows: list[sqlite3.Row], budget: int) -> tuple[str, dict
     text = "\n\n".join(item[1] for item in chronological)
     # Allocation math should keep this bounded; this guard handles very small budgets.
     text = text[:budget]
-    return text, {
-        "sampling_strategy": "beginning-25-middle-25-end-50",
-        "truncation_details": [item[2] for item in chronological if item[2]],
-    }
+    return (
+        text,
+        [int(item[0]["id"]) for item in chronological],
+        {
+            "sampling_strategy": "beginning-25-middle-25-end-50",
+            "truncation_details": [item[2] for item in chronological if item[2]],
+        },
+    )
 
 
 def _select_meaningful(
@@ -467,12 +477,9 @@ def _select_meaningful(
     meaningful = _meaningful_rows(rows)
     all_ids = [int(row["id"]) for row in meaningful]
     if task.input_selector == "conversation-overview-v1":
-        text, details = _overview_selection(meaningful, task.max_input_chars)
-        selected_ids = [
-            int(row["id"])
-            for row in meaningful
-            if f"message_id={int(row['id'])}" in text
-        ]
+        text, selected_ids, details = _overview_selection(
+            meaningful, task.max_input_chars
+        )
         original_text = "\n\n".join(_render_message(row) for row in meaningful)
         original_candidate_count = len(meaningful)
     else:

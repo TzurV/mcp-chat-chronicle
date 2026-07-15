@@ -741,6 +741,13 @@ The report must include:
 
 ## Executor Delivery Rules
 
+The PM/manager exclusively owns staging and commits. Do not run `git add`,
+`git commit`, amend, squash, rebase, or otherwise rewrite history. Leave all
+delivery and rework changes uncommitted with a final `git status --short` for PM
+review. Only the PM may commit after successful validation and an explicit owner
+request; a commit request addressed to the PM or associated with another work
+package is not authorization for the executor.
+
 - Do not commit unless explicitly instructed by the PM after validation.
 - Do not update the ledger to `Accepted`; only the PM does that.
 - You may set the WP row to `Ready for PM validation` only when every acceptance criterion is satisfied and the full real corpus/reference run is complete.
@@ -748,4 +755,3 @@ The report must include:
 - Use `blocked` only for a genuine external dependency that prevents meaningful progress and explain it precisely.
 - Preserve all unrelated and pre-existing working-tree changes.
 - Return a concise delivery message pointing to the required completion report; the report contains the detailed evidence.
-

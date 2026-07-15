@@ -187,6 +187,86 @@ def test_overview_records_message_truncation_and_empty_selection(tmp_path: Path)
         assert empty.metadata["seq_start"] is None
 
 
+def test_overview_ids_are_structural_despite_prefix_and_quoted_body_collisions(
+    tmp_path: Path,
+) -> None:
+    messages = [
+        _message(
+            "user" if index % 2 == 0 else "assistant",
+            (
+                f"collision-marker-{index + 1}-" + "x" * 90
+                + (" quoted message_id=3" if index == 19 else "")
+            ),
+            index,
+        )
+        for index in range(20)
+    ]
+    with connect(tmp_path / "id-collisions.db") as conn:
+        conversation_id = _seed(conn, "id-collisions", messages)
+        task = _production_catalog().tasks["work-mode-classification"].model_copy(
+            update={"max_input_chars": 900}
+        )
+        first = select_input(conn, conversation_id, task)
+        second = select_input(conn, conversation_id, task)
+
+        assert first == second
+        assert len(first.text) <= 900
+        assert 20 in first.metadata["selected_message_ids"]
+        assert 2 not in first.metadata["selected_message_ids"]
+        assert 3 not in first.metadata["selected_message_ids"]
+        assert first.metadata["message_ids"] == first.metadata["selected_message_ids"]
+        assert "message_id=20" in first.text
+        assert "quoted message_id=3" in first.text
+
+        for false_evidence in (2, 3):
+            failed = asyncio.run(
+                run_task(
+                    conn,
+                    task_name=f"collision-{false_evidence}",
+                    task=task,
+                    profile_name="service-local",
+                    profile=ModelProfile(model="mock", api_base="http://localhost/v1"),
+                    conversation_ids=[conversation_id],
+                    client=StaticClient(
+                        {
+                            "mode": "executor",
+                            "confidence": 0.8,
+                            "reason": "Synthetic execution activity dominates.",
+                            "evidence_message_ids": [false_evidence],
+                        }
+                    ),
+                )
+            )[0]
+            assert failed["status"] == "failed"
+            assert failed["error"] == "evidence_validation"
+
+        valid = asyncio.run(
+            run_task(
+                conn,
+                task_name="collision-valid",
+                task=task,
+                profile_name="service-local",
+                profile=ModelProfile(model="mock", api_base="http://localhost/v1"),
+                conversation_ids=[conversation_id],
+                client=StaticClient(
+                    {
+                        "mode": "executor",
+                        "confidence": 0.8,
+                        "reason": "Synthetic execution activity dominates.",
+                        "evidence_message_ids": [20],
+                    }
+                ),
+            )
+        )[0]
+        assert valid["status"] == "completed"
+        rows = conn.execute(
+            "SELECT status, result_json FROM ai_task_results ORDER BY id"
+        ).fetchall()
+        assert [row["status"] for row in rows] == ["failed", "failed", "success"]
+        assert rows[0]["result_json"] is None
+        assert rows[1]["result_json"] is None
+
+
 def test_recent_selector_retains_newest_then_returns_chronological_and_stops(
     tmp_path: Path,
 ) -> None:

@@ -26,6 +26,32 @@ externally editable zero-shot prompts, code-owned schemas/finalizers,
 selected-message evidence validation, separate result/cache identities, and no
 effect on normal archive commands.
 
+## PM validation rework: structural selected IDs
+
+The first PM review found that the overview branch reconstructed selected IDs by
+searching rendered transcript text for message_id=<id>. That allowed a decimal
+prefix such as message ID 2 to match the rendered header for ID 20, and allowed a
+selected message body quoting message_id=3 to falsely imply that omitted ID 3 was
+selected.
+
+The narrow fix changes conversation-overview-v1 to return its chronological
+selected IDs directly from the selected row tuples alongside rendered text and
+selection details. _select_meaningful consumes that structural list without
+parsing or searching transcript text. Sampling allocation, ordering, bounds,
+truncation details, recent-meaningful behavior, schemas, cache, and persistence are
+otherwise unchanged.
+
+The new synthetic regression creates IDs 1 through 20 under a bounded overview,
+with omitted ID 2 colliding with selected header ID 20 and omitted ID 3 quoted in
+the selected ID-20 body. It proves:
+
+- IDs 2 and 3 are absent from message_ids and selected_message_ids;
+- selected ID 20 remains present and the selector is deterministic/bounded;
+- provider responses citing ID 2 or 3 fail with evidence_validation and persist
+  failed rows with no result JSON;
+- a response citing genuine selected ID 20 succeeds;
+- the existing recent-meaningful newest-first regression remains green.
+
 ## Files changed
 
 ### Task catalog
@@ -215,8 +241,8 @@ Poetry preflight resolved to:
 
 Results on the implementation:
 
-- focused WP-5.1.1 plus accepted WP-5.1 matrices: 97 passed;
-- full suite: 353 passed in 48.88 seconds;
+- focused WP-5.1.1 plus accepted WP-5.1 matrices after rework: 98 passed;
+- full suite after rework: 354 passed in 54.48 seconds;
 - wheel/outside-checkout packaging test: 1 passed in 19.6 seconds;
 - poetry run ruff check .: passed;
 - poetry run chronicle --help: passed;
@@ -279,6 +305,7 @@ outputs are tracked. Normal archive commands retain accepted zero-LLM behavior.
 
 ## Commit statement
 
-No implementation commit was made without PM authorization. The PM explicitly
-included a git-commit request with this executor handoff, so the completed and
-validated WP-5.1.1 delivery is prepared for that requested scoped commit.
+The original implementation exists in commit 4c15b0c. Per the PM validation review,
+that commit was not amended, squashed, rebased, or otherwise rewritten. This
+evidence-integrity rework remains uncommitted pending PM validation and explicit
+authorization for any follow-up commit.
