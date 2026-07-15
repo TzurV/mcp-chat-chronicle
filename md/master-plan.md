@@ -2,7 +2,7 @@
 
 **Repo:** current working repo `mcp-chat-chronicle`; target public repo/PyPI name `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** In development · M0 complete; core ingest/search/open/recent, Claude project metadata handling, directory ingest sweep, config/init/collect, scan-local source inventory, and search punctuation hardening accepted · **Plan v3.1 ("Plan A+ — Batch-first, Pluggable Collectors", + AI-deepening roadmap)**, **amended by `md/change-order-01.md`** (prototype fast path with Claude Code extractor pulled forward, link-back schema migration, rename to WorkTrail — read both documents). Full reasoning chain in Appendix A. · **Last updated:** 2026-07-14
+**Status:** In development · real-history core prototype accepted; ingest/collect/stats/search/phrase/recent/open are working across the owner's real ChatGPT, Claude, OpenAI Codex, and Claude Code histories · next executable package is WP-5.1, the configurable AI-task foundation · **Plan v3.2 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI-task roadmap)**, **amended by `md/change-order-01.md`** (prototype fast path with Claude Code extractor pulled forward, link-back schema migration, rename to WorkTrail — read both documents). Full reasoning chain in Appendix A. · **Last updated:** 2026-07-15
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Guiding principle:** *Build the boring useful archive first. Clever live capture, marker joins, and cache forensics are optional later experiments.*
@@ -28,7 +28,7 @@ FTS5 search index
         ↓
 CLI: search / stats / open
         ↓
-optional: local SLM enrichment (v1.2)
+optional: YAML-defined conversation-intelligence tasks via local LLM (v1.2)
         ↓
 optional: MCP recall (v1.3)
 ```
@@ -98,12 +98,12 @@ The product name is **WorkTrail**. The current local repo/package still uses `mc
 | Data models | **Pydantic v2** | Validation + shared schema with SLM structured output later |
 | CLI | **Typer** + Rich | Fast, typed, pretty tables |
 | DB | **SQLite** (stdlib `sqlite3`) + **FTS5** | Zero-install, right tool for text recall |
-| Local SLM (v1.2) | **LM Studio** OpenAI-compatible server, `openai` client at `base_url=http://localhost:1234/v1` | [Structured output docs](https://lmstudio.ai/docs/developer/openai-compat/structured-output) — `response_format.json_schema` from Pydantic `model_json_schema()` |
+| LLM task runtime (v1.2) | **LiteLLM Python SDK** behind a small internal client; local service profile uses **LM Studio**, stronger remote profiles are development/evaluation only | Task and model profiles stay external; structured results are validated against code-owned Pydantic schemas |
 | MCP (v1.3) | **FastMCP** (`fastmcp` 3.x) over official `mcp` 1.x | De-facto standard; [FastMCP](https://pypi.org/project/fastmcp/) · [mcp SDK](https://pypi.org/project/mcp/) |
 | Testing | pytest + **synthetic fixtures only** | Never commit real chat data |
 | Lint/CI | ruff + pre-commit + GitHub Actions (Windows + Ubuntu) | Table stakes for a public repo |
 
-**Not chosen, say why in README:** DuckDB (analytics engine, wrong fit for text recall), Marvin (native `json_schema` teaches more), a browser extension (fragile; covered by exports + extractors), a background daemon (Task Scheduler suffices). Ollama = fine alternative runtime; keep the LLM client behind a small `LocalLLMClient` with configurable `base_url`.
+**Not chosen, say why in README:** DuckDB (analytics engine, wrong fit for text recall), Marvin (task definitions and schemas remain explicit), a browser extension (fragile; covered by exports + extractors), a background daemon (Task Scheduler suffices), and a mandatory LiteLLM proxy service (unnecessary for the single-user v1 workflow). Use the LiteLLM Python SDK behind a small internal `LLMClient` port so the application is not coupled to one provider or runtime. LM Studio is the default local service runtime; other local or remote providers are selected by external model profiles.
 
 ---
 
@@ -112,6 +112,8 @@ The product name is **WorkTrail**. The current local repo/package still uses `mc
 ```
 mcp-chat-chronicle/
 ├── pyproject.toml               # poetry; extras: [enrich], [mcp]
+├── ai-tasks.default.yaml        # tracked task catalog; copied/overridden locally
+├── ai-models.default.yaml       # tracked model-profile examples; no credentials
 ├── README.md                    # positioning (§1.4), 60-sec quickstart, honest limitations
 ├── md/                          # this plan + handoffs + design notes + research + article/post drafts
 │   └── research/                # research spikes on source access, local stores, retention, and roadmap inputs
@@ -129,7 +131,7 @@ mcp-chat-chronicle/
 │   ├── collect.py               # collector: reads sources table, runs adapters, logs ingest_runs
 │   ├── scan.py                  # scan-local: read-only source discovery on Windows
 │   ├── search.py                # FTS5 queries, snippets, ranking
-│   ├── enrich/                  # v1.2: client.py, schemas.py, worker.py
+│   ├── enrich/                  # v1.2: LiteLLM adapter, task loader, schemas, worker
 │   ├── cli.py                   # typer: ingest, ingest-folder, collect, scan-local, stats, search, open
 │   └── mcp_server.py            # v1.3: search_chats, get_conversation, list_recent_topics
 ├── bench/                       # v1.2 benchmark harness (separate poetry group)
@@ -151,7 +153,13 @@ worktrail scan-local                                  # read-only: what sources 
 worktrail stats                                       # counts per source, last runs, unjoined/errors
 worktrail search "docker network"                     # FTS5, ranked, snippets, links
 worktrail open <result-id>                            # deep link (web) or transcript + origin/resume hints
+worktrail --ai-task list                              # names resolved from .chronicle/ai-tasks.yaml
+worktrail --ai-task <name> --conversation-id <id>     # run one configured AI task
 ```
+
+The pre-rename development form is `poetry run chronicle --ai-task <name> ...`. `--ai-task` is intentionally a generic dispatch option rather than one hard-coded command per prompt. Task names, prompts, input-selection policy, model-profile alias, generation parameters, and task version come from `.chronicle/ai-tasks.yaml`. Supported output-schema names remain code-owned and Pydantic-validated. `.chronicle/ai-models.yaml` separately maps logical profiles such as `service-local`, `development-fast`, and `evaluation-strong` to LiteLLM provider/model settings. Secrets are environment-variable references only and must never be written into either YAML file.
+
+Normal `search`, `recent`, `stats`, `collect`, and `open` execution never invokes an LLM. AI tasks run as an explicit, resumable offline workflow. The service default is local-only; a model profile marked remote requires an explicit `--allow-remote` invocation because the archive contains real private data.
 
 `scan-local` example output (read-only, builds trust before any parsing):
 
@@ -217,10 +225,21 @@ CREATE TABLE messages (
     role TEXT, created_at TEXT, body TEXT, seq INTEGER
 );
 
-CREATE TABLE enrichments (                          -- populated in v1.2, optional forever
-    conversation_id INTEGER PRIMARY KEY REFERENCES conversations(id),
-    summary TEXT, tags_json TEXT,                   -- JSON array (SQLite has no arrays!)
-    language TEXT, model_used TEXT, enriched_at TEXT
+CREATE TABLE ai_task_results (                       -- populated in v1.2, optional forever
+    id INTEGER PRIMARY KEY,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+    task_name TEXT NOT NULL, task_version TEXT NOT NULL,
+    input_hash TEXT NOT NULL, prompt_hash TEXT NOT NULL,
+    task_config_hash TEXT NOT NULL,
+    schema_name TEXT NOT NULL, schema_version TEXT NOT NULL,
+    model_profile TEXT NOT NULL, model_config_hash TEXT NOT NULL,
+    model_used TEXT,
+    result_json TEXT, status TEXT NOT NULL, error TEXT,
+    started_at TEXT, completed_at TEXT
+);                                                  -- append-only attempts; indexed cache identity
+CREATE INDEX idx_ai_task_result_cache ON ai_task_results(
+    conversation_id, task_name, input_hash,
+    task_config_hash, schema_version, model_config_hash, status
 );
 
 CREATE TABLE knowledge_items (                      -- v1.2 "distilled knowledge" (WP-5.5)
@@ -235,7 +254,7 @@ CREATE TABLE knowledge_items (                      -- v1.2 "distilled knowledge
 -- v2: CREATE VIRTUAL TABLE chat_vec USING vec0(embedding float[384]);  -- summaries first
 
 CREATE VIRTUAL TABLE chat_fts USING fts5(
-    title, summary, tags, body,
+    title, summary, last_activity, body,
     content='', tokenize='porter unicode61'         -- external-content; sync via triggers/rebuild
 );
 ```
@@ -255,11 +274,12 @@ WP-1.4  CLI ingest + stats
 CO-1    schema migration + importer/extractor link-back touch-ups
 WP-2.1  FTS search + open
 WP-3.1  Claude Code extractor
-PROTOTYPE: search real Claude Code + export history end-to-end
+PROTOTYPE: search/open real coding-agent + web-export history end-to-end [ACCEPTED]
 WP-1.5  scan-local source inventory
 WP-1.6  config defaults + collect + scheduling docs
 WP-2.3.2 search FTS special-character escaping
-then continue with owner smoke, Cursor, MCP, enrichment, release
+NEXT: WP-5.1 YAML AI-task runner + LiteLLM model configuration
+then WP-5.1.1 task details, Gemini when a real Takeout is available, MCP/release later
 ```
 
 Accepted work is not redone; the schema amendments arrive as a forward migration before WP-2.1.
@@ -293,7 +313,7 @@ Same contract; Claude's export `conversations.json` is a flat array (`uuid`, `na
 *Objective:* Parse local OpenAI Codex JSONL sessions from `~/.codex/sessions` into normalized conversations/messages before CLI ingest wiring. Treat this as Class B storage: undocumented, local, version-sensitive, and covered by synthetic fixtures only.
 *AC:* Concrete `openai_codex.py` extractor accepts one session JSONL file and Codex session/home directories; extracts visible user/assistant/developer messages from `response_item`/visible event fallbacks; skips known metadata/tool/reasoning rows without noisy errors; malformed/unknown records log serializable errors; no DB writes, CLI behavior, adapter base/protocol, or real Codex data introduced. CO-3 follow-up: older Codex sessions may be compressed as `.jsonl.zst`; add support before relying on archived Codex history.
 
-**WP-1.4 CLI ingest + stats.** *(depends 1.2/1.3/1.3.1/1.3.2; in flight under the current pre-rename `chronicle` command)*
+**WP-1.4 CLI ingest + stats.** *(accepted under the current pre-rename `chronicle` command)*
 *AC:* `chronicle ingest <path> --provider auto` detects ChatGPT/Claude official exports and OpenAI Codex local sessions by file signature; `chronicle stats` shows per-source counts + last `ingest_runs` summary; 1k conversations ingest < 30 s. After CO-6 rename, equivalent commands are exposed as `worktrail`.
 
 **CO-1 Schema migration + link-back touch-ups.** *(inserted by Change Order 01 — must land before WP-2.1)*
@@ -318,7 +338,7 @@ Same contract; Claude's export `conversations.json` is a flat array (`uuid`, `na
 
 **Future CO: history download helper.** *(backlog candidate, not WP-1.5/WP-1.6 scope)*
 *Objective:* Help users obtain cloud-hosted histories for providers that support documented exports or safe automation.
-*Notes:* This is distinct from import/parsing. The YAML config should record which engines the user uses or wants supported so `scan-local`/help/download UX can explain missing histories and provider-specific next steps. Download support must be provider-by-provider, respect terms and authentication boundaries, and fall back to documented manual export instructions when automation is unsupported.
+*Notes:* This is distinct from import/parsing. The YAML config should record which engines the user uses or wants supported so `scan-local`/help/download UX can explain missing histories and provider-specific next steps. Download support must be provider-by-provider, respect terms and authentication boundaries, and fall back to documented manual export instructions when automation is unsupported. Gemini chat history should be treated as a Google Takeout/My Activity source: selecting the plain "Gemini" product can export only metadata such as custom Gems, while chat text is exported through **My Activity** filtered to **Gemini Apps** / **Gemini Apps Activity**. The expected downloaded archive path is under `My Activity/Gemini Apps/`, with chat text currently visible in `MyActivity.html`; verify whether JSON is also present before writing a parser.
 
 ### M2 — v1 search (first "wow")
 **WP-2.1 FTS5 search + open.**
@@ -334,10 +354,11 @@ Class B ground rules (all WPs): pinned per-tool-version fixtures; parse-don't-va
 *Tasks:* **First task is a research spike** — study the parsers in Agent Sessions, claude-record, and codex-trace as format documentation, then inventory the actual JSONL structure on the developer's machine and freeze it into a fixture + short format memo in `md/` (local inspection remains authoritative; the memo is also LP-3 material). Then: map sessions → conversations (project dir + session id), messages with roles/timestamps; populate `project_id`, `origin_path`, and best-effort `resume_hint` such as `claude --resume <session-id>`; incremental by file mtime + content hash.
 *AC:* Fixture round-trips; re-collect with no new sessions → 0 changes; unknown record types logged and skipped; link-back fields satisfy CO-1.
 
-**Prototype milestone.** *(after WP-3.1)*
+**Prototype milestone.** *(accepted by owner real-history smoke)*
 *Demo AC:* `worktrail search "<something real>"` returns ranked hits spanning the owner's actual Claude Code history and at least one ingested web-chat export; `worktrail open <id>` launches a web URL for export sources or shows a local transcript with `origin_path` + `resume_hint` for CLI sources.
+*Accepted evidence:* Real ChatGPT, Claude, OpenAI Codex, and Claude Code histories are present in the repo-local private DB; owner CLI smoke exercised stats, recent, broad search, phrase search, web URL open, and local transcript rendering. No private transcript or DB artifact is tracked.
 
-**WP-3.2 Cursor extractor.**
+**WP-3.2 Cursor extractor.** *(deferred; owner does not use Cursor)*
 *Objective:* Ingest Cursor chat from `workspaceStorage` SQLite.
 *Tasks:* Same spike-first approach (inventory `state.vscdb` keys, freeze fixture + memo); copy DB to temp before opening (lock avoidance); map workspace → conversation grouping.
 *AC:* Extraction works while Cursor is running (via the copy); fixture-pinned; graceful skip on schema drift.
@@ -357,22 +378,28 @@ Small (≈1 evening on FastMCP) but strategically load-bearing — it's the demo
 *Tasks:* `mcp_server.py`, stdio transport, `worktrail serve`. Tools (docstrings matter — the model reads them):
   - `search_chats(query, provider?, after?, before?, limit=10)` → {title, provider, date, summary?, url?, id, score}
   - `get_conversation(id, max_chars=8000)` → truncated transcript
-  - `list_recent_topics(days=7)` → digest from enrichments (or titles until v1.2 exists)
+  - `list_recent_topics(days=7)` → digest from validated AI-task results (or titles until v1.2 exists)
   **No `log_activity` in v1 MCP** (shelved — Appendix A.6).
 *AC:* Registered in Claude Desktop; end-to-end: "what was I working on in Cursor last month about X?" → correct answer with transcript access.
 *Sources:* [FastMCP docs](https://gofastmcp.com) · [MCP python-sdk](https://github.com/modelcontextprotocol/python-sdk).
 
 **WP-4.2 (experimental, timeboxed 1 evening) ChatGPT bridging docs.** `mcp-remote`/tunnel path per [OpenAI connector docs](https://developers.openai.com/api/docs/guides/tools-connectors-mcp); outcome is a docs page, success optional.
 
-### M5 — v1.2: local SLM enrichment + benchmark
-**WP-5.1 Enrichment worker.**
-*Tasks:* `LocalLLMClient` (openai lib, configurable `base_url`); `EnrichmentResult` schema (summary ≤ 60 words, 3–7 kebab-case tags, language, optional project/topic label); `response_format={"type":"json_schema", ...model_json_schema()}`; map-reduce chunking for long conversations; retries/backoff; `worktrail enrich --model <id> --limit N`, resumable (NULL enrichments only).
-*AC:* 100 fixture conversations, 0 unparseable outputs; LM Studio down → actionable error, nothing else breaks.
-*Source:* [LM Studio structured output](https://lmstudio.ai/docs/developer/openai-compat/structured-output).
+### M5 — v1.2: configurable conversation intelligence + benchmark
+**WP-5.1 YAML AI-task runner + LiteLLM model configuration.**
+*Objective:* Provide one optional, provider-independent execution path for externally defined LLM tasks without slowing or coupling normal archive operations to an LLM.
+*Tasks:* Add the optional LiteLLM SDK behind a small internal `LLMClient`; add tracked privacy-safe defaults plus generated local `.chronicle/ai-tasks.yaml` and `.chronicle/ai-models.yaml`; validate both files with Pydantic; resolve `worktrail --ai-task <name> ...` / pre-rename `poetry run chronicle --ai-task <name> ...` from the task catalog; reserve `--ai-task list` for discoverability; support conversation selection (`--conversation-id`, provider/date filters, and bounded `--limit`), resumable execution, `--force`, timeouts, retries, and per-conversation failure recording. Store hashes of the conversation input, canonical task configuration, prompt, schema version, and resolved model configuration alongside the logical model profile, actual provider/model, timing, usage when available, and validated JSON output in `ai_task_results`. Task YAML owns prompts, task versions, input selectors, generation parameters, dependencies, and model-profile aliases; Python owns the allowed input selectors, Pydantic output schemas, privacy enforcement, and DB writes. API keys come only from environment variables. Local profiles are allowed by default; remote profiles require `--allow-remote`.
+*AC:* A new task can be added or its prompt changed in YAML without adding a CLI command; unknown task/schema/input-selector names fail clearly; unchanged task+input+resolved configuration is skipped from cache; changing the conversation, prompt, task settings/version, schema version, model alias, or model definition produces a new result; malformed YAML or invalid structured output is fail-visible and does not corrupt prior results; LM Studio/provider unavailable produces an actionable task failure while `search`, `recent`, `stats`, `collect`, and `open` remain unaffected; tests mock LiteLLM and use synthetic conversations only.
+*Sources:* [LiteLLM Python SDK](https://docs.litellm.ai/) · [LiteLLM structured outputs](https://docs.litellm.ai/docs/completion/json_mode) · [LM Studio structured output](https://lmstudio.ai/docs/developer/openai-compat/structured-output).
 
-**WP-5.2 Benchmark harness.** *(parallel with 5.1 once schemas exist — the data behind LP-4 and the article)*
-*Tasks:* `bench/run.py`, model × task matrix. Models via LM Studio: `qwen2.5-3b-instruct`, `llama-3.2-3b-instruct`, `phi-4-mini`, `gemma-3-4b`, + one 7–8B ceiling. Tasks: (a) JSON adherence — valid-parse % *without* schema enforcement, then with; (b) summary fidelity — planted-fact (needle) retention; (c) tag quality — Jaccard vs 30 hand-labeled gold fixtures; (d) TTFT/TPS client-side.
-*AC:* One-command reproducible; `bench/report.py` emits markdown table + chart; hardware spec recorded.
+**WP-5.1.1 Initial conversation-intelligence task catalog.** *(depends WP-5.1; task details to be finalized with the owner before handoff)*
+*Objective:* Ship the first four YAML-defined tasks based on the owner's real working pattern.
+*Tasks:* Define independently runnable tasks: (1) `conversation-summary`, returning a concise summary accompanied by deterministic DB-derived `start_date` and `last_active_date`; the LLM must not infer those dates; (2) `work-mode-classification`, classifying the conversation as `manager`, `executor`, `one_off`, `mixed`, or `unknown`, with confidence and concise evidence; later design discussion must decide whole-conversation versus current-phase classification; (3) `last-activity`, summarizing the last configurable number of meaningful turns into recent work, status, blockers, and likely next action while excluding system/tool/reasoning noise; and (4) `title-assessment`, determining whether the current title reflects the conversation's activity and suggesting, but never automatically applying, a replacement title. Keep each task independently versioned, cached, selectable, and assignable to its own model profile. Dependencies between tasks may be declared in YAML, but one failed task must not invalidate successful independent results.
+*AC:* Each task has a Pydantic output contract, synthetic gold examples, deterministic input-selection evidence, and separate stored results; dates exactly match DB metadata; classification always uses the approved label set; last-activity output cites the message range or IDs used; title assessment preserves the source title and does not rename data; normal archive commands make zero LLM calls.
+
+**WP-5.2 Benchmark harness.** *(parallel with 5.1.1 once schemas exist — the data behind LP-4 and the article)*
+*Tasks:* `bench/run.py`, model-profile × AI-task matrix using the same `.chronicle/ai-models.yaml` aliases as the product. Compare local service candidates with one or more explicitly configured stronger development/evaluation models. Measure structured-output adherence, summary fidelity, manager/executor/one-off classification quality, last-activity factuality and state capture, title-assessment agreement, latency, token usage, and cost when reported. Real private conversations must not be sent to a remote profile by default; use synthetic/gold fixtures or an explicitly approved anonymized evaluation set.
+*AC:* One-command reproducible; `bench/report.py` emits a per-task/model-profile markdown table and machine-readable results; model identity, task/prompt/schema versions, hardware, latency, and cost are recorded; remote evaluation requires explicit authorization.
 
 **WP-5.3 `--smart` query rewriting (optional flag, off by default).**
 *Tasks:* `worktrail search --smart` (and an MCP parameter): local model rewrites a vague query into FTS terms + date hints (structured output); hard 2 s timeout → raw-query fallback. **Not on by default** — no LLM call on the default search path.
@@ -380,9 +407,9 @@ Small (≈1 evening on FastMCP) but strategically load-bearing — it's the demo
 
 **WP-5.4 (stretch spike) Phi Silica feasibility memo.** C#/`winrt` interop investigation only; memo in `md/`. [Microsoft Learn](https://learn.microsoft.com/en-us/windows/ai/apis/phi-silica).
 
-**WP-5.5 Distilled knowledge extraction.** *(depends WP-5.1 — same worker, extra schema)*
+**WP-5.5 Distilled knowledge extraction.** *(depends WP-5.1 — same task runner, extra schema)*
 *Objective:* Extract *decisions, solutions, and open questions* from conversations into `knowledge_items` — a personal solutions database, arguably more valuable than the chats themselves.
-*Tasks:* `KnowledgeItems` Pydantic schema (0–5 items per conversation; kind ∈ decision/solution/open_question; statement ≤ 40 words + short context); second structured-output pass in the enrichment worker (separate prompt from summarization — don't overload one call); index statement+context in FTS; `worktrail search --kind solution` filter; `worktrail knowledge` list view.
+*Tasks:* `KnowledgeItems` Pydantic schema (0–5 items per conversation; kind ∈ decision/solution/open_question; statement ≤ 40 words + short context); define it as a separately versioned YAML task rather than overloading the summary prompt; index statement+context in FTS; `worktrail search --kind solution` filter; `worktrail knowledge` list view.
 *AC:* On 30 gold-labeled fixtures, ≥70% of hand-identified decisions/solutions captured, <20% hallucinated items (measure both!); empty result is a valid output (most chit-chat has no knowledge items).
 
 **WP-5.6 Weekly digest.** *(depends WP-5.1)*
@@ -404,22 +431,24 @@ The story arc: *v1 proves the boring archive; v2 makes it intelligent — and me
 
 **V2-1 Retrieval eval harness (built first, before any upgrade).** 30–50 real questions about the developer's own archive with known correct conversations → recall@k / MRR per search mode. Every subsequent feature must move this number, not vibes. Extend `bench/` — same reporting pattern as WP-5.2.
 
-**V2-2 Embeddings + hybrid search.** Embed *summaries* (not bodies) into sqlite-vec; hybrid = FTS5 top-50 → cosine re-rank ([patterns](https://alexgarcia.xyz/blog/2024/sqlite-vec-hybrid-search/index.html)). Embedding model: **free local open-weights, served via LM Studio `/v1/embeddings`** (reuses `LocalLLMClient`; e.g. `bge-small-en-v1.5`, `nomic-embed-text-v1.5`, or `all-MiniLM-L6-v2` — check MTEB at build time; differences are marginal at this corpus size). Fallback runtime: `sentence-transformers` in-process behind a `[vec]` extra. Scale reality: 5k summaries × 384 dims ≈ 8 MB, one-time minutes of CPU — free local is the *correct* tool here, not a compromise. `worktrail search --mode fts|hybrid`; A/B against V2-1 harness.
+**V2-2 Embeddings + hybrid search.** Embed *summaries* (not bodies) into sqlite-vec; hybrid = FTS5 top-50 → cosine re-rank ([patterns](https://alexgarcia.xyz/blog/2024/sqlite-vec-hybrid-search/index.html)). Embedding model: **free local open-weights, served via LM Studio `/v1/embeddings`** through the same internal `LLMClient`/LiteLLM boundary where supported (e.g. `bge-small-en-v1.5`, `nomic-embed-text-v1.5`, or `all-MiniLM-L6-v2` — check MTEB at build time; differences are marginal at this corpus size). Fallback runtime: `sentence-transformers` in-process behind a `[vec]` extra. Scale reality: 5k summaries × 384 dims ≈ 8 MB, one-time minutes of CPU — free local is the *correct* tool here, not a compromise. `worktrail search --mode fts|hybrid`; A/B against V2-1 harness.
 
 **V2-2.5 Git correlation.** Link conversations ↔ repo/branch/commits via repo path + time window: git says what changed, chats say why. Do not squeeze into v1.
 
 **V2-3 `worktrail chat` — agentic RAG over the archive, fully offline.** A local model in a tool-calling loop over the **same retrieval API** used by the CLI and MCP server (one retrieval layer, three consumers). Iterative: model decides queries, reads hits, refines (search "CORS" → read snippet → search the error string it found), answers with conversation-id citations. Bench extension: "agentic loop competence" of 3–4B models — which small models can drive a tool loop without derailing (underexplored; strong article material).
 
 ### Post-v1 backlog (unscheduled — timeboxed spikes only if pulled forward)
-In rough priority order: **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
+In rough priority order: **Gemini Takeout/My Activity importer** (chat text lives under My Activity filtered to Gemini Apps, not necessarily the plain Gemini product checkbox) · **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
 
-**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo. Claude project metadata, WP-1.5/WP-1.6 usability polish (source inventory, YAML defaults, init, collect), and WP-2.3.2 search punctuation hardening are accepted. Next: finish owner smoke, then choose Cursor/Codex follow-ups as needed, MCP recall, M5 enrichment + benchmark, and v0.1 release/publish polish.
+**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo, now accepted. Claude project metadata, WP-1.5/WP-1.6 usability polish (source inventory, YAML defaults, init, collect), and WP-2.3.2 search punctuation hardening are also accepted. Next executable package: WP-5.1 YAML AI-task runner + LiteLLM model configuration. WP-5.1.1 follows only after the owner finalizes task semantics. Cursor is deferred; Gemini importer work waits for a real Takeout shape; MCP and rename/release remain later tracks.
 
 ---
 
 ## 7. LinkedIn Series Plan
 
 Rules: post *after* the milestone works (show, don't promise) · one visual per post · name prior art generously · end with a question · repo link in first comment. The series arc is the honest engineering story: **architecture surviving contact with reality.**
+
+**Progress-share checkpoint — Friday, 17 July 2026.** Share the accepted real-history prototype rather than waiting for WP-5.1. Public evidence may show the multi-source architecture, supported providers, aggregate counts, and privacy-safe terminal output for `stats`, `recent`, or search. Redact local usernames, absolute paths, conversation titles, snippets, URLs, UUIDs, and transcript text unless intentionally disclosed. Describe WP-5.1 as the next YAML-configured AI-task layer; do not present it as implemented until its completion report is accepted.
 
 **LP-1 (after M2/prototype) — "AI tools are multiplying, but the activity trail is missing."**
 Hook: the original AI-generated plan assumed MCP clients passively stream telemetry — they don't, and models don't know their own conversation IDs. Content: the three-stage evolution (impossible telemetry → clever marker workaround, designed then shelved → boring batch-first adapters), why the useful product is an activity/context ledger, and why "the boring architecture is the one that ships." Visual: the A→B→A+ evolution diagram. CTA: "Where does your AI work trail disappear?"
@@ -544,10 +573,10 @@ Minor accepted notes: coding-agent conversations have no URLs (`open` renders lo
 With A+ settled, a follow-up review asked how to deepen the AI side without breaking the "boring core first" principle — the author being an AI engineer, the AI surface *is* part of the learning goal. Candidates considered: embeddings/hybrid search, a local cross-encoder reranker, temporal/intent query parsing, entity extraction, cross-tool threading, distilled knowledge extraction, a weekly digest, an agentic `chronicle chat`, and a retrieval eval harness.
 
 Decisions:
-- **Into v1.2** (cheap adds on the existing enrichment worker): **distilled knowledge** (WP-5.5 — decisions/solutions/open-questions into `knowledge_items`; a personal solutions database) and **weekly digest** (WP-5.6 — offline "what did I work on, where did I leave off").
+- **Into v1.2** through the generic AI-task runner: the owner's first conversation-intelligence catalog (summary with deterministic dates, work-mode classification, last-activity state, and title assessment), then **distilled knowledge** (WP-5.5 — decisions/solutions/open-questions into `knowledge_items`; a personal solutions database) and **weekly digest** (WP-5.6 — offline "what did I work on, where did I leave off").
 - **Committed v2 roadmap** (post-v0.1, in order): **eval harness first** (V2-1 — every retrieval upgrade must move recall@k, not vibes), then **embeddings + hybrid search** (V2-2 — free local open-weights embedding models via LM Studio `/v1/embeddings`; at personal-archive scale, ~8 MB of vectors, local is the correct tool rather than a compromise), then **`chronicle chat`** (V2-3 — agentic RAG: a local model in a tool loop over the same retrieval API serving the CLI and MCP; plus an "agentic loop competence" bench for 3–4B models).
 - **Deferred to backlog:** reranker, entity extraction, threading, default-on query parsing.
 
-Clarification recorded during the discussion, worth restating in the README: in v1 the *only* AI inside the product is the optional local enrichment (summaries/tags, now + knowledge/digest); search runs over both full transcripts *and* summaries/tags via one FTS index (lexical BM25, stemming — the synonym gap is exactly what V2-2 closes); MCP recall uses a cloud model as *client*, not component. The product's restraint is the feature — v1 ships with zero AI dependencies and gains intelligence in measured, benchmarked steps.
+Clarification recorded during the discussion, worth restating in the README: in v1 the *only* AI inside the product is an explicitly invoked, YAML-defined task runner. Prompts and model profiles are external configuration; validated schemas, privacy gates, provenance, and DB writes remain application-owned. The normal search path stays lexical and makes zero LLM calls. Service use defaults to a local model, while stronger remote models are restricted to explicitly authorized development/evaluation runs. The product's restraint is the feature — v1 ships with zero mandatory AI dependencies and gains intelligence in measured, benchmarked steps.
 
 **Guiding principle, restated:** build the boring useful archive first. The boring architecture is the one that ships — then make it intelligent, and measure every step.

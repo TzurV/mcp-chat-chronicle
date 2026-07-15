@@ -6,11 +6,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 
 | Field | Status |
 | --- | --- |
-| Date | 2026-07-14 |
-| Phase | M1 in progress |
-| Last accepted work package | WP-2.3.2 search FTS special-character escaping |
-| Current milestone state | M0 complete; WP-1.1 through WP-3.1.1 plus WP-1.2.1, WP-1.3.3, WP-1.4.1, WP-1.5, WP-1.6, WP-2.2, WP-2.3, WP-2.3.1, and WP-2.3.2 accepted |
-| Next action | Resume prototype owner smoke across `init`, `scan-local`, `collect`, `stats`, `recent`, `search`, and `open`; then decide whether to schedule MCP recall, Cursor extractor, source-management polish, or release/rename preparation |
+| Date | 2026-07-15 |
+| Phase | Core real-history prototype accepted; M5 configurable AI-task foundation next |
+| Last accepted delivery | Real-history prototype owner smoke; last accepted WP is WP-2.3.2 search FTS special-character escaping |
+| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; Cursor deferred; M4 MCP not started; WP-5.1 handoff ready |
+| Next action | Execute WP-5.1; prepare a privacy-safe accepted-prototype progress post for Friday, 17 July 2026; keep WP-5.1.1 semantics pending owner discussion |
 | Current branch | `main` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -36,9 +36,10 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-2.3.2 | Search FTS special-character escaping | Accepted | `md/handoffs/WP-2.3.2-search-fts-special-character-escaping.md` | `md/handoffs/reports/WP-2.3.2-completion-report.md` | `md/handoffs/reports/WP-2.3.2-validation-review.md` | Default broad search now treats ordinary punctuation as safe user text. Owner smoke command `chronicle search "scan-local"` no longer fails with `Invalid search query: no such column: local`; `--phrase` remains exact. |
 | WP-3.1 | Claude Code extractor | Accepted | `md/handoffs/WP-3.1-claude-code-extractor.md` | `md/handoffs/reports/WP-3.1-completion-report.md` | `md/handoffs/reports/WP-3.1-validation-review.md` | Accepted with WP-3.1.1 addendum. Concrete `claude_code` extractor, ingest wiring, project/link-back fields, synthetic fixtures, memo, and CLI smoke complete. |
 | WP-3.1.1 | Claude Code RS-2 format hardening | Accepted | `md/handoffs/WP-3.1.1-claude-code-rs2-format-hardening.md` | `md/handoffs/reports/WP-3.1.1-completion-report.md` | `md/handoffs/reports/WP-3.1.1-validation-review.md` | File-scoped Claude Code identity, `ai-title`, seven record types, `uuid`/`parentUuid`, sidechain, and same-session multi-file fixtures accepted. No broader RS-2 backlog scope approved. |
-| Prototype | Real-history search demo | Planned | Pending | Pending | Pending | Search real Claude Code history plus at least one ingested export end-to-end. |
+| Prototype | Real-history search demo | Accepted by owner smoke | N/A | Owner CLI evidence in PM thread | N/A | Real ChatGPT, Claude, OpenAI Codex, and Claude Code histories are present in the private repo-local DB. Stats, recent, broad/phrase search, ChatGPT URL open, and local Codex transcript rendering were exercised successfully; no private data is tracked. |
 | WP-1.5 | scan-local source inventory | Accepted | `md/handoffs/WP-1.5-scan-local-source-inventory.md` | `md/handoffs/reports/WP-1.5-completion-report.md` | `md/handoffs/reports/WP-1.5-validation-review.md` | Read-only inventory accepted for configured/default histories: exports root, OpenAI/Claude export folders, OpenAI Codex local store, Claude Code projects, and planned Cursor/Copilot paths. No DB writes or full transcript parsing. |
 | WP-1.6 | config defaults + collect workflow + scheduling docs | Accepted | `md/handoffs/WP-1.6-config-defaults-collect-workflow.md` | `md/handoffs/reports/WP-1.6-completion-report.md` | `md/handoffs/reports/WP-1.6-validation-review.md` | Accepted after rework: config-aware DB precedence applies to all DB-opening commands, `chronicle init`/`collect` are functional, YAML defaults and engine-interest settings are present, and README includes optional Task Scheduler docs. |
+| WP-5.1 | YAML AI-task runner + LiteLLM model configuration | Handoff ready | `md/handoffs/WP-5.1-yaml-ai-task-runner-litellm.md` | `md/handoffs/reports/WP-5.1-completion-report.md` | Pending | Foundation only: external task/model YAML, generic CLI dispatch, schema v3 task-result provenance/cache, local-first privacy gate, and mocked validation. Production task semantics remain WP-5.1.1. |
 
 ## Research Artifact Ledger
 
@@ -62,6 +63,9 @@ These are not approved scope. They are recorded from RS-2 for future change-orde
 | OpenAI Codex local app deep-link | Prototype smoke | Proposed only | `chronicle open <id>` renders a local transcript from JSONL, but there is no verified deep-link/resume behavior that opens the original Codex app chat like ChatGPT web URLs. |
 | Config-driven collection workflow | Owner discussion | Approved for WP-1.5/WP-1.6 planning | Add YAML defaults, explicit init, source inventory, and one-line collect. This is orchestration over accepted adapters, not new parsing scope. |
 | History download helper | Owner discussion | Proposed only | Future tool to help download histories from chat providers when supported by documented/exportable flows or safe provider-specific automation. Config YAML should record which engines the user uses or wants supported, but download automation is not part of WP-1.5/WP-1.6 unless explicitly scheduled. |
+| Gemini Takeout/My Activity importer | Owner export note | Proposed only | Gemini chat text should be obtained through Google Takeout by selecting **My Activity**, filtering included activity to **Gemini Apps** / **Gemini Apps Activity**, then inspecting `My Activity/Gemini Apps/MyActivity.html` after ZIP extraction. Selecting the plain "Gemini" product may export only metadata such as custom Gems. Verify real archive shape before parser work. |
+| YAML-driven AI task runner | Owner AI-feature discussion | Approved for M5 planning | Use `poetry run chronicle --ai-task <name> ...`; `<name>` resolves from `.chronicle/ai-tasks.yaml`. Prompts/task policy are external, output schemas and safety controls remain code-owned, and models are aliases from `.chronicle/ai-models.yaml` through a thin LiteLLM-backed client. Local service profiles are default; remote development/evaluation profiles require explicit authorization. |
+| Initial conversation-intelligence tasks | Owner AI-feature discussion | Approved for M5 planning; details pending | First catalog: summary with DB-derived start/last-active dates, manager/executor/one-off classification, last-activity summary from recent meaningful turns, and title assessment with suggestion only. Taxonomy and detailed quality rules must be agreed before the WP-5.1.1 handoff. |
 
 ## Accepted Evidence Snapshot
 
@@ -110,6 +114,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 | --- | --- | --- |
 | ChatGPT/OpenAI official export | Received and compatibility accepted | Owner ZIP is under `exports/openai` and uses the current split layout (`conversations-000.json` ... `conversations-004.json`) with 422 records. WP-1.2.1 accepted direct ingest and auto-detection; PM smoke produced 422 conversations and 5,166 messages with 92 non-text part warnings. |
 | Claude official export | Ingested; project metadata limitation characterized | Claude provider has 13 conversations in the repo-local DB. WP-1.3.3 parses 30 project metadata rows, including `CAR GUI`, and links/searches project names only when exact project UUID references exist. The owner real export has no project-like conversation keys, so `CAR GUI` cannot safely return Claude conversations without guessing. |
+| Gemini official export | Backlog candidate | Owner note: use Google Takeout -> My Activity -> filter to Gemini Apps / Gemini Apps Activity. Expected extracted location is `My Activity/Gemini Apps/MyActivity.html`; plain "Gemini" product export may contain only metadata/custom Gems. |
 | Research records | Recorded | `md/research/` now holds research-spike records for history data retrieval methods and current source-access status. |
 | Source listing utility | Accepted as WP-1.5 | `scan-local` lists available configured/default histories before ingest using read-only checks. `stats` continues to list already-ingested sources. |
 | Config defaults | Accepted as WP-1.6 | YAML config defines `.chronicle/chronicle.db`, `exports`, `exports/openai`, `exports/claude`, `%USERPROFILE%\.codex`, and `%USERPROFILE%\.claude\projects`. Installation does not mutate folders; explicit `chronicle init` creates directories/config. |
@@ -118,16 +123,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-Resume owner smoke:
-
-```powershell
-poetry run chronicle init
-poetry run chronicle scan-local
-poetry run chronicle collect
-poetry run chronicle stats
-poetry run chronicle recent -n 10
-poetry run chronicle search "scan-local"
-poetry run chronicle search --phrase "YOU are the MANAGER"
-```
-
-After smoke, choose the next planning track: MCP recall, Cursor extractor, source-management polish, or release/rename preparation.
+1. Execute WP-5.1 from `md/handoffs/WP-5.1-yaml-ai-task-runner-litellm.md` and return the required detailed completion report.
+2. Keep WP-5.1.1 pending until the owner finalizes classification scope, recent-turn selection, summary form, and title-quality rules.
+3. By Friday, 17 July 2026, prepare a privacy-safe progress post from the already accepted real-history prototype. WP-5.1 may be described as next/in progress, not complete unless PM validation has accepted its report.
+4. Schedule Gemini format inspection/import only after a real Google Takeout archive is available. Cursor remains deferred; MCP and rename/release remain later tracks.

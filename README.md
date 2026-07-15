@@ -1,8 +1,8 @@
 # Chat Chronicle
 
-*A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
+*A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, with optional YAML-defined AI tasks and MCP recall planned as separate layers.*
 
-> **Status: M1 in progress.** The local DB, official export importers, local coding-agent extractors, single-source and parent-folder ingest, config/init/collect, scan-local inventory, stats, search, open, and recent-activity CLI paths are implemented. Claude project metadata is parsed and linked when reliable conversation references exist; real exports may contain standalone project rows that cannot be safely joined. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
+> **Status: core real-history prototype accepted; configurable AI-task foundation is next.** The local DB, official ChatGPT and Claude export importers, OpenAI Codex and Claude Code local extractors, single-source and parent-folder ingest, config/init/collect, scan-local inventory, stats, search, phrase search, open, and recent-activity CLI paths are implemented and exercised against the owner's real archive. Claude project metadata is linked only when reliable conversation references exist. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
 
 ## Why
 
@@ -207,7 +207,7 @@ poetry run chronicle scan-local
 
 Python 3.11+ · Poetry · Pydantic v2 · Typer + Rich · stdlib `sqlite3` + FTS5 · pytest · ruff · pre-commit · GitHub Actions (Windows + Ubuntu).
 
-Optional extras: `enrich` (local SLM via LM Studio's OpenAI-compatible server), `mcp` (FastMCP recall server). v1 ships with zero AI dependencies.
+Planned optional extras: `enrich` (YAML-defined AI tasks through LiteLLM, local service profile by default) and `mcp` (FastMCP recall server). The core archive keeps zero mandatory AI dependencies.
 
 Not chosen: **DuckDB** (an analytics engine, wrong fit for text recall) · **Marvin** (native `json_schema` structured output teaches more) · **a browser extension** (fragile; exports and extractors cover the same ground) · **a background daemon** (a one-line Windows Task Scheduler entry suffices).
 
