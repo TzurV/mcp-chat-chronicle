@@ -1,20 +1,102 @@
 version: 1
 tasks:
-  example-task:
-    enabled: false
+  conversation-summary:
+    enabled: true
     version: "1"
-    description: "Disabled privacy-safe example; production tasks arrive in WP-5.1.1."
+    description: "Concise factual conversation summary with application-owned dates."
     model_profile: service-local
-    input_selector: full-conversation
-    output_schema: example-result-v1
+    input_selector: conversation-overview-v1
+    output_schema: conversation-summary-v1
     system_prompt: |
-      Return JSON with one string field named result.
+      Summarize the selected conversation factually in 2-5 concise sentences and at most 120 words.
+      Cover its principal goal or topic, material work or decisions, and supported outcome or current
+      position. Do not invent success, decisions, blockers, or next steps. Return only the provider
+      schema fields summary and evidence_message_ids. Cite 1-8 selected message_id values when
+      meaningful content exists; otherwise use an empty evidence list. Do not provide chain-of-thought.
     user_prompt: |
-      Process this synthetic or explicitly selected conversation:\n{transcript}
-    # Optional per-field overrides; omitted fields inherit the model profile.
+      Selected conversation messages:
+      {transcript}
     generation:
       temperature: 0
-      max_tokens: 500
+      max_tokens: 350
+    depends_on: []
+    max_input_chars: 50000
+    recent_message_count: 20
+  work-mode-classification:
+    enabled: true
+    version: "1"
+    description: "Whole-conversation manager, executor, one-off, mixed, or unknown classification."
+    model_profile: service-local
+    input_selector: conversation-overview-v1
+    output_schema: work-mode-classification-v1
+    system_prompt: |
+      Classify the conversation as a whole, not a speaker or only its latest turn. Use exactly one mode:
+      manager: project coordination, scope, delegation, prioritization, validation, approval, or rework
+      dominates; executor: concrete inspection, implementation, testing, debugging, and delivery
+      dominates; one_off: a bounded standalone question, explanation, recommendation, troubleshooting
+      exchange, or small request; mixed: substantial manager and executor phases or another substantial
+      independent purpose, not ordinary planning within execution; unknown: insufficient, malformed, or
+      fragmentary evidence. Return mode, confidence from 0 to 1, a reason of at most 60 words, and up to
+      8 selected evidence_message_ids. Do not provide chain-of-thought.
+    user_prompt: |
+      Selected conversation messages:
+      {transcript}
+    generation:
+      temperature: 0
+      max_tokens: 250
+    depends_on: []
+    max_input_chars: 50000
+    recent_message_count: 20
+
+  last-activity:
+    enabled: true
+    version: "1"
+    description: "Recent meaningful work, status, blockers, and supported next action."
+    model_profile: service-local
+    input_selector: recent-meaningful-v1
+    output_schema: last-activity-v1
+    system_prompt: |
+      Describe only the selected recent meaningful messages. Return recent_work (at most 100 words);
+      status: in_progress for active incomplete work, completed for completion or acceptance with no
+      unfinished follow-up, blocked for a stated technical or external blocker, awaiting_input when an
+      owner or user decision, credential, data, approval, or report is required, or unknown when the
+      state is not reliable; blockers as at most 3 concise strings and [] when none; next_action as at
+      most 40 words or null; next_action_basis: explicit only when stated, inferred only for a
+      conservative directly supported continuation, or unknown with next_action=null; and up to 8
+      selected evidence_message_ids. Do not turn suggestions into commitments or provide chain-of-thought.
+    user_prompt: |
+      Recent selected messages:
+      {transcript}
+    generation:
+      temperature: 0
+      max_tokens: 350
+    depends_on: []
+    max_input_chars: 24000
+    recent_message_count: 12
+
+  title-assessment:
+    enabled: true
+    version: "1"
+    description: "Suggestion-only assessment of whether the stored title fits actual activity."
+    model_profile: service-local
+    input_selector: conversation-overview-v1
+    output_schema: title-assessment-v1
+    system_prompt: |
+      Assess whether the source title specifically and accurately reflects the dominant conversation
+      activity. A title does not fit when empty, placeholder, unrelated, obsolete after a topic change,
+      materially misleading, or too generic to distinguish the work. If it fits, set suggested_title
+      to null. If it does not fit, provide a concrete 3-10 word replacement of at most 80 characters
+      that preserves meaningful names and acronyms and makes no unsupported outcome claim. Return
+      title_fits, confidence from 0 to 1, a reason of at most 60 words, suggested_title, and up to 8
+      selected evidence_message_ids. This task only suggests and never renames data. Do not provide
+      chain-of-thought.
+    user_prompt: |
+      Source title: {title}
+      Selected conversation messages:
+      {transcript}
+    generation:
+      temperature: 0
+      max_tokens: 250
     depends_on: []
     max_input_chars: 50000
     recent_message_count: 20

@@ -182,15 +182,28 @@ normal commands have no AI dependency and make no model calls:
 poetry install -E enrich
 poetry run chronicle init
 poetry run chronicle --ai-task list
-poetry run chronicle --ai-task example-task --conversation-id 1 --dry-run
+poetry run chronicle --ai-task conversation-summary --conversation-id <id> --dry-run
+poetry run chronicle --ai-task work-mode-classification --conversation-id <id>
+poetry run chronicle --ai-task last-activity --conversation-id <id>
+poetry run chronicle --ai-task title-assessment --conversation-id <id>
 ```
 
 `init` copies the tracked privacy-safe templates `ai-tasks.default.yaml` and
 `ai-models.default.yaml` to `.chronicle/ai-tasks.yaml` and
 `.chronicle/ai-models.yaml`. Existing local catalogs are kept unless `--force`
 is explicitly supplied. Prompts/tasks and model profiles are separate,
-strictly validated YAML files. The included example task is disabled and the
-local LM Studio profile uses a loopback endpoint plus the
+strictly validated YAML files. The four enabled production tasks are:
+
+- `conversation-summary`: a 2-5 sentence factual overview with exact start and
+  last-active dates injected deterministically from normalized DB metadata;
+- `work-mode-classification`: whole-conversation classification as `manager`,
+  `executor`, `one_off`, `mixed`, or `unknown`;
+- `last-activity`: recent work and state from only the last 12 meaningful
+  selected messages by default;
+- `title-assessment`: a suggestion-only title check that never updates the
+  stored conversation or source data.
+
+The local LM Studio profile uses a loopback endpoint plus the
 `CHRONICLE_LOCAL_MODEL` environment variable.
 
 For isolated automation or testing, `CHAT_CHRONICLE_AI_CONFIG_DIR` may point at
@@ -213,8 +226,11 @@ profiles are blocked unless that invocation includes `--allow-remote`.
 Successful results resume from a configuration/input-aware cache; `--force`
 appends a fresh auditable attempt. In a mixed batch, individual failures are
 stored and reported while successful conversations continue; the command exits
-nonzero when every selected conversation fails. The four production conversation-
-intelligence tasks are intentionally deferred to WP-5.1.1.
+nonzero when every selected conversation fails. Selected transcript content is
+private: prefer the local profile, inspect task bounds before execution, and use
+`--allow-remote` only when you intentionally authorize transmission to a remote
+provider. These contracts and synthetic tests do not claim real-model quality;
+real-data teacher references and benchmarking are deferred to WP-5.1.2 and WP-5.2.
 
 `chronicle ingest` accepts either a single supported source or a parent directory. A parent directory is scanned for supported child sources such as ChatGPT/OpenAI exports, Claude exports, OpenAI Codex local JSONL sessions, and Claude Code project JSONL sessions. Directories that are already valid single sources, such as `$env:USERPROFILE\.codex` or `$env:USERPROFILE\.claude\projects`, still ingest as one source rather than being expanded file by file.
 

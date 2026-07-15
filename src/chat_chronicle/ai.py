@@ -5,13 +5,23 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import sqlite3
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from chat_chronicle.ai_config import (
     ModelProfile,
@@ -28,7 +38,171 @@ class ExampleResult(BaseModel):
     result: str
 
 
-OUTPUT_SCHEMAS: dict[str, tuple[str, type[BaseModel]]] = {"example-result-v1": ("1", ExampleResult)}
+class ConversationSummaryProviderResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    summary: str = Field(min_length=1, max_length=1_000)
+    evidence_message_ids: list[StrictInt] = Field(max_length=8)
+
+    @field_validator("summary")
+    @classmethod
+    def bounded_words(cls, value: str) -> str:
+        if len(value.split()) > 120:
+            raise ValueError("summary must contain at most 120 words")
+        sentences = [item for item in re.split(r"(?<=[.!?])\s+", value.strip()) if item]
+        if not 2 <= len(sentences) <= 5:
+            raise ValueError("summary must contain 2-5 sentences")
+        return value
+
+
+class ConversationSummaryResult(ConversationSummaryProviderResult):
+    start_date: str
+    last_active_date: str
+
+
+class WorkModeClassificationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["manager", "executor", "one_off", "mixed", "unknown"]
+    confidence: float = Field(ge=0, le=1)
+    reason: str = Field(min_length=1, max_length=500)
+    evidence_message_ids: list[StrictInt] = Field(max_length=8)
+
+    @field_validator("reason")
+    @classmethod
+    def bounded_reason(cls, value: str) -> str:
+        if len(value.split()) > 60:
+            raise ValueError("reason must contain at most 60 words")
+        return value
+
+
+class LastActivityResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    recent_work: str = Field(min_length=1, max_length=800)
+    status: Literal["in_progress", "completed", "blocked", "awaiting_input", "unknown"]
+    blockers: list[str] = Field(max_length=3)
+    next_action: str | None = Field(default=None, max_length=400)
+    next_action_basis: Literal["explicit", "inferred", "unknown"]
+    evidence_message_ids: list[StrictInt] = Field(max_length=8)
+
+    @field_validator("recent_work")
+    @classmethod
+    def bounded_recent_work(cls, value: str) -> str:
+        if len(value.split()) > 100:
+            raise ValueError("recent_work must contain at most 100 words")
+        return value
+
+    @field_validator("blockers")
+    @classmethod
+    def concise_blockers(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() or len(item.split()) > 40 for item in value):
+            raise ValueError("blockers must be non-empty and at most 40 words each")
+        return value
+
+    @field_validator("next_action")
+    @classmethod
+    def bounded_next_action(cls, value: str | None) -> str | None:
+        if value is not None and (not value.strip() or len(value.split()) > 40):
+            raise ValueError("next_action must be non-empty and at most 40 words")
+        return value
+
+    @model_validator(mode="after")
+    def action_consistency(self) -> LastActivityResult:
+        if self.next_action_basis == "unknown" and self.next_action is not None:
+            raise ValueError("unknown next_action_basis requires next_action=null")
+        if self.next_action_basis != "unknown" and self.next_action is None:
+            raise ValueError("explicit or inferred next_action_basis requires a next_action")
+        return self
+
+
+class TitleAssessmentResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title_fits: bool
+    confidence: float = Field(ge=0, le=1)
+    reason: str = Field(min_length=1, max_length=500)
+    suggested_title: str | None = Field(default=None, max_length=80)
+    evidence_message_ids: list[StrictInt] = Field(max_length=8)
+
+    @field_validator("reason")
+    @classmethod
+    def bounded_reason(cls, value: str) -> str:
+        if len(value.split()) > 60:
+            raise ValueError("reason must contain at most 60 words")
+        return value
+
+    @model_validator(mode="after")
+    def suggestion_consistency(self) -> TitleAssessmentResult:
+        if self.title_fits and self.suggested_title is not None:
+            raise ValueError("title_fits=true requires suggested_title=null")
+        if not self.title_fits and (
+            self.suggested_title is None or not self.suggested_title.strip()
+        ):
+            raise ValueError("title_fits=false requires a non-empty suggested_title")
+        return self
+
+
+Finalizer = Callable[[BaseModel, "SelectedInput"], dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class OutputSchemaSpec:
+    version: str
+    provider_model: type[BaseModel]
+    final_model: type[BaseModel]
+    finalizer_version: str
+    finalizer: Finalizer
+
+    @property
+    def identity_version(self) -> str:
+        return f"{self.version}+finalizer-{self.finalizer_version}"
+
+    def __getitem__(self, index: int) -> str | type[BaseModel]:
+        """Retain the accepted WP-5.1 tuple-style registry inspection seam."""
+        return (self.version, self.provider_model)[index]
+
+
+def _identity_finalizer(value: BaseModel, selected: SelectedInput) -> dict[str, Any]:
+    return value.model_dump(mode="json")
+
+
+def _summary_finalizer(value: BaseModel, selected: SelectedInput) -> dict[str, Any]:
+    result = value.model_dump(mode="json")
+    result["start_date"] = selected.start_date
+    result["last_active_date"] = selected.last_active_date
+    return result
+
+
+OUTPUT_SCHEMAS: dict[str, OutputSchemaSpec | tuple[str, type[BaseModel]]] = {
+    "example-result-v1": OutputSchemaSpec(
+        "1", ExampleResult, ExampleResult, "1", _identity_finalizer
+    ),
+    "conversation-summary-v1": OutputSchemaSpec(
+        "1",
+        ConversationSummaryProviderResult,
+        ConversationSummaryResult,
+        "1",
+        _summary_finalizer,
+    ),
+    "work-mode-classification-v1": OutputSchemaSpec(
+        "1",
+        WorkModeClassificationResult,
+        WorkModeClassificationResult,
+        "1",
+        _identity_finalizer,
+    ),
+    "last-activity-v1": OutputSchemaSpec(
+        "1", LastActivityResult, LastActivityResult, "1", _identity_finalizer
+    ),
+    "title-assessment-v1": OutputSchemaSpec(
+        "1", TitleAssessmentResult, TitleAssessmentResult, "1", _identity_finalizer
+    ),
+}
+
+
+def _schema_spec(name: str) -> OutputSchemaSpec:
+    value = OUTPUT_SCHEMAS[name]
+    if isinstance(value, OutputSchemaSpec):
+        return value
+    version, model = value
+    return OutputSchemaSpec(version, model, model, "legacy", _identity_finalizer)
 
 
 class LLMError(RuntimeError):
@@ -152,6 +326,198 @@ class PreparedAttempt:
     schema_version: str
 
 
+MEANINGFUL_ROLES = frozenset({"user", "human", "assistant"})
+
+
+def _meaningful_rows(rows: list[sqlite3.Row]) -> list[sqlite3.Row]:
+    return [
+        row
+        for row in rows
+        if (row["role"] or "").strip().lower() in MEANINGFUL_ROLES
+        and (row["body"] or "").strip()
+    ]
+
+
+def _message_header(row: sqlite3.Row) -> str:
+    timestamp = row["created_at"] or "unknown"
+    role = (row["role"] or "unknown").strip()
+    return (
+        f"[message_id={int(row['id'])} seq={int(row['seq'])} "
+        f"timestamp={timestamp} role={role}]"
+    )
+
+
+def _render_message(row: sqlite3.Row) -> str:
+    return f"{_message_header(row)}\n{(row['body'] or '').strip()}"
+
+
+def _truncate_message(
+    row: sqlite3.Row, budget: int, *, keep_tail: bool
+) -> tuple[str, dict[str, Any]]:
+    original = _render_message(row)
+    header = _message_header(row)
+    marker = "\n[…truncated…]\n"
+    if budget >= len(original):
+        return original, {}
+    if budget <= len(header):
+        rendered = header[:budget]
+    else:
+        body_budget = max(0, budget - len(header) - len(marker))
+        body = (row["body"] or "").strip()
+        fragment = body[-body_budget:] if keep_tail and body_budget else body[:body_budget]
+        rendered = f"{header}{marker}{fragment}"[:budget]
+    return rendered, {
+        "message_id": int(row["id"]),
+        "original_chars": len(original),
+        "selected_chars": len(rendered),
+        "kept": "tail" if keep_tail else "head",
+    }
+
+
+def _append_with_budget(
+    selected: list[tuple[sqlite3.Row, str, dict[str, Any]]],
+    row: sqlite3.Row,
+    budget: int,
+    *,
+    keep_tail: bool,
+) -> bool:
+    used = sum(len(item[1]) for item in selected) + max(0, len(selected) - 1) * 2
+    separator = 2 if selected else 0
+    remaining = budget - used - separator
+    if remaining <= 0:
+        return False
+    rendered = _render_message(row)
+    if len(rendered) <= remaining:
+        selected.append((row, rendered, {}))
+        return True
+    if not selected:
+        text, detail = _truncate_message(row, remaining, keep_tail=keep_tail)
+        selected.append((row, text, detail))
+    return False
+
+
+def _bounded_omitted_ids(ids: list[int]) -> tuple[list[int], bool]:
+    return ids[:100], len(ids) > 100
+
+
+def _overview_selection(rows: list[sqlite3.Row], budget: int) -> tuple[str, dict[str, Any]]:
+    rendered_all = [_render_message(row) for row in rows]
+    full_text = "\n\n".join(rendered_all)
+    if len(full_text) <= budget:
+        return full_text, {
+            "sampling_strategy": "complete",
+            "truncation_details": [],
+        }
+
+    # Reserve the two separators between the three deterministic allocation groups.
+    allocatable = max(1, budget - 4)
+    begin_budget = allocatable // 4
+    middle_budget = allocatable // 4
+    end_budget = allocatable - begin_budget - middle_budget
+    begin: list[tuple[sqlite3.Row, str, dict[str, Any]]] = []
+    middle: list[tuple[sqlite3.Row, str, dict[str, Any]]] = []
+    end: list[tuple[sqlite3.Row, str, dict[str, Any]]] = []
+
+    for row in rows:
+        if not _append_with_budget(begin, row, begin_budget, keep_tail=False):
+            break
+    selected_ids = {int(item[0]["id"]) for item in begin}
+
+    for row in reversed(rows):
+        if int(row["id"]) in selected_ids:
+            continue
+        if not _append_with_budget(end, row, end_budget, keep_tail=True):
+            break
+    selected_ids.update(int(item[0]["id"]) for item in end)
+
+    candidates = [row for row in rows if int(row["id"]) not in selected_ids]
+    # Center-out order provides distributed middle coverage without provider assumptions.
+    order: list[sqlite3.Row] = []
+    pending = [candidates]
+    while pending:
+        group = pending.pop(0)
+        if not group:
+            continue
+        midpoint = len(group) // 2
+        order.append(group[midpoint])
+        pending.extend((group[:midpoint], group[midpoint + 1 :]))
+    for row in order:
+        if not _append_with_budget(middle, row, middle_budget, keep_tail=False):
+            if middle:
+                continue
+            break
+
+    combined = begin + middle + end
+    by_id = {int(item[0]["id"]): item for item in combined}
+    chronological = sorted(
+        by_id.values(), key=lambda item: (int(item[0]["seq"]), int(item[0]["id"]))
+    )
+    text = "\n\n".join(item[1] for item in chronological)
+    # Allocation math should keep this bounded; this guard handles very small budgets.
+    text = text[:budget]
+    return text, {
+        "sampling_strategy": "beginning-25-middle-25-end-50",
+        "truncation_details": [item[2] for item in chronological if item[2]],
+    }
+
+
+def _select_meaningful(
+    rows: list[sqlite3.Row], task: TaskDefinition
+) -> tuple[str, dict[str, Any]]:
+    meaningful = _meaningful_rows(rows)
+    all_ids = [int(row["id"]) for row in meaningful]
+    if task.input_selector == "conversation-overview-v1":
+        text, details = _overview_selection(meaningful, task.max_input_chars)
+        selected_ids = [
+            int(row["id"])
+            for row in meaningful
+            if f"message_id={int(row['id'])}" in text
+        ]
+        original_text = "\n\n".join(_render_message(row) for row in meaningful)
+        original_candidate_count = len(meaningful)
+    else:
+        candidates = meaningful[-task.recent_message_count :]
+        picked_reverse: list[tuple[sqlite3.Row, str, dict[str, Any]]] = []
+        for row in reversed(candidates):
+            if not _append_with_budget(
+                picked_reverse, row, task.max_input_chars, keep_tail=True
+            ):
+                break
+        chronological = sorted(
+            picked_reverse, key=lambda item: (int(item[0]["seq"]), int(item[0]["id"]))
+        )
+        text = "\n\n".join(item[1] for item in chronological)
+        selected_ids = [int(item[0]["id"]) for item in chronological]
+        original_text = "\n\n".join(_render_message(row) for row in candidates)
+        original_candidate_count = len(candidates)
+        details = {
+            "sampling_strategy": "newest-complete-first",
+            "truncation_details": [item[2] for item in chronological if item[2]],
+        }
+
+    omitted = [item for item in all_ids if item not in set(selected_ids)]
+    omitted_ids, omitted_bounded = _bounded_omitted_ids(omitted)
+    selected_rows = [row for row in meaningful if int(row["id"]) in set(selected_ids)]
+    metadata = {
+        "selector": task.input_selector,
+        "selector_version": "1",
+        "message_ids": selected_ids,
+        "selected_message_ids": selected_ids,
+        "omitted_count": len(omitted),
+        "omitted_message_ids": omitted_ids,
+        "omitted_ids_bounded": omitted_bounded,
+        "meaningful_message_count": len(meaningful),
+        "original_candidate_count": original_candidate_count,
+        "seq_start": int(selected_rows[0]["seq"]) if selected_rows else None,
+        "seq_end": int(selected_rows[-1]["seq"]) if selected_rows else None,
+        "original_chars": len(original_text),
+        "selected_chars": len(text),
+        "truncated": len(text) < len(original_text),
+        **details,
+    }
+    return text, metadata
+
+
 def select_input(
     conn: sqlite3.Connection, conversation_id: int, task: TaskDefinition
 ) -> SelectedInput:
@@ -166,26 +532,30 @@ def select_input(
         "WHERE conversation_id = ? ORDER BY seq, id",
         (conversation_id,),
     ).fetchall()
-    if task.input_selector in {"recent-messages", "metadata-recent"}:
-        rows = rows[-task.recent_message_count :]
-    rendered = [f"{row['role'] or 'unknown'}: {row['body']}" for row in rows]
-    full_text = "\n\n".join(rendered)
-    truncated = len(full_text) > task.max_input_chars
-    text = full_text[-task.max_input_chars :] if truncated else full_text
-    dates = [row["created_at"] for row in rows if row["created_at"]]
+    all_rows = rows
+    if task.input_selector in {"conversation-overview-v1", "recent-meaningful-v1"}:
+        text, metadata = _select_meaningful(all_rows, task)
+    else:
+        if task.input_selector in {"recent-messages", "metadata-recent"}:
+            rows = rows[-task.recent_message_count :]
+        rendered = [f"{row['role'] or 'unknown'}: {row['body']}" for row in rows]
+        full_text = "\n\n".join(rendered)
+        truncated = len(full_text) > task.max_input_chars
+        text = full_text[-task.max_input_chars :] if truncated else full_text
+        metadata = {
+            "selector": task.input_selector,
+            "message_ids": [int(row["id"]) for row in rows],
+            "message_roles": [row["role"] for row in rows],
+            "message_sequences": [row["seq"] for row in rows],
+            "seq_start": int(rows[0]["seq"]) if rows else None,
+            "seq_end": int(rows[-1]["seq"]) if rows else None,
+            "original_chars": len(full_text),
+            "selected_chars": len(text),
+            "truncated": truncated,
+        }
+    dates = [row["created_at"] for row in all_rows if row["created_at"]]
     start = conversation["created_at"] or (dates[0] if dates else "")
     last = conversation["updated_at"] or (dates[-1] if dates else "")
-    metadata = {
-        "selector": task.input_selector,
-        "message_ids": [int(row["id"]) for row in rows],
-        "message_roles": [row["role"] for row in rows],
-        "message_sequences": [row["seq"] for row in rows],
-        "seq_start": int(rows[0]["seq"]) if rows else None,
-        "seq_end": int(rows[-1]["seq"]) if rows else None,
-        "original_chars": len(full_text),
-        "selected_chars": len(text),
-        "truncated": truncated,
-    }
     return SelectedInput(
         int(conversation["id"]),
         conversation["provider"],
@@ -221,7 +591,7 @@ def prepare_attempt(
     }
     system = interpolate_prompt(task.system_prompt, prompt_values)
     user = interpolate_prompt(task.user_prompt, prompt_values)
-    schema_version, schema = OUTPUT_SCHEMAS[task.output_schema]
+    schema_spec = _schema_spec(task.output_schema)
     effective_generation = resolve_generation(task, profile)
     model_for_hash = {key: value for key, value in resolved.items() if key != "api_key"}
     model_for_hash["generation"] = effective_generation.model_dump(mode="json")
@@ -241,7 +611,7 @@ def prepare_attempt(
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            response_schema=schema.model_json_schema(),
+            response_schema=schema_spec.provider_model.model_json_schema(),
             enforce_schema=profile.structured_output,
             temperature=effective_generation.temperature,
             max_tokens=effective_generation.max_tokens,
@@ -255,7 +625,7 @@ def prepare_attempt(
         task_hash=canonical_hash(task.model_dump(mode="json")),
         model_hash=canonical_hash(model_for_hash),
         schema_name=task.output_schema,
-        schema_version=schema_version,
+        schema_version=schema_spec.identity_version,
     )
 
 
@@ -329,6 +699,34 @@ def _sanitize_error(message: str, prepared: PreparedAttempt) -> str:
     return safe[:500]
 
 
+def _validate_and_finalize(parsed: Any, prepared: PreparedAttempt) -> dict[str, Any]:
+    spec = _schema_spec(prepared.schema_name)
+    provider_value = spec.provider_model.model_validate(parsed)
+    candidate = spec.finalizer(provider_value, prepared.selected)
+    final_value = spec.final_model.model_validate(candidate)
+    result = final_value.model_dump(mode="json")
+    evidence = result.get("evidence_message_ids")
+    if evidence is None:
+        return result
+    selected_ids = set(prepared.selected.metadata.get("selected_message_ids", []))
+    invalid = [item for item in evidence if item not in selected_ids]
+    if invalid:
+        raise LLMError("evidence_validation", "Response cited evidence outside selected input.")
+    if evidence:
+        return result
+    if not selected_ids:
+        return result
+    schema_name = prepared.schema_name
+    unknown_result = (
+        schema_name == "work-mode-classification-v1" and result.get("mode") == "unknown"
+    ) or (schema_name == "last-activity-v1" and result.get("status") == "unknown")
+    if not unknown_result:
+        raise LLMError(
+            "evidence_validation", "Response omitted required selected-message evidence."
+        )
+    return result
+
+
 async def run_task(
     conn: sqlite3.Connection,
     *,
@@ -384,8 +782,7 @@ async def run_task(
                 parsed = json.loads(response.content)
             except json.JSONDecodeError as exc:
                 raise LLMError("invalid_json", "Provider returned invalid JSON.") from exc
-            _, schema = OUTPUT_SCHEMAS[prepared.schema_name]
-            validated = schema.model_validate(parsed).model_dump(mode="json")
+            validated = _validate_and_finalize(parsed, prepared)
             completed_at = _utc_now()
             result_id = record_ai_task_result(
                 conn,

@@ -39,11 +39,16 @@ def test_built_wheel_initializes_ai_catalogs_outside_checkout(tmp_path: Path) ->
     code = (
         "from pathlib import Path; "
         "from typer.testing import CliRunner; "
+        "from chat_chronicle.ai_config import load_task_catalog; "
         "from chat_chronicle.cli import app; "
         "r=CliRunner().invoke(app,['init']); "
         "assert r.exit_code == 0, r.output; "
         "assert Path('.chronicle/ai-tasks.yaml').is_file(); "
-        "assert Path('.chronicle/ai-models.yaml').is_file()"
+        "assert Path('.chronicle/ai-models.yaml').is_file(); "
+        "c=load_task_catalog(Path('.chronicle/ai-tasks.yaml')); "
+        "assert set(c.tasks) == {'conversation-summary','work-mode-classification',"
+        "'last-activity','title-assessment'}; "
+        "assert all(t.enabled for t in c.tasks.values())"
     )
     env = os.environ.copy()
     env["PYTHONPATH"] = str(target)

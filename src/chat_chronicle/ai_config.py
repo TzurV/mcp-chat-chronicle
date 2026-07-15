@@ -16,8 +16,20 @@ AI_MODELS_FILENAME = "ai-models.yaml"
 AI_TASKS_TEMPLATE = "ai-tasks.default.yaml"
 AI_MODELS_TEMPLATE = "ai-models.default.yaml"
 AI_CONFIG_DIR_ENV = "CHAT_CHRONICLE_AI_CONFIG_DIR"
-ALLOWED_SELECTORS = {"full-conversation", "recent-messages", "metadata-recent"}
-ALLOWED_SCHEMAS = {"example-result-v1"}
+ALLOWED_SELECTORS = {
+    "full-conversation",
+    "recent-messages",
+    "metadata-recent",
+    "conversation-overview-v1",
+    "recent-meaningful-v1",
+}
+ALLOWED_SCHEMAS = {
+    "example-result-v1",
+    "conversation-summary-v1",
+    "work-mode-classification-v1",
+    "last-activity-v1",
+    "title-assessment-v1",
+}
 ALLOWED_PLACEHOLDERS = {
     "conversation_id",
     "provider",
