@@ -87,6 +87,59 @@ def test_list_needs_no_litellm_and_lists_task_and_profile(project: Path) -> None
     assert "litellm" not in sys.modules
 
 
+def test_verbose_list_reports_privacy_safe_catalog_source_and_profile(project: Path) -> None:
+    sys.modules.pop("litellm", None)
+    result = runner.invoke(app, ["--ai-task", "list", "--verbose"])
+    assert result.exit_code == 0, result.output
+    assert "AI configuration source: repository-local .chronicle" in result.output
+    assert "task catalog: .chronicle/ai-tasks.yaml" in result.output
+    assert "model catalog: .chronicle/ai-models.yaml" in result.output
+    assert "timeout=60s" in result.output
+    assert "retries=1" in result.output
+    assert "structured_output=True" in result.output
+    assert str(project) not in result.output
+    assert "litellm" not in sys.modules
+
+
+def test_verbose_execution_reports_effective_config_without_private_content(
+    project: Path,
+) -> None:
+    conversation_id = _seed(project)
+    result = runner.invoke(
+        app,
+        [
+            "--ai-task",
+            "test-task",
+            "--conversation-id",
+            str(conversation_id),
+            "--dry-run",
+            "--verbose",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "effective task config:" in result.output
+    assert "selector=full-conversation" in result.output
+    assert "schema=example-result-v1" in result.output
+    assert "temperature=0" in result.output
+    assert "effective model config: endpoint=loopback" in result.output
+    assert "timeout=60s" in result.output
+    assert "private-one" not in result.output
+    assert str(project) not in result.output
+
+
+def test_verbose_labels_environment_config_override_without_printing_path(
+    project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    override = project / ".chronicle"
+    monkeypatch.setenv("CHAT_CHRONICLE_AI_CONFIG_DIR", str(override))
+    result = runner.invoke(app, ["--ai-task", "list", "--verbose"])
+    assert result.exit_code == 0, result.output
+    assert "AI configuration source: CHAT_CHRONICLE_AI_CONFIG_DIR override" in result.output
+    assert "task catalog: [CHAT_CHRONICLE_AI_CONFIG_DIR]/ai-tasks.yaml" in result.output
+    assert "model catalog: [CHAT_CHRONICLE_AI_CONFIG_DIR]/ai-models.yaml" in result.output
+    assert str(override) not in result.output
+
+
 @pytest.mark.parametrize(
     "args",
     [
@@ -95,6 +148,7 @@ def test_list_needs_no_litellm_and_lists_task_and_profile(project: Path) -> None
         ["--ai-task", "list", "--dry-run"],
         ["--dry-run", "stats"],
         ["--ai-task", "test-task", "--conversation-id", "1", "--provider", "synthetic"],
+        ["--verbose", "stats"],
     ],
 )
 def test_scope_and_option_conflicts_are_actionable_without_traceback(
@@ -192,6 +246,8 @@ def test_dry_run_reports_exact_cache_counts_and_prints_no_transcript(project: Pa
     result = runner.invoke(app, ["--ai-task", "test-task", "--limit", "2", "--dry-run"])
     assert result.exit_code == 0, result.output
     assert "cache hits: 1  cache misses: 1" in result.output
+    assert "input estimate:" in result.output
+    assert "configured context window: not set" in result.output
     assert "private-cached" not in result.output
     assert "private-miss" not in result.output
     assert str(second) in result.output

@@ -5,10 +5,14 @@ profiles:
     api_base: http://127.0.0.1:1234/v1
     api_key_env: null
     remote: false
-    timeout: 60
-    retries: 1
+    # Small local models can need more than a minute for schema-constrained output.
+    timeout: 180
+    # Avoid queueing a duplicate long-running local generation after a timeout.
+    retries: 0
     concurrency: 1
     structured_output: true
+    # Match this to the context configured when the model is loaded in LM Studio.
+    context_window: 8192
     # Safe defaults used unless the selected task overrides an individual field.
     generation:
       temperature: 0

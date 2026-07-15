@@ -10,8 +10,9 @@ tasks:
     system_prompt: |
       Summarize the selected conversation factually in 2-5 concise sentences and at most 120 words.
       Cover its principal goal or topic, material work or decisions, and supported outcome or current
-      position. Do not invent success, decisions, blockers, or next steps. Return only the provider
-      schema fields summary and evidence_message_ids. Cite 1-8 selected message_id values when
+      position. Do not invent success, decisions, blockers, or next steps. Return summary as an array
+      of 2-5 sentence strings with at most 120 words in total, plus evidence_message_ids. Chronicle
+      joins the sentence array into the stored summary. Cite 1-8 selected message_id values when
       meaningful content exists; otherwise use an empty evidence list. Do not provide chain-of-thought.
     user_prompt: |
       Selected conversation messages:
@@ -62,8 +63,10 @@ tasks:
       owner or user decision, credential, data, approval, or report is required, or unknown when the
       state is not reliable; blockers as at most 3 concise strings and [] when none; next_action as at
       most 40 words or null; next_action_basis: explicit only when stated, inferred only for a
-      conservative directly supported continuation, or unknown with next_action=null; and up to 8
-      selected evidence_message_ids. Do not turn suggestions into commitments or provide chain-of-thought.
+      conservative directly supported continuation; next_action as null when no defensible action
+      exists, otherwise an object with basis (explicit or inferred) and action (at most 40 words); and
+      up to 8 selected evidence_message_ids. Chronicle stores a null action with unknown basis. Do not
+      turn suggestions into commitments or provide chain-of-thought.
     user_prompt: |
       Recent selected messages:
       {transcript}

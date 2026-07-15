@@ -228,3 +228,41 @@ def test_failure_sanitizer_redacts_credential_and_full_selected_text(
         assert "key-private-value" not in stored
         assert "synthetic-redaction" not in stored
         assert "[REDACTED]" in stored
+
+
+def test_configured_context_preflight_fails_before_call_and_remains_retryable(
+    tmp_path: Path,
+) -> None:
+    class UnexpectedClient:
+        calls = 0
+
+        async def complete(self, request):
+            self.calls += 1
+            raise AssertionError("context preflight must run before the provider call")
+
+    client = UnexpectedClient()
+    with connect(tmp_path / "context.db") as conn:
+        conversation_id = _seed(conn, "context")
+        arguments = dict(
+            conn=conn,
+            task_name="demo",
+            task=_task(),
+            profile_name="local",
+            profile=ModelProfile(
+                model="mock",
+                api_base="http://localhost/v1",
+                context_window=32,
+            ),
+            conversation_ids=[conversation_id],
+            client=client,
+        )
+        first = asyncio.run(run_task(**arguments))[0]
+        second = asyncio.run(run_task(**arguments))[0]
+        assert first["error"] == second["error"] == "context_length"
+        assert client.calls == 0
+        rows = conn.execute(
+            "SELECT status, error FROM ai_task_results ORDER BY id"
+        ).fetchall()
+        assert len(rows) == 2
+        assert all(row["status"] == "failed" for row in rows)
+        assert all("context_length" in row["error"] for row in rows)

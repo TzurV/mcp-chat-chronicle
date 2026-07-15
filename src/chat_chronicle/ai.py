@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import re
 import sqlite3
 import time
@@ -40,23 +41,35 @@ class ExampleResult(BaseModel):
 
 class ConversationSummaryProviderResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    summary: str = Field(min_length=1, max_length=1_000)
+    summary: list[str] = Field(min_length=2, max_length=5)
     evidence_message_ids: list[StrictInt] = Field(max_length=8)
 
     @field_validator("summary")
     @classmethod
-    def bounded_words(cls, value: str) -> str:
+    def bounded_sentences(cls, value: list[str]) -> list[str]:
+        if any(not sentence.strip() for sentence in value):
+            raise ValueError("summary sentences must be non-empty")
+        if sum(len(sentence.split()) for sentence in value) > 120:
+            raise ValueError("summary must contain at most 120 words")
+        return value
+
+
+class ConversationSummaryResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    summary: str = Field(min_length=1, max_length=1_000)
+    start_date: str
+    last_active_date: str
+    evidence_message_ids: list[StrictInt] = Field(max_length=8)
+
+    @field_validator("summary")
+    @classmethod
+    def bounded_summary(cls, value: str) -> str:
         if len(value.split()) > 120:
             raise ValueError("summary must contain at most 120 words")
         sentences = [item for item in re.split(r"(?<=[.!?])\s+", value.strip()) if item]
         if not 2 <= len(sentences) <= 5:
             raise ValueError("summary must contain 2-5 sentences")
         return value
-
-
-class ConversationSummaryResult(ConversationSummaryProviderResult):
-    start_date: str
-    last_active_date: str
 
 
 class WorkModeClassificationResult(BaseModel):
@@ -113,6 +126,42 @@ class LastActivityResult(BaseModel):
         return self
 
 
+class NextActionProviderResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    basis: Literal["explicit", "inferred"]
+    action: str = Field(min_length=1, max_length=400)
+
+    @field_validator("action")
+    @classmethod
+    def bounded_action(cls, value: str) -> str:
+        if len(value.split()) > 40:
+            raise ValueError("next action must contain at most 40 words")
+        return value
+
+
+class LastActivityProviderResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    recent_work: str = Field(min_length=1, max_length=800)
+    status: Literal["in_progress", "completed", "blocked", "awaiting_input", "unknown"]
+    blockers: list[str] = Field(max_length=3)
+    next_action: NextActionProviderResult | None
+    evidence_message_ids: list[StrictInt] = Field(max_length=8)
+
+    @field_validator("recent_work")
+    @classmethod
+    def bounded_recent_work(cls, value: str) -> str:
+        if len(value.split()) > 100:
+            raise ValueError("recent_work must contain at most 100 words")
+        return value
+
+    @field_validator("blockers")
+    @classmethod
+    def concise_blockers(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() or len(item.split()) > 40 for item in value):
+            raise ValueError("blockers must be non-empty and at most 40 words each")
+        return value
+
+
 class TitleAssessmentResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title_fits: bool
@@ -165,8 +214,27 @@ def _identity_finalizer(value: BaseModel, selected: SelectedInput) -> dict[str, 
 
 def _summary_finalizer(value: BaseModel, selected: SelectedInput) -> dict[str, Any]:
     result = value.model_dump(mode="json")
+    sentences = []
+    for sentence in result["summary"]:
+        normalized = sentence.strip()
+        if not normalized.endswith((".", "!", "?")):
+            normalized += "."
+        sentences.append(normalized)
+    result["summary"] = " ".join(sentences)
     result["start_date"] = selected.start_date
     result["last_active_date"] = selected.last_active_date
+    return result
+
+
+def _last_activity_finalizer(value: BaseModel, selected: SelectedInput) -> dict[str, Any]:
+    result = value.model_dump(mode="json")
+    action = result.pop("next_action")
+    if action is None:
+        result["next_action"] = None
+        result["next_action_basis"] = "unknown"
+    else:
+        result["next_action"] = action["action"]
+        result["next_action_basis"] = action["basis"]
     return result
 
 
@@ -178,7 +246,7 @@ OUTPUT_SCHEMAS: dict[str, OutputSchemaSpec | tuple[str, type[BaseModel]]] = {
         "1",
         ConversationSummaryProviderResult,
         ConversationSummaryResult,
-        "1",
+        "2",
         _summary_finalizer,
     ),
     "work-mode-classification-v1": OutputSchemaSpec(
@@ -189,7 +257,7 @@ OUTPUT_SCHEMAS: dict[str, OutputSchemaSpec | tuple[str, type[BaseModel]]] = {
         _identity_finalizer,
     ),
     "last-activity-v1": OutputSchemaSpec(
-        "1", LastActivityResult, LastActivityResult, "1", _identity_finalizer
+        "1", LastActivityProviderResult, LastActivityResult, "2", _last_activity_finalizer
     ),
     "title-assessment-v1": OutputSchemaSpec(
         "1", TitleAssessmentResult, TitleAssessmentResult, "1", _identity_finalizer
@@ -211,6 +279,94 @@ class LLMError(RuntimeError):
         super().__init__(message)
 
 
+_SAFE_PROVIDER_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
+def _provider_failure(exc: Exception) -> LLMError:
+    """Classify provider failures without retaining provider-controlled text."""
+    exception_type = type(exc).__name__
+    name = exception_type.lower()
+    message = str(exc).lower()
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+    status = status if isinstance(status, int) and 100 <= status <= 599 else None
+    raw_code = getattr(exc, "code", None) or getattr(exc, "error_code", None)
+    code = str(raw_code) if raw_code is not None else None
+    code = code if code and _SAFE_PROVIDER_CODE.fullmatch(code) else None
+
+    if "provider" in message and any(
+        marker in message
+        for marker in ("not provided", "no provider", "custom_llm_provider")
+    ):
+        kind = "provider_route"
+        detail = (
+            "LiteLLM could not resolve the model provider; use a provider-prefixed "
+            "model such as 'lm_studio/<model-id>'."
+        )
+    elif "context" in message and any(
+        marker in message for marker in ("length", "window", "maximum", "token")
+    ):
+        kind = "context_length"
+        detail = "The request exceeds the model's configured context window."
+    elif "model" in message and any(
+        marker in message for marker in ("not found", "not loaded", "does not exist")
+    ):
+        kind = "model_not_found"
+        detail = "The configured model was not found or is not loaded by the provider."
+    elif status == 404 and "model" in message:
+        kind = "model_not_found"
+        detail = "The configured model was not found or is not loaded by the provider."
+    elif any(marker in name for marker in ("authentication", "permission")) or status in {
+        401,
+        403,
+    }:
+        kind = "authentication"
+        detail = "The provider rejected the configured authentication."
+    elif any(marker in name for marker in ("ratelimit", "rate_limit")) or status == 429:
+        kind = "rate_limit"
+        detail = "The provider rate-limited the request."
+    elif "timeout" in name or "timed out" in message:
+        kind = "timeout"
+        detail = (
+            "The model request timed out. Increase the selected profile's `timeout` "
+            "in the active ai-models.yaml and retry; for local inference, keep "
+            "`retries: 0` while calibrating."
+        )
+    elif "connection" in name or any(
+        marker in message
+        for marker in ("connection refused", "failed to connect", "unreachable")
+    ):
+        kind = "connection"
+        detail = "Chronicle could not connect to the configured model endpoint."
+    elif any(
+        marker in message
+        for marker in (
+            "unsupported parameter",
+            "unsupported request",
+            "response_format",
+            "unrecognized request argument",
+            "must be 'json_schema'",
+        )
+    ):
+        kind = "unsupported_parameter"
+        detail = "The provider rejected a request parameter or structured-output mode."
+    elif status is not None:
+        kind = "provider_http"
+        detail = f"The provider returned HTTP status {status}."
+    else:
+        kind = "provider"
+        detail = "The model provider rejected the request."
+
+    safe_facts = [f"exception={exception_type[:80]}"]
+    if status is not None:
+        safe_facts.append(f"status={status}")
+    if code is not None:
+        safe_facts.append(f"code={code}")
+    return LLMError(kind, f"{detail} ({', '.join(safe_facts)})")
+
+
 @dataclass(frozen=True)
 class CompletionRequest:
     model: str
@@ -223,6 +379,8 @@ class CompletionRequest:
     retries: int
     api_base: str | None = None
     api_key: str | None = None
+    context_window: int | None = None
+    estimated_input_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -281,26 +439,23 @@ class LiteLLMClient:
                 raise LLMError("invalid_json", "Provider returned an empty structured response.")
             usage_object = getattr(response, "usage", None)
             usage = usage_object.model_dump() if usage_object is not None else None
+            provider = str(getattr(response, "provider", "") or "").strip()
+            if not provider or provider == "unknown":
+                provider = request.model.split("/", 1)[0] if "/" in request.model else "unknown"
+            actual_model = str(getattr(response, "model", request.model))
+            provider_prefix = f"{provider}/"
+            if provider != "unknown" and actual_model.startswith(provider_prefix):
+                actual_model = actual_model[len(provider_prefix) :]
             return CompletionResponse(
                 content=content,
-                provider=str(getattr(response, "provider", "unknown")),
-                model=str(getattr(response, "model", request.model)),
+                provider=provider,
+                model=actual_model,
                 usage=usage,
             )
         except LLMError:
             raise
         except Exception as exc:
-            name = type(exc).__name__.lower()
-            aliases = {
-                "timeout": "timeout",
-                "authentication": "authentication",
-                "permission": "authentication",
-                "ratelimit": "rate_limit",
-                "rate_limit": "rate_limit",
-                "connection": "connection",
-            }
-            kind = next((value for key, value in aliases.items() if key in name), "provider")
-            raise LLMError(kind, f"{kind.replace('_', ' ')} error from model provider.") from exc
+            raise _provider_failure(exc) from exc
 
 
 @dataclass(frozen=True)
@@ -579,6 +734,30 @@ def canonical_hash(value: Any) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def _estimate_input_tokens(messages: list[dict[str, str]]) -> int:
+    """Return a conservative privacy-safe estimate without adding a tokenizer dependency."""
+    characters = sum(len(item.get("role", "")) + len(item.get("content", "")) for item in messages)
+    return math.ceil(characters / 4) + (4 * len(messages))
+
+
+def _provider_response_schema(
+    schema_spec: OutputSchemaSpec, selected: SelectedInput
+) -> dict[str, Any]:
+    """Bind evidence integers to the exact input IDs for provider-side enforcement."""
+    schema = schema_spec.provider_model.model_json_schema()
+    evidence_schema = schema.get("properties", {}).get("evidence_message_ids")
+    if not isinstance(evidence_schema, dict):
+        return schema
+    selected_ids = list(dict.fromkeys(selected.metadata.get("selected_message_ids", [])))
+    if selected_ids:
+        items = evidence_schema.setdefault("items", {"type": "integer"})
+        if isinstance(items, dict):
+            items["enum"] = selected_ids
+    else:
+        evidence_schema["maxItems"] = 0
+    return schema
+
+
 def prepare_attempt(
     conn: sqlite3.Connection,
     *,
@@ -600,6 +779,11 @@ def prepare_attempt(
     user = interpolate_prompt(task.user_prompt, prompt_values)
     schema_spec = _schema_spec(task.output_schema)
     effective_generation = resolve_generation(task, profile)
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+    estimated_input_tokens = _estimate_input_tokens(messages)
     model_for_hash = {key: value for key, value in resolved.items() if key != "api_key"}
     model_for_hash["generation"] = effective_generation.model_dump(mode="json")
     input_payload = {
@@ -614,11 +798,8 @@ def prepare_attempt(
         selected=selected,
         request=CompletionRequest(
             model=resolved["model"],
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            response_schema=schema_spec.provider_model.model_json_schema(),
+            messages=messages,
+            response_schema=_provider_response_schema(schema_spec, selected),
             enforce_schema=profile.structured_output,
             temperature=effective_generation.temperature,
             max_tokens=effective_generation.max_tokens,
@@ -626,6 +807,8 @@ def prepare_attempt(
             retries=profile.retries,
             api_base=profile.api_base,
             api_key=resolved.get("api_key"),
+            context_window=profile.context_window,
+            estimated_input_tokens=estimated_input_tokens,
         ),
         input_hash=canonical_hash(input_payload),
         prompt_hash=canonical_hash({"system": system, "user": user}),
@@ -686,6 +869,13 @@ def inspect_cache(
                 "status": "hit" if hit else "miss",
                 "actual_provider": hit["actual_provider"] if hit else None,
                 "actual_model": hit["actual_model"] if hit else None,
+                "selected_characters": len(prepared.selected.text),
+                "estimated_input_tokens": prepared.request.estimated_input_tokens,
+                "estimated_request_tokens": (
+                    (prepared.request.estimated_input_tokens or 0)
+                    + prepared.request.max_tokens
+                ),
+                "context_window": prepared.request.context_window,
             }
         )
     return results
@@ -698,12 +888,37 @@ def _utc_now() -> str:
 def _sanitize_error(message: str, prepared: PreparedAttempt) -> str:
     safe = message
     transcript_fragments = [
-        line.split(": ", 1)[1] for line in prepared.selected.text.splitlines() if ": " in line
+        line.strip()
+        for line in prepared.selected.text.splitlines()
+        if line.strip() and not line.lstrip().startswith("[message_id=")
     ]
+    transcript_fragments.extend(
+        line.split(": ", 1)[1].strip()
+        for line in prepared.selected.text.splitlines()
+        if ": " in line and line.split(": ", 1)[1].strip()
+    )
     for secret in (prepared.request.api_key, prepared.selected.text, *transcript_fragments):
         if secret:
             safe = safe.replace(secret, "[REDACTED]")
+    safe = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+", "Bearer [REDACTED]", safe)
+    safe = re.sub(
+        r"(?i)(api[_-]?key|token|password|secret)\s*[:=]\s*\S+",
+        r"\1=[REDACTED]",
+        safe,
+    )
+    safe = re.sub(r"https?://[^\s/@:]+:[^\s/@]+@", "[REDACTED_URL]", safe)
+    safe = re.sub(r"(?i)\b[A-Z]:\\[^\r\n]+", "[REDACTED_PATH]", safe)
     return safe[:500]
+
+
+def _safe_validation_detail(exc: ValidationError) -> str:
+    facts = []
+    for error in exc.errors(include_url=False, include_context=False, include_input=False)[:3]:
+        location = ".".join(str(item) for item in error.get("loc", ())) or "response"
+        error_type = str(error.get("type", "invalid"))
+        facts.append(f"{location}: {error_type}")
+    suffix = f" ({'; '.join(facts)})" if facts else ""
+    return f"Response failed output validation{suffix}."[:500]
 
 
 def _validate_and_finalize(parsed: Any, prepared: PreparedAttempt) -> dict[str, Any]:
@@ -783,6 +998,19 @@ async def run_task(
         started_clock = time.monotonic()
         response: CompletionResponse | None = None
         try:
+            estimated = prepared.request.estimated_input_tokens
+            context_window = prepared.request.context_window
+            if (
+                context_window is not None
+                and estimated is not None
+                and estimated + prepared.request.max_tokens > context_window
+            ):
+                raise LLMError(
+                    "context_length",
+                    "Estimated request tokens exceed the configured model context window "
+                    f"({estimated} input + {prepared.request.max_tokens} output > "
+                    f"{context_window}).",
+                )
             async with semaphore:
                 response = await client.complete(prepared.request)
             try:
@@ -827,7 +1055,7 @@ async def run_task(
             detail = (
                 _sanitize_error(str(exc), prepared)
                 if isinstance(exc, LLMError)
-                else "Response failed output validation."
+                else _safe_validation_detail(exc)
             )
             completed_at = _utc_now()
             result_id = record_ai_task_result(

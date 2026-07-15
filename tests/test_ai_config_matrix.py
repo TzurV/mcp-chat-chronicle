@@ -91,6 +91,29 @@ def test_model_catalog_strict_version_and_missing_environment(
         resolve_model(ModelProfile(model="mock", api_key_env="SYNTHETIC_MODEL_KEY"))
 
 
+def test_lm_studio_environment_model_requires_litellm_provider_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    profile = ModelProfile(
+        model="${CHRONICLE_LOCAL_MODEL}",
+        api_base="http://127.0.0.1:1234/v1",
+    )
+    monkeypatch.setenv("CHRONICLE_LOCAL_MODEL", "qwen3.5-4b")
+    with pytest.raises(AIConfigError, match="lm_studio/<model-id>"):
+        resolve_model(profile)
+
+    monkeypatch.setenv("CHRONICLE_LOCAL_MODEL", "lm_studio/qwen3.5-4b")
+    resolved = resolve_model(profile)
+    assert resolved["model"] == "lm_studio/qwen3.5-4b"
+    assert "api_key" not in resolved
+
+    template = load_model_catalog(Path(__file__).resolve().parents[1] / "ai-models.default.yaml")
+    local = template.profiles["service-local"]
+    assert local.timeout == 180
+    assert local.retries == 0
+    assert local.context_window == 8192
+
+
 def test_packaged_templates_are_available_and_privacy_safe() -> None:
     repo = Path(__file__).resolve().parents[1]
     for name in ("ai-tasks.default.yaml", "ai-models.default.yaml"):

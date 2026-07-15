@@ -188,6 +188,114 @@ poetry run chronicle --ai-task last-activity --conversation-id <id>
 poetry run chronicle --ai-task title-assessment --conversation-id <id>
 ```
 
+### First local AI setup with LM Studio
+
+Chronicle does not install or start a local model runtime. Install LM Studio for
+Windows separately, then use its local OpenAI-compatible server.
+
+For the first smoke test, use this conservative model choice:
+
+```text
+Model: qwen/qwen3.5-4b
+Format: GGUF
+Quantization: Q4_K_M
+```
+
+In LM Studio:
+
+1. Open **Discover** and search for `qwen/qwen3.5-4b`.
+2. Download the LM Studio Community GGUF `Q4_K_M` revision.
+3. Load the model. For the initial short structured extraction test, disable model
+   thinking; the tested 8192-token context is sufficient for a genuinely short
+   conversation. Use 16K or 32K for longer chats when available memory permits.
+4. Open **Developer**, keep the bind address at `127.0.0.1`, set port `1234`,
+   and start the server. Do not bind to `0.0.0.0` unless network exposure and
+   authentication have been deliberately configured.
+
+Initialize AI configuration for repositories that were set up before AI support
+was added. `init` creates missing AI YAML files without replacing the existing DB
+or configuration:
+
+```powershell
+poetry env info --path
+poetry run chronicle init
+poetry install -E enrich
+poetry run chronicle --ai-task list
+```
+
+Verify the local server and obtain the exact model ID it exposes:
+
+```powershell
+lms server status
+(Invoke-RestMethod http://127.0.0.1:1234/v1/models).data.id
+```
+
+Select the chat/generation model from the returned IDs, not an embedding model such
+as `text-embedding-*`. LiteLLM requires its LM Studio provider prefix, so set the
+current PowerShell session to `lm_studio/<returned-chat-model-id>`:
+
+```powershell
+$env:CHRONICLE_LOCAL_MODEL = "lm_studio/<returned-chat-model-id>"
+```
+
+For the recommended first model, the expected value is:
+
+```powershell
+$env:CHRONICLE_LOCAL_MODEL = "lm_studio/qwen3.5-4b"
+```
+
+The prefix is part of LiteLLM routing; LM Studio itself still receives the local
+ID `qwen3.5-4b`. Chronicle rejects an unprefixed value from this default profile
+before making a request. An unauthenticated loopback LM Studio server needs no API
+key, so keep `api_key_env: null` unless authentication was deliberately enabled.
+
+Set `context_window` in `.chronicle/ai-models.yaml` to the context configured when
+the model was loaded. Fresh initialization uses 8192 for the short-smoke profile.
+Chronicle reports selected characters and estimated input/request tokens during
+`--dry-run`, and fails before the model call when the estimate plus requested output
+exceeds the configured window. The estimate is conservative and does not silently
+truncate beyond the selected task's deterministic input selector.
+
+The local template allows 180 seconds per schema-constrained generation and uses no
+automatic retry. On slower local hardware, raise `timeout` deliberately after a
+bounded dry-run; a retry can queue the same expensive generation twice and is not a
+substitute for a realistic timeout.
+
+Select a short or medium real conversation, inspect the request without calling
+the model, then run the first local task:
+
+```powershell
+poetry run chronicle recent -n 5
+poetry run chronicle --ai-task conversation-summary --conversation-id <id> --dry-run --verbose
+poetry run chronicle --ai-task conversation-summary --conversation-id <id>
+```
+
+`--verbose` prints a privacy-safe summary of the effective AI configuration. It
+identifies repository-local configuration versus a `CHAT_CHRONICLE_AI_CONFIG_DIR`
+override and reports the selected profile's timeout, retries, context window,
+structured-output mode, selector/schema, and effective generation limits. It does
+not print the absolute override path, credentials, prompts, transcript text, or
+generated output.
+
+For evidence-bearing tasks, Chronicle also binds the provider JSON Schema to the
+exact normalized message IDs selected for that attempt. This prevents a structured
+provider from choosing excluded or nonexistent IDs; client-side evidence validation
+still rejects any incompatible provider response as a retryable failure.
+
+The default local profile expects `http://127.0.0.1:1234/v1` and strict JSON
+Schema output. Current LM Studio accepts `json_schema` and may reject OpenAI's
+`json_object` mode, so do not use `structured_output: false` as a generic fallback.
+Only disable schema enforcement after an invented direct probe proves that the
+selected provider rejects `json_schema` and accepts `json_object`; Chronicle still
+applies local Pydantic result validation in that mode.
+
+Every executed attempt is appended to `ai_task_results`: validated successes hold
+the structured result and become configuration/input-aware cache hits, while
+sanitized failures hold no result and remain retryable. `--force` bypasses a success
+cache entry and appends another auditable attempt. Keep real structured outputs and
+logs private, and do not enable verbose LiteLLM request/response logging because it
+can expose prompts, transcripts, credentials, titles, and generated content.
+
 `init` copies the tracked privacy-safe templates `ai-tasks.default.yaml` and
 `ai-models.default.yaml` to `.chronicle/ai-tasks.yaml` and
 `.chronicle/ai-models.yaml`. Existing local catalogs are kept unless `--force`

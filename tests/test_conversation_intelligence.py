@@ -17,6 +17,7 @@ from chat_chronicle.ai import (
     LastActivityResult,
     TitleAssessmentResult,
     WorkModeClassificationResult,
+    prepare_attempt,
     run_task,
     select_input,
 )
@@ -68,6 +69,58 @@ def _message(role: str | None, body: str, seq: int) -> Message:
 def _production_catalog():
     path = Path(__file__).resolve().parents[1] / "ai-tasks.default.yaml"
     return load_task_catalog(path)
+
+
+@pytest.mark.parametrize(
+    "task_name",
+    [
+        "conversation-summary",
+        "work-mode-classification",
+        "last-activity",
+        "title-assessment",
+    ],
+)
+def test_provider_schema_restricts_evidence_to_exact_selected_ids(
+    tmp_path: Path, task_name: str
+) -> None:
+    with connect(tmp_path / f"evidence-schema-{task_name}.db") as conn:
+        conversation_id = _seed(
+            conn,
+            task_name,
+            [
+                _message("user", "First synthetic message", 0),
+                _message("system", "Excluded synthetic instruction", 1),
+                _message("assistant", "Second synthetic message", 2),
+            ],
+        )
+        prepared = prepare_attempt(
+            conn,
+            task=_production_catalog().tasks[task_name],
+            profile=ModelProfile(model="mock", api_base="http://localhost/v1"),
+            conversation_id=conversation_id,
+        )
+        selected_ids = prepared.selected.metadata["selected_message_ids"]
+        evidence = prepared.request.response_schema["properties"]["evidence_message_ids"]
+        assert len(selected_ids) == 2
+        assert selected_ids[1] - selected_ids[0] == 2
+        assert evidence["items"]["enum"] == selected_ids
+
+
+def test_provider_schema_requires_empty_evidence_for_empty_selection(tmp_path: Path) -> None:
+    with connect(tmp_path / "empty-evidence-schema.db") as conn:
+        conversation_id = _seed(
+            conn,
+            "empty-evidence-schema",
+            [_message("system", "Excluded synthetic instruction", 0)],
+        )
+        prepared = prepare_attempt(
+            conn,
+            task=_production_catalog().tasks["conversation-summary"],
+            profile=ModelProfile(model="mock", api_base="http://localhost/v1"),
+            conversation_id=conversation_id,
+        )
+        evidence = prepared.request.response_schema["properties"]["evidence_message_ids"]
+        assert evidence["maxItems"] == 0
 
 
 def test_production_catalog_and_packaged_template_are_exact() -> None:
@@ -361,7 +414,7 @@ def test_provider_neutral_synthetic_scenarios_are_selectable(
     [
         (
             ConversationSummaryProviderResult,
-            {"summary": "It began safely. It ended clearly.", "evidence_message_ids": [1]},
+            {"summary": ["It began safely", "It ended clearly"], "evidence_message_ids": [1]},
         ),
         (
             WorkModeClassificationResult,
@@ -471,9 +524,9 @@ def test_schema_consistency_and_bounds() -> None:
                 "evidence_message_ids": [],
             }
         )
-    with pytest.raises(ValidationError, match="2-5"):
+    with pytest.raises(ValidationError):
         ConversationSummaryProviderResult.model_validate(
-            {"summary": "Only one sentence.", "evidence_message_ids": []}
+            {"summary": ["Only one sentence"], "evidence_message_ids": []}
         )
 
 
@@ -490,7 +543,7 @@ class StaticClient:
 def test_summary_dates_are_application_owned_and_evidence_is_validated(tmp_path: Path) -> None:
     client = StaticClient(
         {
-            "summary": "The synthetic task was requested. A bounded result was returned.",
+            "summary": ["The synthetic task was requested", "A bounded result was returned"],
             "evidence_message_ids": [1],
         }
     )
@@ -518,7 +571,10 @@ def test_summary_dates_are_application_owned_and_evidence_is_validated(tmp_path:
 
         bad = StaticClient(
             {
-                "summary": "The synthetic task was requested. An invalid citation was returned.",
+                "summary": [
+                    "The synthetic task was requested",
+                    "An invalid citation was returned",
+                ],
                 "evidence_message_ids": [999],
             }
         )
@@ -545,7 +601,10 @@ def test_all_tasks_store_independently_and_title_assessment_never_writes_title(
     catalog = _production_catalog()
     outputs = {
         "conversation-summary": {
-            "summary": "The synthetic request was discussed. The response records a safe result.",
+            "summary": [
+                "The synthetic request was discussed",
+                "The response records a safe result",
+            ],
             "evidence_message_ids": [1],
         },
         "work-mode-classification": {
@@ -559,7 +618,6 @@ def test_all_tasks_store_independently_and_title_assessment_never_writes_title(
             "status": "completed",
             "blockers": [],
             "next_action": None,
-            "next_action_basis": "unknown",
             "evidence_message_ids": [1],
         },
         "title-assessment": {
@@ -593,7 +651,11 @@ def test_all_tasks_store_independently_and_title_assessment_never_writes_title(
         ).fetchall()
         assert {row["task_name"] for row in rows} == set(outputs)
         assert len({(row["task_name"], row["output_schema_name"]) for row in rows}) == 4
-        assert all("finalizer-1" in row["output_schema_version"] for row in rows)
+        versions = {row["task_name"]: row["output_schema_version"] for row in rows}
+        assert versions["conversation-summary"].endswith("finalizer-2")
+        assert versions["last-activity"].endswith("finalizer-2")
+        assert versions["work-mode-classification"].endswith("finalizer-1")
+        assert versions["title-assessment"].endswith("finalizer-1")
         assert conn.execute("SELECT title FROM conversations").fetchone()["title"] == "Chat"
         assert conn.execute("SELECT * FROM chat_fts ORDER BY rowid").fetchall() == fts_before
 
@@ -604,7 +666,7 @@ def test_finalizer_version_change_invalidates_only_schema_identity(
     task = _production_catalog().tasks["conversation-summary"]
     client = StaticClient(
         {
-            "summary": "The synthetic task began. The synthetic task ended.",
+            "summary": ["The synthetic task began", "The synthetic task ended"],
             "evidence_message_ids": [1],
         }
     )
@@ -626,7 +688,7 @@ def test_finalizer_version_change_invalidates_only_schema_identity(
         monkeypatch.setitem(
             ai_module.OUTPUT_SCHEMAS,
             "conversation-summary-v1",
-            replace(original, finalizer_version="2"),
+            replace(original, finalizer_version="3"),
         )
         assert asyncio.run(run_task(**arguments))[0]["status"] == "completed"
         assert len(client.requests) == 2

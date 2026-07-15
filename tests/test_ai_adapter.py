@@ -64,6 +64,34 @@ def test_adapter_sends_json_schema_and_normalizes_response(
     assert result.model == "mock-model"
 
 
+def test_lm_studio_route_propagates_api_base_without_key_and_reports_route_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    async def completion(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"result":"ok"}'))],
+            model="lm_studio/qwen3.5-4b",
+        )
+
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(acompletion=completion))
+    request = CompletionRequest(
+        **{
+            **_request().__dict__,
+            "model": "lm_studio/qwen3.5-4b",
+            "api_base": "http://127.0.0.1:1234/v1",
+        }
+    )
+    result = asyncio.run(LiteLLMClient().complete(request))
+    assert captured["model"] == "lm_studio/qwen3.5-4b"
+    assert captured["api_base"] == "http://127.0.0.1:1234/v1"
+    assert captured["api_key"] is None
+    assert result.provider == "lm_studio"
+    assert result.model == "qwen3.5-4b"
+
+
 def test_adapter_explicitly_degrades_when_profile_disables_schema_enforcement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -106,6 +134,55 @@ def test_adapter_normalizes_provider_errors(
         asyncio.run(LiteLLMClient().complete(_request()))
     assert caught.value.kind == kind
     assert "secret provider payload" not in str(caught.value)
+    if kind == "timeout":
+        assert "increase" in str(caught.value).lower()
+        assert "ai-models.yaml" in str(caught.value)
+        assert "retries: 0" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("exception_name", "message", "status", "kind"),
+    [
+        (
+            "BadRequestError",
+            "LLM Provider NOT provided; secret transcript fragment",
+            400,
+            "provider_route",
+        ),
+        ("NotFoundError", "model not loaded: private-name", 404, "model_not_found"),
+        ("BadRequestError", "maximum context length exceeded", 400, "context_length"),
+        (
+            "BadRequestError",
+            "unsupported parameter response_format with private output",
+            400,
+            "unsupported_parameter",
+        ),
+        ("ServiceError", "private provider payload", 503, "provider_http"),
+    ],
+)
+def test_adapter_categorizes_actionable_provider_failures_without_raw_detail(
+    monkeypatch: pytest.MonkeyPatch,
+    exception_name: str,
+    message: str,
+    status: int,
+    kind: str,
+) -> None:
+    error_type = type(exception_name, (Exception,), {})
+    error = error_type(message)
+    error.status_code = status
+    error.code = "safe_code"
+
+    async def completion(**kwargs):
+        raise error
+
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(acompletion=completion))
+    with pytest.raises(LLMError) as caught:
+        asyncio.run(LiteLLMClient().complete(_request()))
+    assert caught.value.kind == kind
+    detail = str(caught.value)
+    assert "private" not in detail
+    assert f"status={status}" in detail
+    assert "code=safe_code" in detail
 
 
 @pytest.mark.parametrize("content", ["", "   "])

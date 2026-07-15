@@ -112,6 +112,7 @@ class ModelProfile(_StrictModel):
     retries: int = Field(default=1, ge=0, le=10)
     concurrency: int = Field(default=1, gt=0, le=16)
     structured_output: bool = True
+    context_window: int | None = Field(default=None, gt=0, le=10_000_000)
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
 
 
@@ -196,6 +197,16 @@ def resolve_model(profile: ModelProfile) -> dict[str, Any]:
     if "$" in model:
         raise AIConfigError(
             f"Model profile requires an unset environment variable: {profile.model}"
+        )
+    if (
+        "CHRONICLE_LOCAL_MODEL" in profile.model
+        and profile.api_base
+        and not is_remote_profile(profile)
+        and "/" not in model
+    ):
+        raise AIConfigError(
+            "Local OpenAI-compatible model profiles require a LiteLLM provider prefix; "
+            "for LM Studio use 'lm_studio/<model-id>'."
         )
     result = profile.model_dump(mode="json")
     result["model"] = model

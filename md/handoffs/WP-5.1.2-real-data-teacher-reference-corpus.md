@@ -2,12 +2,12 @@
 
 ## Status
 
-Planned and dependency gated.
+Ready for executor implementation through the operator checkpoint.
 
-Do not execute this work package until:
-
-1. WP-5.1 has been PM-accepted.
-2. WP-5.1.1 has finalized and implemented the four task names, input selectors, prompt versions, and Pydantic output contracts.
+WP-5.1 and WP-5.1.1 are PM-accepted. The executor may implement generic tooling,
+create the local frozen snapshot/pilot, and produce the operator checkpoint report.
+The executor must stop before any real remote call; only the owner manually launches
+remote teacher/reconciliation commands after PM checkpoint approval.
 
 This file is the complete executor instruction for WP-5.1.2. Do not infer additional product AI features or local-model benchmark scope from the broader roadmap.
 
@@ -38,6 +38,8 @@ The following decisions are approved and must not be reopened inside execution:
 10. Private corpus data, source mappings, teacher requests/responses, candidate predictions, and private reports are never committed.
 11. Generic corpus tooling, schemas, privacy-safe templates, synthetic fixtures, tests, and aggregate-only documentation may be committed.
 12. WP-5.2 will compare zero-shot and few-shot task variants. Few-shot examples may only come from the development split.
+13. Development and evaluation use a frozen, local SQLite snapshot of the current product DB; later product ingests must not alter the corpus basis.
+14. Every real remote teacher or reconciliation call is launched manually by the owner after a PM-validated operator checkpoint. The executor must not transmit private data.
 
 ## Dependency Stop Check
 
@@ -93,12 +95,40 @@ The source is the owner's real configured Chronicle database, normally:
 Requirements:
 
 - resolve the effective source DB through accepted project configuration rather than hard-coding a private absolute path;
-- open the source DB in SQLite read-only/query-only mode;
+- use the source DB only to create one consistent local evaluation snapshot;
 - never run product schema migration against it from evaluation tooling;
 - never add evaluation tables, task results, locks, timestamps, or audit rows to it;
-- capture a source fingerprint before and after corpus creation and prove that evaluation tooling did not mutate it;
-- tolerate normal WAL/SHM behavior from another application without claiming byte-for-byte identity where SQLite itself changes sidecar state;
+- capture a source fingerprint before and after snapshot creation and prove that evaluation tooling did not mutate it;
 - fail clearly if a consistent read-only snapshot cannot be obtained.
+
+### Frozen Development Snapshot
+
+Create the snapshot under the private evaluation root:
+
+```text
+.chronicle/eval/source/chronicle-frozen-<UTC-date-or-corpus-version>.db
+.chronicle/eval/source/snapshot-manifest.json
+```
+
+The snapshot command must use SQLite's online backup API or an equivalently safe
+SQLite-native mechanism. Do not use `Copy-Item`, `shutil.copyfile`, or another raw
+filesystem copy of a possibly active WAL-mode database.
+
+After the SQLite backup finishes and all handles close:
+
+- verify `PRAGMA integrity_check` on the snapshot;
+- record the source product schema version and aggregate conversation/message counts;
+- record a SHA-256 hash of the closed snapshot;
+- record snapshot creation time, corpus version, and the source DB's privacy-safe logical identifier;
+- mark the snapshot file read-only on Windows where practical;
+- open it for all later corpus work with SQLite URI read-only mode and `PRAGMA query_only=ON`;
+- use `immutable=1` only after proving the snapshot is closed, self-contained, and has no required WAL/SHM sidecars;
+- verify the snapshot hash before and after pilot/full-corpus work;
+- fail rather than silently refresh, replace, or migrate a frozen snapshot.
+
+The snapshot manifest is private and untracked because it may contain local paths,
+hashes, or source metadata. Creating a new snapshot creates a new corpus basis and
+must never rewrite an already frozen corpus.
 
 ### Private Evaluation Root
 
@@ -108,6 +138,9 @@ Default local layout:
 .chronicle/eval/
   eval-config.yaml
   eval.db
+  source/
+    chronicle-frozen-<version>.db
+    snapshot-manifest.json
   artifacts/
     teacher/
       <teacher-run-id>/
@@ -411,6 +444,114 @@ Requirements:
 
 Do not use provider Files, Assistants, persistent threads, Batch, or other stateful/storage features unless separately approved. For OpenAI calls, set `store=false` where supported. Record Anthropic's current Fable retention terms before transmission.
 
+## Required Development CLI And Manual Operator Boundary
+
+Implement a development-only `python -m bench` command surface. The exact parser
+may follow repository conventions, but the following operator capabilities and
+stable command concepts are mandatory:
+
+```powershell
+poetry run python -m bench snapshot create --corpus pilot-v1
+poetry run python -m bench pilot prepare --corpus pilot-v1 --count 30
+poetry run python -m bench pilot preflight --corpus pilot-v1 --teachers teacher-openai-sol,teacher-claude-fable
+poetry run python -m bench teacher-run --corpus pilot-v1 --teachers teacher-openai-sol,teacher-claude-fable --parallel-teachers 2 --allow-remote --confirm-private-eval
+poetry run python -m bench teacher-status --corpus pilot-v1
+poetry run python -m bench reconcile --corpus pilot-v1 --teachers teacher-openai-sol,teacher-claude-fable --parallel-teachers 2 --allow-remote --confirm-private-eval
+poetry run python -m bench pilot-report --corpus pilot-v1
+```
+
+If implementation requires a small syntax adjustment, document the final exact
+PowerShell commands in the operator checkpoint report. Do not weaken or combine
+away the snapshot, preflight, explicit remote confirmation, status, reconciliation,
+or report stages.
+
+### `teacher-run` Contract
+
+The owner will manually launch this command after PM checkpoint approval:
+
+```powershell
+poetry run python -m bench teacher-run `
+  --corpus pilot-v1 `
+  --teachers teacher-openai-sol,teacher-claude-fable `
+  --parallel-teachers 2 `
+  --allow-remote `
+  --confirm-private-eval
+```
+
+Its required behavior is:
+
+1. Load the private eval config, frozen corpus, task catalog, and the two named model profiles.
+2. Verify the frozen snapshot/corpus/config hashes and reject draft or changed inputs.
+3. Require `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` from process environment variables; never read keys from tracked YAML or print them.
+4. Re-run the secret-quarantine, provider/model allowlist, retention acknowledgement, request/token/cost ceiling, and explicit-intent checks before the first network call.
+5. Create or resume independent teacher-run records for OpenAI GPT-5.6 Sol and Anthropic Claude Fable 5.
+6. Send the same frozen case input independently to both teachers. Initial generation must never expose either teacher's answer to the other.
+7. Run two bounded teacher lanes concurrently. `--parallel-teachers 2` means at most two teacher requests are in flight and normally one lane belongs to each provider; it is not unbounded per-provider concurrency.
+8. Validate JSON schema and selected-message evidence before marking an output successful.
+9. Store private request/response artifacts, parsed outputs, usage, latency, model identity, failures, and disclosure records only below `.chronicle/eval/`.
+10. Print only aggregate progress and opaque case/run IDs, never titles, transcript text, prompts, responses, URLs, source IDs, or secrets.
+11. Cache successful outputs by exact identity. Re-running the same command resumes missing/failed work and makes zero duplicate calls for unchanged successful cases.
+12. Stop safely on Ctrl+C with committed eval rows consistent and resumable.
+
+The command performs teacher generation only. It does not silently reconcile
+disagreements, expand to 300 conversations, modify the product DB, or run local
+candidate models.
+
+### Manual Credential Handling
+
+The operator runbook must use masked, process-local PowerShell input where supported:
+
+```powershell
+$env:OPENAI_API_KEY = Read-Host "OpenAI API key" -MaskInput
+$env:ANTHROPIC_API_KEY = Read-Host "Anthropic API key" -MaskInput
+```
+
+After all manual remote commands finish:
+
+```powershell
+Remove-Item Env:OPENAI_API_KEY
+Remove-Item Env:ANTHROPIC_API_KEY
+```
+
+Do not place literal keys in shell command history, YAML, `.env` files, reports, or
+tracked configuration. The owner must use API credentials with API billing/access;
+consumer ChatGPT or Claude subscriptions alone are not treated as API credentials.
+
+### Operator Checkpoint
+
+The executor must stop before every first real remote call and write:
+
+```text
+md/handoffs/reports/WP-5.1.2-operator-checkpoint.md
+```
+
+The checkpoint report must contain only privacy-safe aggregates and must include:
+
+- frozen snapshot creation/integrity/hash-verification evidence without private hashes or paths;
+- pilot count/strata/task totals and quarantine counts;
+- exact final PowerShell commands the owner will run;
+- requested and resolved model-profile names and API model IDs;
+- verified provider documentation links and verification date;
+- OpenAI and Anthropic storage/retention acknowledgement;
+- estimated initial and worst-case requests, input/output tokens, and cost by provider;
+- configured hard request/token/cost ceilings;
+- proof that preflight and missing-confirmation paths made zero network calls;
+- proof that `.chronicle/eval/` is ignored and no private artifact is staged/tracked;
+- status `Ready for PM operator-checkpoint validation`.
+
+At this checkpoint, leave implementation and report changes uncommitted. The PM
+validates the tooling and report. Only after PM approval will the PM provide the
+owner with the final step-by-step commands. The owner, not the executor or PM agent,
+manually enters credentials and launches `teacher-run` and any remote reconciliation
+command.
+
+After the owner reports that manual teacher execution finished, the executor may
+resume to inspect privacy-safe local aggregates and prepare the next checkpoint or
+report. If reconciliation requires remote calls, the PM must validate its preflight
+and return the exact command to the owner for manual execution; the executor still
+does not launch it. Do not infer owner authorization from this handoff alone; the
+explicit flags are necessary but do not replace the checkpoint.
+
 ## Remote Privacy And Cost Gate
 
 The owner's authorization in this handoff permits the approved bounded teacher runs. It does not authorize arbitrary providers, models, case counts, storage modes, or unlimited spend.
@@ -613,33 +754,41 @@ Use synthetic conversations and mocked/injected teacher clients for committed te
 Cover at least:
 
 1. Evaluation schema creation and forward migration independent of the product DB.
-2. Product source DB opened read-only and unchanged.
-3. Deterministic seeded sampling and split assignment.
-4. Exact-content deduplication across providers.
-5. Minority-provider inclusion without duplicated cases.
-6. Stable opaque eval IDs and input hashes.
-7. All four task cases created from accepted selectors/schemas.
-8. Deterministic dates copied from DB, not generated by teachers.
-9. Frozen input snapshot unaffected by later source changes.
-10. Secret quarantine true positives and UUID/code false-positive resistance.
-11. Dry run makes zero network/LLM calls.
-12. Remote calls blocked without both explicit confirmation flags.
-13. Provider/model allowlist enforcement.
-14. Case/token/request/cost ceilings checked before transmission.
-15. `store=false` or equivalent configured where supported.
-16. Successful teacher output caching and resumable rerun.
-17. Prompt/schema/model/settings changes invalidate the correct cache identity.
-18. Malformed teacher output, timeout, retry exhaustion, and partial provider failure.
-19. Direct teacher agreement classification.
-20. Randomized anonymous reciprocal reconciliation.
-21. Reconciled convergence versus unresolved disagreement.
-22. Evidence validation and primary-score eligibility rules.
-23. Pilot gate pass/fail behavior.
-24. Frozen corpus immutability and new-version behavior.
-25. Few-shot examples rejected from validation/holdout splits.
-26. Model artifact/quantization/runtime stored as separate factors.
-27. Privacy-safe aggregate report contains no transcript/title/path/URL/UUID leakage.
-28. Git-ignore/privacy checks for all private artifact extensions and paths.
+2. SQLite-native backup creates a consistent snapshot from a WAL-mode synthetic source.
+3. Snapshot integrity check, manifest, closed-file hash, read-only/query-only opening, and before/after hash verification.
+4. Raw filesystem copying is not used by the snapshot command.
+5. Product source DB remains unchanged and later source changes do not alter the frozen snapshot.
+6. Snapshot refresh/replacement is rejected for a frozen corpus version.
+7. Deterministic seeded sampling and split assignment.
+8. Exact-content deduplication across providers.
+9. Minority-provider inclusion without duplicated cases.
+10. Stable opaque eval IDs and input hashes.
+11. All four task cases created from accepted selectors/schemas.
+12. Deterministic dates copied from DB, not generated by teachers.
+13. Secret quarantine true positives and UUID/code false-positive resistance.
+14. Dry run makes zero network/LLM calls.
+15. Remote calls blocked without both explicit confirmation flags and without a validated operator checkpoint.
+16. Missing API-key environment variables fail without printing secrets or making calls.
+17. Provider/model allowlist enforcement.
+18. Case/token/request/cost ceilings checked before transmission.
+19. `store=false` or equivalent configured where supported.
+20. Dual-teacher scheduling uses two independent bounded lanes with at most two in-flight calls.
+21. Both teachers receive the same frozen case input without seeing the other's initial output.
+22. Successful teacher output caching and resumable rerun make zero duplicate calls.
+23. Ctrl+C/partial provider failure leaves consistent resumable eval rows.
+24. Prompt/schema/model/settings changes invalidate the correct cache identity.
+25. Malformed teacher output, refusal, timeout, retry exhaustion, and partial provider failure.
+26. Default progress/error output contains no transcript, title, path, URL, UUID, prompt, response, or key material.
+27. Direct teacher agreement classification.
+28. Randomized anonymous reciprocal reconciliation.
+29. Reconciled convergence versus unresolved disagreement.
+30. Evidence validation and primary-score eligibility rules.
+31. Pilot gate pass/fail behavior.
+32. Frozen corpus immutability and new-version behavior.
+33. Few-shot examples rejected from validation/holdout splits.
+34. Model artifact/quantization/runtime stored as separate factors.
+35. Privacy-safe aggregate reports contain no private content or identifiers.
+36. Git-ignore/privacy checks for all private artifact extensions and paths.
 
 ## Acceptance Criteria
 
@@ -648,21 +797,25 @@ WP-5.1.2 is complete only when:
 1. Both dependency packages were accepted before execution.
 2. Generic tracked tooling and synthetic tests are implemented and documented.
 3. `.chronicle/eval/eval.db` is the canonical private evaluation store.
-4. The real source DB was read-only and unchanged.
-5. A deterministic, representative 30-conversation pilot was built.
-6. Both approved teacher profiles ran or resumed through the accepted LiteLLM boundary.
-7. Pilot quality/privacy/cost gates passed.
-8. A deterministic 300-conversation corpus was created with 150/50/100 splits, or the report is `partial` because fewer than 300 eligible unique records exist.
-9. All four task cases have two teacher outputs or explicit bounded failure states.
-10. Agreement, reconciliation, disagreement, invalid, and quarantine states are preserved.
-11. Unresolved cases are ineligible for primary scoring.
-12. The corpus is frozen before any candidate-model testing.
-13. Model/prompt/runtime metadata structures are ready for WP-5.2.
-14. No human review is claimed or required.
-15. No private evaluation artifact is tracked or leaked in the completion report.
-16. Full tests and Ruff pass.
-17. Existing Chronicle commands and WP-5.1 behavior remain regression-clean.
-18. The required detailed completion report exists at the exact path below.
+4. A consistent SQLite-native frozen source snapshot and private manifest were created without a raw filesystem copy.
+5. The real product DB remained unchanged and all corpus work used the read-only frozen snapshot.
+6. Snapshot integrity/hash checks passed before and after evaluation.
+7. A deterministic, representative 30-conversation pilot was built.
+8. The operator checkpoint report was PM-validated before the owner made any remote call.
+9. The owner manually launched all real remote teacher/reconciliation commands; the executor did not transmit private data.
+10. Both approved teacher profiles ran or resumed through the accepted LiteLLM boundary using independent bounded lanes.
+11. Pilot quality/privacy/cost gates passed.
+12. A deterministic 300-conversation corpus was created with 150/50/100 splits, or the report is `partial` because fewer than 300 eligible unique records exist.
+13. All four task cases have two teacher outputs or explicit bounded failure states.
+14. Agreement, reconciliation, disagreement, invalid, and quarantine states are preserved.
+15. Unresolved cases are ineligible for primary scoring.
+16. The corpus is frozen before any candidate-model testing.
+17. Model/prompt/runtime metadata structures are ready for WP-5.2.
+18. No human review is claimed or required.
+19. No private evaluation artifact is tracked or leaked in either report.
+20. Full tests and Ruff pass.
+21. Existing Chronicle commands and WP-5.1 behavior remain regression-clean.
+22. The required checkpoint and detailed completion reports exist at the exact paths defined here.
 
 If remote credentials or configured cost authorization prevent teacher generation, implement and validate the generic tooling but report `partial` or `blocked` accurately. Do not claim corpus completion from mocked calls.
 
@@ -721,13 +874,13 @@ The report must include:
 3. Executive summary and explicit statement that references are automated silver references with no human review.
 4. Files changed, separating tracked generic tooling from untracked private artifacts.
 5. Evaluation data layout and eval-database schema/version.
-6. Source read-only/no-write mechanism and evidence.
-7. Sampling, deduplication, stratification, split, seed, and freeze rules.
+6. SQLite-native snapshot mechanism, source no-write evidence, snapshot integrity/hash verification, and confirmation that no raw filesystem copy was used.
+7. Sampling, deduplication, stratification, split, seed, snapshot basis, and freeze rules.
 8. Pilot aggregate profile without private identifiers/content.
 9. Teacher profile/model/config provenance.
 10. Current remote retention/storage controls and verification links/date.
 11. Secret quarantine method and aggregate exclusions.
-12. Preflight estimated versus actual tokens/requests/cost, without billing/account identifiers.
+12. PM-approved operator checkpoint plus preflight estimated versus actual tokens/requests/cost, without billing/account identifiers.
 13. Schema-valid, agreement, reconciliation, disagreement, invalid, and usable-reference rates by task.
 14. Pilot gate checklist and expansion decision.
 15. Full corpus aggregate counts/splits/strata if completed.
@@ -737,7 +890,8 @@ The report must include:
 19. Git privacy/tracking evidence.
 20. Known limitations, especially lack of human gold labels and low-N provider strata.
 21. Requirement-by-requirement acceptance checklist.
-22. Final statement that nothing was committed unless the PM explicitly requested a commit.
+22. Confirmation that the owner manually launched every real remote command and the executor made no private remote transmission.
+23. Final statement that nothing was committed unless the PM explicitly requested a commit.
 
 ## Executor Delivery Rules
 

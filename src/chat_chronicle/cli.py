@@ -22,6 +22,7 @@ from chat_chronicle import __version__
 from chat_chronicle.adapters import chatgpt_export, claude_code, claude_export, openai_codex
 from chat_chronicle.ai import inspect_cache, run_task
 from chat_chronicle.ai_config import (
+    AI_CONFIG_DIR_ENV,
     AI_MODELS_TEMPLATE,
     AI_TASKS_TEMPLATE,
     AIConfigError,
@@ -29,6 +30,7 @@ from chat_chronicle.ai_config import (
     is_remote_profile,
     load_model_catalog,
     load_task_catalog,
+    resolve_generation,
     resolve_model,
     validate_catalog_references,
 )
@@ -202,6 +204,13 @@ def main(
     force: Annotated[bool, typer.Option("--force")] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     allow_remote: Annotated[bool, typer.Option("--allow-remote")] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            help="Print a privacy-safe summary of effective AI configuration.",
+        ),
+    ] = False,
 ) -> None:
     """A local-first, searchable archive of your AI conversations."""
     if ai_task is None:
@@ -221,6 +230,7 @@ def main(
             or force
             or dry_run
             or allow_remote
+            or verbose
         ):
             _fail("AI root options require --ai-task and cannot modify normal subcommands")
         return
@@ -238,6 +248,33 @@ def main(
         force,
         dry_run,
         allow_remote,
+        verbose,
+    )
+
+
+def _print_ai_catalog_source(tasks_path: Path, models_path: Path) -> None:
+    override = bool(os.environ.get(AI_CONFIG_DIR_ENV))
+    source = f"{AI_CONFIG_DIR_ENV} override" if override else "repository-local .chronicle"
+    location = f"[{AI_CONFIG_DIR_ENV}]" if override else ".chronicle"
+    console.print(f"AI configuration source: {source}")
+    console.print(f"task catalog: {location}/{tasks_path.name}")
+    console.print(f"model catalog: {location}/{models_path.name}")
+
+
+def _print_ai_profile_summary(profile: Any, *, locality: str, prefix: str) -> None:
+    if profile.api_base is None:
+        endpoint = "provider-managed"
+    elif locality == "local":
+        endpoint = "loopback"
+    else:
+        endpoint = "non-loopback"
+    credential = "environment-configured" if profile.api_key_env else "none"
+    context = profile.context_window if profile.context_window is not None else "not set"
+    console.print(
+        f"{prefix}endpoint={endpoint}; credential={credential}; "
+        f"timeout={profile.timeout:g}s; retries={profile.retries}; "
+        f"concurrency={profile.concurrency}; structured_output={profile.structured_output}; "
+        f"context_window={context}"
     )
 
 
@@ -253,6 +290,7 @@ def _run_ai_cli(
     force: bool,
     dry_run: bool,
     allow_remote: bool,
+    verbose: bool,
 ) -> None:
     tasks_path, models_path = ai_config_paths()
     try:
@@ -281,6 +319,8 @@ def _run_ai_cli(
         ):
             _fail("--ai-task list does not accept execution or selection options")
         console.print("AI tasks")
+        if verbose:
+            _print_ai_catalog_source(tasks_path, models_path)
         for name, task in tasks.tasks.items():
             state = "enabled" if task.enabled else "disabled"
             console.print(f"{name}: {state}; model={task.model_profile}; {task.description}")
@@ -288,6 +328,8 @@ def _run_ai_cli(
         for name, profile in models.profiles.items():
             locality = "remote" if is_remote_profile(profile) else "local"
             console.print(f"{name}: {locality}")
+            if verbose:
+                _print_ai_profile_summary(profile, locality=locality, prefix="  ")
         return
     if conversation_id is None and limit is None:
         _fail("A runnable AI task requires --conversation-id or an explicit positive --limit")
@@ -335,6 +377,22 @@ def _run_ai_cli(
                 f"model profile: {profile_name} ({'remote' if remote else 'local'}); "
                 f"resolved model: {resolved_model}"
             )
+            if verbose:
+                _print_ai_catalog_source(tasks_path, models_path)
+                effective_generation = resolve_generation(task, profile_config)
+                console.print(
+                    "effective task config: "
+                    f"selector={task.input_selector}; schema={task.output_schema}; "
+                    f"max_input_chars={task.max_input_chars}; "
+                    f"recent_message_count={task.recent_message_count}; "
+                    f"temperature={effective_generation.temperature:g}; "
+                    f"max_tokens={effective_generation.max_tokens}"
+                )
+                _print_ai_profile_summary(
+                    profile_config,
+                    locality="remote" if remote else "local",
+                    prefix="effective model config: ",
+                )
             console.print(f"selected: {len(ids)}; conversation ids: {', '.join(map(str, ids))}")
             if dry_run:
                 cache = inspect_cache(
@@ -348,6 +406,26 @@ def _run_ai_cli(
                 matching_hits = sum(item["status"] == "hit" for item in cache)
                 hits = 0 if force else matching_hits
                 console.print(f"cache hits: {hits}  cache misses: {len(cache) - hits}")
+                selected_characters = [item["selected_characters"] for item in cache]
+                input_tokens = [item["estimated_input_tokens"] for item in cache]
+                request_tokens = [item["estimated_request_tokens"] for item in cache]
+                console.print(
+                    "input estimate: "
+                    f"selected characters total={sum(selected_characters)} "
+                    f"max={max(selected_characters)}; "
+                    f"input tokens total={sum(input_tokens)} max={max(input_tokens)}; "
+                    f"max request tokens including output={max(request_tokens)}"
+                )
+                context_windows = {
+                    item["context_window"] for item in cache if item["context_window"] is not None
+                }
+                if context_windows:
+                    console.print(
+                        "configured context window: "
+                        + ", ".join(str(item) for item in sorted(context_windows))
+                    )
+                else:
+                    console.print("configured context window: not set")
                 if force and matching_hits:
                     console.print(f"cache bypassed by --force: {matching_hits}")
                 console.print("dry run: no model call made")
