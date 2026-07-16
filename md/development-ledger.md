@@ -7,10 +7,10 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Field | Status |
 | --- | --- |
 | Date | 2026-07-16 |
-| Phase | Chat Chronicle v0.1.0 source release ready |
+| Phase | Chat Chronicle v0.1.0 source release published |
 | Last accepted delivery | First-release README, AI-task guide, LinkedIn article, and sanitized manager-chat artifact |
-| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; WP-5.1, WP-5.1.1, WP-5.1.3, and WP-5.1.4 accepted; hosted GitHub validation passed; WP-5.1.2 is paused; v0.1.0 release validation is green; WorkTrail rename, PyPI, Cursor, Gemini, and MCP are deferred |
-| Next action | Commit and tag `v0.1.0`, then owner pushes and makes the GitHub repository public |
+| Current milestone state | M0/M1/M2 core and real-history prototype accepted; OpenAI Codex and Claude Code local extraction accepted; WP-5.1, WP-5.1.1, WP-5.1.3, and WP-5.1.4 accepted; Chat Chronicle v0.1.0 is public at GitHub from release commit `1f3fbce` and remote tag `v0.1.0`; WP-5.1.2 is paused; WorkTrail rename, PyPI, Cursor, Gemini, MCP, and benchmarks are deferred |
+| Next action | Owner decides when to publish the prepared LinkedIn article and which product-development workstream to resume; no further release or development activity is implicitly authorized |
 | Current branch | `main` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -45,6 +45,12 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.1.3 | Local LM Studio AI-task smoke and compatibility fix | Accepted | `md/handoffs/WP-5.1.3-local-lm-studio-ai-task-smoke-fix.md` | `md/handoffs/reports/WP-5.1.3-completion-report.md` | `md/handoffs/reports/WP-5.1.3-validation-review.md` | Accepted after direct LM Studio/LiteLLM isolation and real local smoke. Dedicated `lm_studio/` routing, provider-compatible structural schemas, exact evidence binding, safe diagnostics, context estimates, and realistic tracked timeout policy are in place. |
 | WP-5.1.4 | Windows CI Rich-output wrapping patch | Accepted | `md/handoffs/WP-5.1.4-windows-ci-rich-output-wrapping.md` | `md/handoffs/reports/WP-5.1.4-completion-report.md` | `md/handoffs/reports/WP-5.1.4-validation-review.md` | Accepted after deterministic long-path and 20-column Rich regressions plus owner-confirmed hosted GitHub pass for `f0ecaf6`. Test-only patch preserves exit code, task/alias identity, full normalized diagnostic, and no-traceback behavior. |
 
+## Release Ledger
+
+| Release | State | Commit | Tag | Public artifacts | Validation |
+| --- | --- | --- | --- | --- | --- |
+| Chat Chronicle v0.1.0 | Published source release | `1f3fbce` | `v0.1.0` (present locally and on `origin`) | Public GitHub repository/release page; release README; `docs/ai-tasks.md`; prepared LinkedIn article; sanitized manager-chat artifact | Full local suite passed; Ruff passed; `chronicle --version` reports `0.1.0`; branch matches `origin/main`; unauthenticated repository and release-page checks returned HTTP 200 |
+
 ## Research Artifact Ledger
 
 | ID | Name | State | Files | Notes |
@@ -71,7 +77,7 @@ These are not approved scope. They are recorded from RS-2 for future change-orde
 | YAML-driven AI task runner | Owner AI-feature discussion | Approved for M5 planning | Use `poetry run chronicle --ai-task <name> ...`; `<name>` resolves from `.chronicle/ai-tasks.yaml`. Prompts/task policy are external, output schemas and safety controls remain code-owned, and models are aliases from `.chronicle/ai-models.yaml` through a thin LiteLLM-backed client. Local service profiles are default; remote development/evaluation profiles require explicit authorization. |
 | Initial conversation-intelligence tasks | Owner AI-feature discussion | Accepted as WP-5.1.1 | First catalog: summary with DB-derived start/last-active dates, whole-conversation work-mode classification, last-activity summary from recent meaningful turns, and title assessment with suggestion only. Real-model semantic quality remains unmeasured until WP-5.1.2/WP-5.2. |
 | Real-data teacher-reference corpus | Owner evaluation discussion | Paused by owner direction | Preserve the current WP-5.1.2 handoff as planning history, but do not execute snapshot, remote teacher, reconciliation, or expansion work until the owner resumes it after first-release preparation. |
-| First-release preparation | Owner release direction | Release-ready for v0.1.0 | Release-quality README and AI-task guide prepared; LinkedIn article and owner-reviewed sanitized manager transcript included; current Chat Chronicle name approved for this source release; WorkTrail rename and PyPI deferred. |
+| First-release preparation | Owner release direction | Released as v0.1.0 | Public source release committed as `1f3fbce` and tagged `v0.1.0`; release-quality README and AI-task guide, prepared LinkedIn article, and owner-reviewed sanitized manager transcript are included; WorkTrail rename and PyPI remain deferred. |
 | Host-bundled local-model benchmark adapters | Owner local-model survey | Proposed only | Edge Phi-4-mini/Aion and Chrome Gemini Nano are browser JavaScript APIs, not LiteLLM HTTP profiles. Evaluate later through dedicated adapters. Phi Silica remains the WP-5.4 Windows App SDK spike. Foundry Local needs no new adapter because it offers an OpenAI-compatible endpoint. |
 
 ## Accepted Evidence Snapshot
@@ -113,7 +119,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 | Claude standalone project metadata | WP-1.3.3 / future schema follow-up | Known limitation | Real Claude exports may include `projects/*.json` rows with no reliable conversation reference. Project rows are stored, but search only returns conversations linked by exact project UUID references. |
 | WP-2.1 real-archive performance | Prototype validation | Open | Synthetic performance smoke passed on 350 conversations; master-plan p95 target on a larger real archive remains to be measured during prototype validation. |
 | Default FTS special-character handling | WP-2.3.2 executor | Mitigated | Default broad search now sanitizes user text before FTS5 `MATCH`; `scan-local` returns results instead of parser errors while `--phrase` remains exact. |
-| Rename to WorkTrail | Release polish / pre-public | Open | Product name is WorkTrail; target repo/PyPI `worktrail-ai`, CLI `worktrail`. Rename before first public push. |
+| Rename to WorkTrail | Future release planning | Deferred | v0.1.0 was intentionally published under Chat Chronicle. Any later WorkTrail / `worktrail-ai` rename requires a separately approved migration and release plan; it is no longer a prerequisite for the already-published first source release. |
 | Teacher-reference validity | WP-5.1.2 / WP-5.2 | Open by design | No human adjudication is planned. References are silver, not ground truth; retain teacher provenance and disagreement states, exclude unresolved cases from primary scores, and publish coverage/agreement alongside model results. |
 | Remote evaluation retention and cost | WP-5.1.2 executor | Controlled by handoff | Owner authorizes bounded remote teacher generation from the real archive for this WP. Require a privacy-safe dry-run manifest, secret quarantine, provider/model allowlist, retention acknowledgement, explicit remote flags, and configured case/token/cost ceilings before transmission. |
 
@@ -132,8 +138,8 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Open a separate first-release task/thread and provide `md/release-1-planning-note.md` as initial context.
-2. In that release thread, decide version/name/rename scope, release channel, README acceptance, and LinkedIn post/article deliverables.
-3. Decide how this main manager chat is included, including public/private status, transcript versus case study, redaction, and explicit publication approval.
-4. Keep WP-5.1.2 and WP-5.2 paused until the owner resumes evaluation work.
-5. Keep this thread for main development planning and PM validation rather than release execution.
+1. Treat Chat Chronicle v0.1.0 as the published baseline at commit `1f3fbce` / tag `v0.1.0`.
+2. The owner decides when and how to publish the prepared LinkedIn article; article publication is not inferred from the tracked draft.
+3. Keep WP-5.1.2 and WP-5.2 paused until the owner explicitly resumes evaluation work.
+4. Before new development, the owner selects and approves the next workstream, such as MCP recall, Gemini format inspection, evaluation/prompt calibration, or post-release maintenance.
+5. Keep this thread as the main development planning and PM-validation record.

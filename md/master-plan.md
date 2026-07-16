@@ -2,7 +2,7 @@
 
 **Repo:** first public source release under `mcp-chat-chronicle`; later rename/PyPI candidate `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** Chat Chronicle v0.1.0 release-ready · real-history core prototype accepted; ingest/collect/stats/search/phrase/recent/open work across the owner's real ChatGPT, Claude, OpenAI Codex, and Claude Code histories · WP-5.1 configurable AI-task foundation, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, and WP-5.1.4 Windows CI portability are accepted · WP-5.1.2 evaluation is paused by owner direction · the release-quality README, LinkedIn article, and sanitized manager-chat artifact are prepared · **Plan v3.3 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks and measured local-model evaluation)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-07-16
+**Status:** Chat Chronicle v0.1.0 source release published · release commit `1f3fbce` and remote tag `v0.1.0` are available from the public GitHub repository/release page · real-history core prototype accepted; ingest/collect/stats/search/phrase/recent/open work across the owner's real ChatGPT, Claude, OpenAI Codex, and Claude Code histories · WP-5.1 configurable AI-task foundation, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, and WP-5.1.4 Windows CI portability are accepted · WP-5.1.2 evaluation is paused by owner direction · the release-quality README, AI-task guide, LinkedIn article, and sanitized manager-chat artifact are included · **Plan v3.3 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks and measured local-model evaluation)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-07-16
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Guiding principle:** *Build the boring useful archive first. Clever live capture, marker joins, and cache forensics are optional later experiments.*
@@ -442,14 +442,13 @@ Small (≈1 evening on FastMCP) but strategically load-bearing — it's the demo
 *AC:* Fixture project produces a useful next-session brief with cited conversation ids; no cloud dependency; no crash when enrichment is unavailable.
 
 ### M6 — Release & polish
-**First-release planning checkpoint.** The owner has paused WP-5.1.2 and directed
-that the current accepted version be prepared for its first release in a separate
-release thread. Required planning inputs are recorded in
-`md/release-1-planning-note.md`. The release work must cover a release-quality
-README, LinkedIn post and/or article, and an owner-approved representation of the
-current main development-manager chat. The chat's publication form and redaction
-policy remain explicit decisions; do not publish or commit the raw transcript by
-default.
+**First-release checkpoint: complete.** Chat Chronicle v0.1.0 was prepared in a
+separate release thread, committed as `1f3fbce`, tagged and pushed as `v0.1.0`, and
+made publicly available on GitHub. The source release includes the release-quality
+README, AI-task guide, prepared LinkedIn article, and owner-reviewed sanitized
+manager-chat artifact. `md/release-1-planning-note.md` records the decisions and
+privacy process. This source release deliberately retains the Chat Chronicle name;
+WorkTrail rename, PyPI/pipx publication, MCP, and benchmark work remain deferred.
 
 **WP-6.1 — v0.1.0 source release.** Release-quality five-minute README, supported-source/export instructions, honest limitations, separate advanced AI-task guide, LinkedIn article, sanitized manager-chat artifact, full validation, `v0.1.0` tag, and GitHub publication under the current Chat Chronicle name. WorkTrail rename, PyPI/pipx publication, demo GIF, and MCP setup remain later release work.
 *AC:* A Windows user can clone the repository, run `poetry install`, initialize, collect supported sources, and perform the first search using the README alone. Core archive commands have zero AI dependency; private exports and raw histories remain untracked; full tests, Ruff, pre-commit, package build, and privacy scans pass before tagging.

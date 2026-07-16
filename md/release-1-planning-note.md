@@ -2,9 +2,9 @@
 
 ## Status
 
-Approved for the Chat Chronicle v0.1.0 source release. Release preparation and owner
-privacy review are complete; commit and annotated tag are authorized. The owner will
-push and make the GitHub repository public afterward.
+**Released.** Chat Chronicle v0.1.0 was committed as `1f3fbce`, tagged `v0.1.0`,
+pushed to `origin/main`, and published through the public GitHub repository and
+release page. Release preparation and owner privacy review are complete.
 
 ## Owner Direction
 
@@ -206,5 +206,7 @@ the owner resumes that work after the first-release activity.
 
 ## Immediate Next Action
 
-Commit the complete reviewed release scope and create annotated tag `v0.1.0`. Do not
-push; the owner will push the commit and tag, then make the repository public.
+The v0.1.0 source-release workstream is complete. The owner controls publication of
+the prepared LinkedIn article and any future promotion. Product development resumes
+only after the owner selects and explicitly approves the next workstream; WP-5.1.2
+and WP-5.2 remain paused.
