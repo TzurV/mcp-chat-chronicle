@@ -121,4 +121,3 @@ PM final revalidation will focus on:
 - full regression, Ruff, package resources, diff, and privacy evidence.
 
 WP-5.1.1 and WP-5.1.2 remain dependency-gated until WP-5.1 is accepted.
-

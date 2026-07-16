@@ -11,10 +11,10 @@ OpenAI Codex local sessions are **Class B local durable stores**, not official e
 Current machine evidence, inspected by keys/types and filenames only:
 
 ```text
-Codex home: C:\Users\tzurv\.codex
-Session index: C:\Users\tzurv\.codex\session_index.jsonl
-Session files: C:\Users\tzurv\.codex\sessions\<year>\<month>\<day>\rollout-*.jsonl
-Archived sessions: C:\Users\tzurv\.codex\archived_sessions
+Codex home: `%USERPROFILE%\.codex`
+Session index: `%USERPROFILE%\.codex\session_index.jsonl`
+Session files: `%USERPROFILE%\.codex\sessions\<year>\<month>\<day>\rollout-*.jsonl`
+Archived sessions: `%USERPROFILE%\.codex\archived_sessions`
 ```
 
 Observed `session_index.jsonl` keys:

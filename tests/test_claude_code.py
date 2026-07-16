@@ -269,10 +269,7 @@ def test_same_session_id_in_multiple_files_stays_file_scoped_on_ingest(
 
     assert len(rows) == 2
     assert rows[0]["provider_conv_id"] != rows[1]["provider_conv_id"]
-    assert all(
-        row["provider_conv_id"].startswith("shared-resume-session::branch-")
-        for row in rows
-    )
+    assert all(row["provider_conv_id"].startswith("shared-resume-session::branch-") for row in rows)
     assert [Path(row["origin_path"]).name for row in rows] == ["branch-a.jsonl", "branch-b.jsonl"]
     assert [row["resume_hint"] for row in rows] == [
         "claude --resume shared-resume-session",

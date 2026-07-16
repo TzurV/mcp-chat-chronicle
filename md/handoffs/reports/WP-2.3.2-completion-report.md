@@ -29,7 +29,7 @@ syntax:
   `local` as a column name: `no such column: local`.
 - `provider:openai_codex` -> `:` is a column filter: `no such column: provider`.
 - `(scan-local)` -> grouping plus the `-` operator: `no such column: local`.
-- `C:\Users\tzurv\.codex` -> `:` column filter: `no such column: C`.
+- `C:\SyntheticUser\.codex` -> `:` column filter: `no such column: C`.
 - `scan/local` -> `fts5: syntax error near "/"`.
 - `()` -> `fts5: syntax error near ")"`.
 
@@ -137,7 +137,7 @@ Privacy-safe observations:
 
 FTS-special-character inputs were exercised via the new tests and confirmed to
 not raise: `provider:openai_codex`, `"scan-local"`, `(scan-local)`,
-`C:\Users\tzurv\.codex`, and `scan/local`. Punctuation-only input `()` returns
+`C:\SyntheticUser\.codex`, and `scan/local`. Punctuation-only input `()` returns
 a friendly `No results` with no SQLite exception.
 
 No private transcript bodies are included in this report.

@@ -99,12 +99,8 @@ def test_scan_local_detects_claude_code_store(scan_project: Path) -> None:
 def test_scan_local_marks_cursor_and_copilot_paths_experimental(
     scan_project: Path,
 ) -> None:
-    (scan_project / "appdata" / "Cursor" / "User" / "workspaceStorage").mkdir(
-        parents=True
-    )
-    (scan_project / "appdata" / "Code" / "User" / "workspaceStorage").mkdir(
-        parents=True
-    )
+    (scan_project / "appdata" / "Cursor" / "User" / "workspaceStorage").mkdir(parents=True)
+    (scan_project / "appdata" / "Code" / "User" / "workspaceStorage").mkdir(parents=True)
 
     result = _run_scan(scan_project)
 

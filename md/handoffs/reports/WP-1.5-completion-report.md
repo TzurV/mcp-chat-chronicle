@@ -66,10 +66,10 @@ poetry run chronicle scan-local
 Provider         Path                                                        Status
 chatgpt          C:\work\Github\mcp-chat-chronicle\exports\openai            found
 claude           C:\work\Github\mcp-chat-chronicle\exports\claude            found
-openai_codex     C:\Users\tzurv\.codex                                      found
-claude_code      C:\Users\tzurv\.claude\projects                            found
-cursor           C:\Users\tzurv\AppData\Roaming\Cursor\User\workspaceStorage missing
-copilot_vscode   C:\Users\tzurv\AppData\Roaming\Code\User\workspaceStorage   experimental
+openai_codex     %USERPROFILE%\.codex                                      found
+claude_code      %USERPROFILE%\.claude\projects                            found
+cursor           %USERPROFILE%\AppData\Roaming\Cursor\User\workspaceStorage missing
+copilot_vscode   %USERPROFILE%\AppData\Roaming\Code\User\workspaceStorage   experimental
 ```
 
 The manual scan output included only provider/path/status/notes. No private transcript content, message text, JSON snippets, DB rows, or export contents were printed.

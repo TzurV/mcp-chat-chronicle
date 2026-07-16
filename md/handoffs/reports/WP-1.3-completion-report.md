@@ -203,7 +203,7 @@ The documented `VIRTUAL_ENV` hazard from `md/agent-operating-notes.md` **fired o
 this run.** The first invocation reported another project's environment:
 
 ```text
-C:\work\Github\Asensus\SurgeryCopilot\GitLabRepo\CopilotLocalMongoDB\.venv
+C:\work\other-project\.venv
 ```
 
 Per the operating notes I stopped and cleared the inherited `VIRTUAL_ENV` before

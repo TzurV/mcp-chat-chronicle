@@ -138,7 +138,7 @@ test_load_conversations_invalid_json_is_reported
 ## Command Evidence
 
 > **Poetry preflight note.** A bare `poetry env info --path` initially resolved to
-> `C:\work\Github\Asensus\SurgeryCopilot\GitLabRepo\CopilotLocalMongoDB\.venv` — exactly the
+> `C:\work\other-project\.venv` — exactly the
 > `VIRTUAL_ENV` leak documented in `md/agent-operating-notes.md`. Every Poetry command below was run
 > with `VIRTUAL_ENV` cleared for the command's environment, which resolves the repo-local venv. No
 > install or command was run against the other project's virtualenv.
@@ -147,7 +147,7 @@ test_load_conversations_invalid_json_is_reported
 
 ```text
 # bare invocation (leaked VIRTUAL_ENV — NOT used for any command)
-C:\work\Github\Asensus\SurgeryCopilot\GitLabRepo\CopilotLocalMongoDB\.venv
+C:\work\other-project\.venv
 
 # with VIRTUAL_ENV cleared — this is the environment all commands below used
 $ VIRTUAL_ENV= poetry env info --path

@@ -1,7 +1,7 @@
 # RS-2 — Claude Code Local JSONL Format Memo
 
-**Date:** 2026-07-13  
-**Status:** complete for WP-3.1 implementation; updated by WP-3.1.1 hardening  
+**Date:** 2026-07-13
+**Status:** complete for WP-3.1 implementation; updated by WP-3.1.1 hardening
 **Scope:** prior-art parser review, privacy-safe local shape inspection, and extractor decisions for `claude_code`.
 
 ## Prior Art Inspected

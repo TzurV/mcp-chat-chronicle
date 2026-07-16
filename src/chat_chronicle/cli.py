@@ -637,9 +637,7 @@ def _print_single_ingest_summary(
     console.print(f"db path: {_connect_db_display_path(db_path)}")
     console.print(f"source path: {outcome.path}")
     console.print(f"conversations seen: {summary.conversations_seen}")
-    console.print(
-        f"added: {summary.added}  updated: {summary.updated}  skipped: {summary.skipped}"
-    )
+    console.print(f"added: {summary.added}  updated: {summary.updated}  skipped: {summary.skipped}")
     console.print(f"parse errors: {len(summary.errors)}")
     console.print(f"ingest run id: {outcome.run_id}")
 
@@ -863,9 +861,7 @@ def init(
         console.print(f"  = {entry}")
 
 
-def _ensure_directory(
-    path: Path, created: list[str], existing: list[str], seen: set[Path]
-) -> None:
+def _ensure_directory(path: Path, created: list[str], existing: list[str], seen: set[Path]) -> None:
     resolved = path.resolve()
     if resolved in seen:
         return
@@ -922,18 +918,14 @@ def collect(
         console.print("collect: no sources collected (all missing/skipped).")
 
 
-def _collect_ingest_one(
-    conn: sqlite3.Connection, provider: str, path: Path
-) -> IngestRunSummary:
+def _collect_ingest_one(conn: sqlite3.Connection, provider: str, path: Path) -> IngestRunSummary:
     outcome = _ingest_source_with_connection(conn, provider, path)
     if outcome.status != "success":
         raise RuntimeError(outcome.error or f"failed to ingest {path}")
     return outcome.summary
 
 
-def _collect_ingest_directory(
-    conn: sqlite3.Connection, directory: Path
-) -> list[IngestRunSummary]:
+def _collect_ingest_directory(conn: sqlite3.Connection, directory: Path) -> list[IngestRunSummary]:
     discovery = _discover_directory_sources(directory, _PROVIDER_AUTO)
     summaries: list[IngestRunSummary] = []
     for source in discovery.sources:
@@ -1434,8 +1426,7 @@ def _load_conversations_json_for_detection(path: Path) -> object | None:
                 split_members = sorted(
                     name
                     for name in archive.namelist()
-                    if not name.endswith("/")
-                    and _is_split_conversations_name(Path(name).name)
+                    if not name.endswith("/") and _is_split_conversations_name(Path(name).name)
                 )
                 records: list[object] = []
                 for member in split_members:
@@ -1482,10 +1473,7 @@ def _looks_like_chatgpt_export(data: object) -> bool:
         return False
     return any(
         isinstance(record, dict)
-        and (
-            isinstance(record.get("mapping"), dict)
-            or isinstance(record.get("current_node"), str)
-        )
+        and (isinstance(record.get("mapping"), dict) or isinstance(record.get("current_node"), str))
         for record in data
     )
 

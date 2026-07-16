@@ -102,7 +102,7 @@ Prefer a small helper with focused unit tests, for example a helper that convert
 | User input | Safe broad-search intent |
 | --- | --- |
 | `scan-local` | `scan` AND/OR `local`, according to existing broad-search semantics |
-| `C:\Users\tzurv\.codex` | searchable path-like terms, no parser crash |
+| `C:\SyntheticUser\.codex` | searchable path-like terms, no parser crash |
 | `"quoted text"` | searchable text terms, no parser crash |
 | `provider:openai_codex` | searchable text terms, no parser crash |
 | `()` | friendly no-searchable-terms result, no parser crash |
@@ -121,7 +121,7 @@ Required cases:
   - `provider:openai_codex`
   - `"scan-local"`
   - `(scan-local)`
-  - `C:\Users\tzurv\.codex`
+  - `C:\SyntheticUser\.codex`
   - `scan/local`
 - Existing broad token search still works, for example `docker network`.
 - `chronicle search --phrase "scan-local"` remains exact phrase search.

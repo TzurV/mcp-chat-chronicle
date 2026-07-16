@@ -4,7 +4,7 @@
 
 Accepted.
 
-WP-1.3.3 satisfies the handoff requirements. Claude project metadata is parsed, persisted, linked when a reliable conversation-to-project UUID reference exists, and searchable for linked conversations. The real owner export does not expose a reliable project reference from conversations to `projects/*.json`, so `CAR GUI` correctly remains unlinked and does not return Claude conversations.
+WP-1.3.3 satisfies the handoff requirements. Claude project metadata is parsed, persisted, linked when a reliable conversation-to-project UUID reference exists, and searchable for linked conversations. The real owner export does not expose a reliable project reference from conversations to `projects/*.json`, so the private project correctly remains unlinked and does not return Claude conversations.
 
 ## Review Summary
 
@@ -17,7 +17,7 @@ The implementation takes the right conservative path:
 - includes linked project names in FTS metadata and phrase-search matching;
 - keeps real export findings privacy-safe.
 
-The completion report clearly explains why the real `CAR GUI` project cannot be connected to conversations from the available export data. This meets the handoff rule that project parsing without reliable linking must be explicitly documented.
+The completion report clearly explains why the real private project cannot be connected to conversations from the available export data. This meets the handoff rule that project parsing without reliable linking must be explicitly documented.
 
 ## Independent Validation
 
@@ -76,7 +76,7 @@ Result: clean.
 | Project rows persisted/reused | Pass | CLI ingest tests verify project persistence and idempotent re-ingest. |
 | Conversations linked when export provides reliable references | Pass | Exact UUID reference fixture links to `project_id`. |
 | Search by linked project name works | Pass | FTS, phrase, and CLI coverage added. |
-| Real export smoke determines whether `CAR GUI` can be found | Pass | Real export has 30 project rows but no conversation project keys; no reliable link exists. |
+| Real export smoke determines whether the private project can be found | Pass | Real export has 30 project rows but no conversation project keys; no reliable link exists. |
 | Full tests and Ruff pass | Pass | Independently verified. |
 | No private Claude export data committed | Pass | New fixtures are synthetic; report only includes structure/counts/key names. |
 

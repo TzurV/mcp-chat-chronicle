@@ -7,13 +7,13 @@ Extend the accepted Claude official-export importer so Claude export project met
 This follow-up was triggered by the owner finding a Claude export project metadata file:
 
 ```json
-{"uuid": "2e43627a-350a-42a1-be4b-1d9ff0f0277c", "name": "CAR GUI", ...}
+{"uuid": "11111111-1111-4111-8111-111111111111", "name": "Synthetic Project Alpha", ...}
 ```
 
 The current archive has provider `claude` ingested successfully, but:
 
 ```powershell
-poetry run chronicle search "CAR GUI" --provider claude --db-path .\.chronicle\chronicle.db
+poetry run chronicle search "Synthetic Project Alpha" --provider claude --db-path .\.chronicle\chronicle.db
 ```
 
 returns no results. That is expected with current scope because the importer indexes Claude conversations/messages, not standalone project metadata.
@@ -157,7 +157,7 @@ Also include a privacy-safe real-export smoke:
 
 ```powershell
 poetry run chronicle ingest .\exports\claude\data-7ddb5876-919f-4a35-b090-f405cbbe3260-1783680081-e3a8326b-batch-0000.zip --provider claude --db-path <tmp-db>
-poetry run chronicle search "CAR GUI" --provider claude --db-path <tmp-db>
+poetry run chronicle search "Synthetic Project Alpha" --provider claude --db-path <tmp-db>
 ```
 
 Report only:
@@ -165,7 +165,7 @@ Report only:
 - project metadata count;
 - conversations seen/added/updated/skipped/errors;
 - whether a reliable project-to-conversation link exists;
-- whether `CAR GUI` returns results after the change;
+- whether the synthetic project name returns results after the change;
 - no private transcript text.
 
 ## Completion Report Requirements
@@ -200,6 +200,6 @@ WP-1.3.3 is complete when:
 - project rows are persisted/reused;
 - conversations are linked to projects when the export provides reliable references;
 - search by linked project name works in synthetic tests;
-- real-export smoke determines whether `CAR GUI` can be found through reliable links;
+- real-export smoke determines whether a private project can be found through reliable links;
 - full tests and Ruff pass;
 - no private Claude export data is committed.

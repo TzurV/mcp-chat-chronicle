@@ -186,9 +186,7 @@ def _collect_one(
     return base
 
 
-def _apply_summaries(
-    result: SourceCollectResult, summaries: list[IngestRunSummary]
-) -> None:
+def _apply_summaries(result: SourceCollectResult, summaries: list[IngestRunSummary]) -> None:
     for summary in summaries:
         result.seen += summary.conversations_seen
         result.added += summary.added

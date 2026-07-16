@@ -61,9 +61,7 @@ def _insert_search_conversation(
                 provider=provider,
                 provider_conv_id=provider_conv_id,
                 title=title,
-                url="https://chatgpt.com/c/synthetic"
-                if provider == "chatgpt"
-                else None,
+                url="https://chatgpt.com/c/synthetic" if provider == "chatgpt" else None,
                 messages=[
                     Message(
                         role="user",
@@ -163,7 +161,7 @@ def test_search_cli_fts_special_characters_do_not_crash(tmp_path: Path) -> None:
         "provider:openai_codex",
         '"scan-local"',
         "(scan-local)",
-        r"C:\Users\tzurv\.codex",
+        r"C:\SyntheticUser\.codex",
         "scan/local",
     ]:
         result = runner.invoke(app, ["search", query, "--db-path", str(db_path)])

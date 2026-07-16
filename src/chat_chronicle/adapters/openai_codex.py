@@ -28,9 +28,7 @@ SESSION_INDEX_FILENAME = "session_index.jsonl"
 
 _VISIBLE_RESPONSE_ROLES = frozenset({"user", "assistant", "developer"})
 _VISIBLE_CONTENT_BLOCK_TYPES = frozenset({"input_text", "output_text"})
-_KNOWN_TOP_LEVEL_TYPES = frozenset(
-    {"session_meta", "turn_context", "response_item", "event_msg"}
-)
+_KNOWN_TOP_LEVEL_TYPES = frozenset({"session_meta", "turn_context", "response_item", "event_msg"})
 _KNOWN_RESPONSE_ITEM_METADATA_TYPES = frozenset(
     {
         "reasoning",

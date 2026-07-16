@@ -54,9 +54,7 @@ def _single_value(db_path: Path, sql: str):
 
 def _source_rows(db_path: Path):
     with connect(db_path) as conn:
-        return conn.execute(
-            "SELECT provider, path_or_config FROM sources ORDER BY id"
-        ).fetchall()
+        return conn.execute("SELECT provider, path_or_config FROM sources ORDER BY id").fetchall()
 
 
 def test_ingest_auto_detects_chatgpt_and_inserts_conversations_and_messages(
@@ -78,9 +76,7 @@ def test_ingest_auto_detects_split_chatgpt_zip(tmp_path: Path) -> None:
     db_path = _db_path(tmp_path)
     source = tmp_path / "chatgpt-split-export.zip"
     record = json.loads(
-        (FIXTURES / "chatgpt" / "minimal" / "conversations.json").read_text(
-            encoding="utf-8"
-        )
+        (FIXTURES / "chatgpt" / "minimal" / "conversations.json").read_text(encoding="utf-8")
     )[0]
     with zipfile.ZipFile(source, "w") as archive:
         archive.writestr("export/conversations-000.json", json.dumps([record]))
@@ -118,7 +114,14 @@ def test_ingest_claude_project_metadata_links_and_searches_project_name(
     second = _invoke_ingest(source, db_path)
     search = runner.invoke(
         app,
-        ["search", "CAR GUI", "--provider", "claude", "--db-path", str(db_path)],
+        [
+            "search",
+            "Synthetic Project Alpha",
+            "--provider",
+            "claude",
+            "--db-path",
+            str(db_path),
+        ],
     )
 
     assert first.exit_code == 0, first.stdout
@@ -138,9 +141,9 @@ def test_ingest_claude_project_metadata_links_and_searches_project_name(
             """
         ).fetchone()
     assert row["project_id"] is not None
-    assert row["name"] == "CAR GUI"
+    assert row["name"] == "Synthetic Project Alpha"
     assert search.exit_code == 0, search.stdout
-    assert "CAR GUI" in search.stdout
+    assert "Synthetic Project Alpha" in search.stdout
     assert "Linked Claude project chat" in search.stdout
 
 
@@ -268,9 +271,7 @@ def test_directory_sweep_orders_discovered_sources_by_resolved_path(
     assert result.exit_code == 0, result.stdout
     rows = _source_rows(db_path)
     assert [row["provider"] for row in rows] == ["chatgpt", "claude"]
-    assert [row["path_or_config"] for row in rows] == sorted(
-        row["path_or_config"] for row in rows
-    )
+    assert [row["path_or_config"] for row in rows] == sorted(row["path_or_config"] for row in rows)
 
 
 def test_directory_sweep_ignores_unsupported_files_when_supported_sources_exist(
@@ -461,10 +462,13 @@ def test_ingest_rebuilds_fts(tmp_path: Path) -> None:
     result = _invoke_ingest(source, db_path)
 
     assert result.exit_code == 0, result.stdout
-    assert _single_value(
-        db_path,
-        "SELECT count(*) FROM chat_fts WHERE chat_fts MATCH 'docker'",
-    ) == 1
+    assert (
+        _single_value(
+            db_path,
+            "SELECT count(*) FROM chat_fts WHERE chat_fts MATCH 'docker'",
+        )
+        == 1
+    )
 
 
 def test_stats_reports_counts_provider_sources_and_runs_after_ingest(tmp_path: Path) -> None:

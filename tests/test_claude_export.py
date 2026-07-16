@@ -116,14 +116,14 @@ def test_realistic_export_normalizes_timestamps_to_utc() -> None:
 def test_load_conversations_parses_project_metadata_from_directory() -> None:
     result = load_conversations(_fixture_path("project_linked").parent)
 
-    assert [project.name for project in result.projects] == ["CAR GUI"]
+    assert [project.name for project in result.projects] == ["Synthetic Project Alpha"]
     assert "missing_project_name" in _error_codes(result)
 
 
 def test_project_uuid_reference_creates_reliable_project_hint() -> None:
     result = load_conversations(_fixture_path("project_linked").parent)
 
-    assert result.project_hints["conv-project-linked-1"].name == "CAR GUI"
+    assert result.project_hints["conv-project-linked-1"].name == "Synthetic Project Alpha"
 
 
 def test_project_metadata_without_conversation_reference_does_not_guess_link() -> None:
@@ -148,8 +148,8 @@ def test_load_conversations_parses_project_metadata_from_zip(tmp_path: Path) -> 
 
     result = load_conversations(archive_path)
 
-    assert [project.name for project in result.projects] == ["CAR GUI"]
-    assert result.project_hints["conv-project-linked-1"].name == "CAR GUI"
+    assert [project.name for project in result.projects] == ["Synthetic Project Alpha"]
+    assert result.project_hints["conv-project-linked-1"].name == "Synthetic Project Alpha"
 
 
 # --- content extraction ---------------------------------------------------

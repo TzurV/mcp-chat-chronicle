@@ -43,9 +43,7 @@ _KNOWN_METADATA_RECORD_TYPES = frozenset(
 _KNOWN_TOOL_BLOCK_TYPES = frozenset(
     {"tool_use", "tool-use", "tool_call", "tool-call", "tool_result", "tool-result"}
 )
-_KNOWN_NON_TEXT_BLOCK_TYPES = _KNOWN_TOOL_BLOCK_TYPES | frozenset(
-    {"thinking", "image", "document"}
-)
+_KNOWN_NON_TEXT_BLOCK_TYPES = _KNOWN_TOOL_BLOCK_TYPES | frozenset({"thinking", "image", "document"})
 
 
 class ClaudeCodeExtractError(BaseModel):

@@ -35,9 +35,7 @@ DEFAULT_TEMPLATE_FILENAME = "chronicle.default.yaml"
 
 # Provider identifiers understood by accepted adapters. Keep in sync with the
 # CLI's ``_SUPPORTED_PROVIDERS`` (minus ``auto``).
-SUPPORTED_PROVIDERS = frozenset(
-    {"chatgpt", "claude", "claude_code", "openai_codex"}
-)
+SUPPORTED_PROVIDERS = frozenset({"chatgpt", "claude", "claude_code", "openai_codex"})
 
 _KIND_OFFICIAL_EXPORT = "official_export"
 _KIND_LOCAL_STORE = "local_store"
@@ -138,9 +136,7 @@ def load_config(config_path: Path) -> ChronicleConfig:
     if data is None:
         data = {}
     if not isinstance(data, dict):
-        raise ConfigError(
-            f"Invalid config in {config_path}: expected a mapping at the top level."
-        )
+        raise ConfigError(f"Invalid config in {config_path}: expected a mapping at the top level.")
 
     try:
         return ChronicleConfig.model_validate(data)

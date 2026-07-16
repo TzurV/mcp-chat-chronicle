@@ -429,7 +429,7 @@ def _build_broad_match_query(query: str) -> str | None:
     Reserved characters such as ``-`` (column filter / ``NOT``), ``:`` (column
     filter), ``()`` (grouping), ``*`` (prefix), and ``"`` (phrase) otherwise
     crash the parser with ``no such column`` or ``syntax error`` when they
-    appear in ordinary input like ``scan-local`` or ``C:\\Users\\tzurv``.
+    appear in ordinary input like ``scan-local`` or ``C:\\SyntheticUser\\history``.
 
     Each searchable term is extracted and emitted as a double-quoted FTS5
     string literal, so a term is never interpreted as an operator or column

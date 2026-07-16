@@ -297,8 +297,7 @@ def _provider_failure(exc: Exception) -> LLMError:
     code = code if code and _SAFE_PROVIDER_CODE.fullmatch(code) else None
 
     if "provider" in message and any(
-        marker in message
-        for marker in ("not provided", "no provider", "custom_llm_provider")
+        marker in message for marker in ("not provided", "no provider", "custom_llm_provider")
     ):
         kind = "provider_route"
         detail = (
@@ -335,8 +334,7 @@ def _provider_failure(exc: Exception) -> LLMError:
             "`retries: 0` while calibrating."
         )
     elif "connection" in name or any(
-        marker in message
-        for marker in ("connection refused", "failed to connect", "unreachable")
+        marker in message for marker in ("connection refused", "failed to connect", "unreachable")
     ):
         kind = "connection"
         detail = "Chronicle could not connect to the configured model endpoint."
@@ -488,8 +486,7 @@ def _meaningful_rows(rows: list[sqlite3.Row]) -> list[sqlite3.Row]:
     return [
         row
         for row in rows
-        if (row["role"] or "").strip().lower() in MEANINGFUL_ROLES
-        and (row["body"] or "").strip()
+        if (row["role"] or "").strip().lower() in MEANINGFUL_ROLES and (row["body"] or "").strip()
     ]
 
 
@@ -497,8 +494,7 @@ def _message_header(row: sqlite3.Row) -> str:
     timestamp = row["created_at"] or "unknown"
     role = (row["role"] or "unknown").strip()
     return (
-        f"[message_id={int(row['id'])} seq={int(row['seq'])} "
-        f"timestamp={timestamp} role={role}]"
+        f"[message_id={int(row['id'])} seq={int(row['seq'])} " f"timestamp={timestamp} role={role}]"
     )
 
 
@@ -626,24 +622,18 @@ def _overview_selection(
     )
 
 
-def _select_meaningful(
-    rows: list[sqlite3.Row], task: TaskDefinition
-) -> tuple[str, dict[str, Any]]:
+def _select_meaningful(rows: list[sqlite3.Row], task: TaskDefinition) -> tuple[str, dict[str, Any]]:
     meaningful = _meaningful_rows(rows)
     all_ids = [int(row["id"]) for row in meaningful]
     if task.input_selector == "conversation-overview-v1":
-        text, selected_ids, details = _overview_selection(
-            meaningful, task.max_input_chars
-        )
+        text, selected_ids, details = _overview_selection(meaningful, task.max_input_chars)
         original_text = "\n\n".join(_render_message(row) for row in meaningful)
         original_candidate_count = len(meaningful)
     else:
         candidates = meaningful[-task.recent_message_count :]
         picked_reverse: list[tuple[sqlite3.Row, str, dict[str, Any]]] = []
         for row in reversed(candidates):
-            if not _append_with_budget(
-                picked_reverse, row, task.max_input_chars, keep_tail=True
-            ):
+            if not _append_with_budget(picked_reverse, row, task.max_input_chars, keep_tail=True):
                 break
         chronological = sorted(
             picked_reverse, key=lambda item: (int(item[0]["seq"]), int(item[0]["id"]))
@@ -872,8 +862,7 @@ def inspect_cache(
                 "selected_characters": len(prepared.selected.text),
                 "estimated_input_tokens": prepared.request.estimated_input_tokens,
                 "estimated_request_tokens": (
-                    (prepared.request.estimated_input_tokens or 0)
-                    + prepared.request.max_tokens
+                    (prepared.request.estimated_input_tokens or 0) + prepared.request.max_tokens
                 ),
                 "context_window": prepared.request.context_window,
             }

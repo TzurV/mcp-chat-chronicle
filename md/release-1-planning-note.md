@@ -2,8 +2,9 @@
 
 ## Status
 
-Recorded for a future dedicated release thread. Do not execute release preparation
-from the main development-manager thread.
+Approved for the Chat Chronicle v0.1.0 source release. Release preparation and owner
+privacy review are complete; commit and annotated tag are authorized. The owner will
+push and make the GitHub repository public afterward.
 
 ## Owner Direction
 
@@ -28,6 +29,27 @@ The release workstream must include:
 All release planning, handoffs, execution reports, README release editing, and
 LinkedIn/article drafting must happen in a separate task/thread. This thread remains
 the main project development and PM-validation record.
+
+## Owner Discussion And Approval Gate
+
+The detailed release plan, exact working context, deliverables, and order of
+activities must be discussed with the owner before execution. Discussion, analysis,
+or agreement with a general direction does not authorize the next activity.
+
+For every material stage, the release manager must:
+
+1. present the proposed scope, inputs, outputs, sequence, privacy implications, and
+   acceptance criteria;
+2. resolve owner questions or requested changes;
+3. wait for an explicit owner request and approval to proceed;
+4. perform only the approved stage;
+5. report results and wait for approval before starting the next stage.
+
+Do not infer authorization from this planning note, earlier project approvals, the
+existence of a handoff, or silence. Do not automatically edit the README, create or
+publish manager-chat artifacts, draft public posts, rename/package the project,
+commit, tag, push, or publish a release without the applicable explicit request and
+approval.
 
 The release thread should begin by reading:
 
@@ -66,6 +88,82 @@ the release artifact is generated so the release does not use a stale partial
 transcript. Do not identify the chat through a hard-coded local UUID or private path
 in tracked documentation.
 
+### Release Artifact Availability
+
+The first release includes the cleaned, human-readable manager transcript at
+`md/release-artifacts/manager-chat/chat-chronicle-manager.md`.
+
+### Procedure For Adding Approved Manager-Chat Records
+
+This procedure covers both parts of the manager record: the ChatGPT manager thread
+and any OpenAI Codex sessions used to implement or validate its work. It does not
+authorize publication. Complete each privacy and owner-approval gate before moving
+to the next step.
+
+1. Refresh the private, git-ignored archive from the configured ChatGPT export and
+   local Codex store:
+
+   ```powershell
+   poetry run chronicle collect --config .\.chronicle\config.yaml
+   poetry run chronicle stats --db-path .\.chronicle\chronicle.db
+   ```
+
+   A fresh ChatGPT data export must first be placed under the configured
+   `exports/openai` source. Codex sessions are collected from the configured local
+   store, normally `${USERPROFILE}/.codex`. The export, local JSONL records, and
+   `.chronicle/chronicle.db` remain private and git-ignored.
+
+2. Locate the records by stable content and provider rather than documenting a
+   private UUID or absolute path. Start with recent activity, then use several
+   distinctive phrases from the manager thread and its executor handoffs:
+
+   ```powershell
+   poetry run chronicle recent -n 30 --db-path .\.chronicle\chronicle.db
+   poetry run chronicle search --phrase "<distinctive manager phrase>" --provider chatgpt --db-path .\.chronicle\chronicle.db
+   poetry run chronicle search --phrase "<distinctive implementation phrase>" --provider openai_codex --db-path .\.chronicle\chronicle.db
+   poetry run chronicle open <result-id> --db-path .\.chronicle\chronicle.db
+   ```
+
+   Record the selected result IDs only in private release-working notes. Confirm
+   that the dates and content cover the intended development period and that no
+   related executor session has been omitted.
+
+3. Create a working copy outside the repository. Preserve the selected records
+   verbatim in that private staging area so redactions are reviewable, but never use
+   `git add -f` to bypass the repository's export, database, ZIP, `.chronicle`, or
+   local-session ignores.
+
+4. Produce the owner-approved form: full transcript, excerpts, chronology, or case
+   study. Remove or replace names, usernames, absolute paths, conversation and
+   account IDs, URLs, credentials, private project details, real chat titles and
+   snippets, and private AI prompts/results unless the owner explicitly approves a
+   specific item. Treat text quoted from executor sessions as private source
+   material too. Mark omissions and paraphrases honestly; do not present derived
+   prose as a verbatim transcript.
+
+5. Put only the reviewed publication artifact in a dedicated tracked location such
+   as `md/release-artifacts/manager-chat-case-study.md`. Include a short provenance
+   note stating the source types, covered date range, artifact form, and that private
+   identifiers and content were redacted. Do not include the private archive,
+   staging copy, raw ChatGPT export, Codex JSONL, or lookup IDs.
+
+6. Before staging, inspect the complete artifact and repository diff, scan for the
+   agreed sensitive patterns, and confirm that ignored private files remain
+   untracked:
+
+   ```powershell
+   git diff -- md/release-artifacts/manager-chat-case-study.md
+   git status --short --ignored
+   git ls-files "*.db" "*.sqlite" "*.zip" ".chronicle/*" "exports/*"
+   ```
+
+   Add a targeted secret/path/identifier scan based on the private values found
+   during review. Do not paste those values into a tracked scan script or report.
+
+7. Present the final artifact and privacy-check result to the owner. Only after
+   explicit approval may the reviewed artifact be staged and committed. Publication
+   or attachment to a release requires a separate explicit approval.
+
 ## First-Release Scope Boundary
 
 The release should describe accepted behavior only. It may include:
@@ -89,21 +187,24 @@ WP-5.1.2 is on owner-directed hold. Preserve its current handoff as planning his
 but do not execute its snapshot, teacher, reconciliation, or benchmark workflow until
 the owner resumes that work after the first-release activity.
 
-## Release Decisions Deferred To The Dedicated Thread
+## Release Decisions
 
-- release name and semantic version;
-- whether the planned WorkTrail / `worktrail-ai` rename occurs before this release;
-- public repository and package publication targets;
-- supported Python and Windows versions stated publicly;
-- install commands and optional dependency tiers;
-- release notes and changelog format;
-- screenshot/GIF/architecture-diagram needs;
-- LinkedIn post versus article scope and publication order;
-- exact manager-chat artifact and redaction policy;
-- final release acceptance checklist and rollback criteria.
+- release: Chat Chronicle v0.1.0;
+- repository/package/CLI remain `mcp-chat-chronicle`, `chat-chronicle`, and
+  `chronicle` for this release;
+- WorkTrail / `worktrail-ai`, PyPI/pipx, and short CLI aliases are deferred;
+- publication target: the existing GitHub repository, installed from source with
+  Poetry and Python 3.11+;
+- core archive/search has no AI dependency; the `enrich` extra and local AI guide
+  are advanced, explicitly invoked work-in-progress functionality;
+- public content includes the release-quality README, LinkedIn article, and the
+  owner-reviewed sanitized Markdown manager transcript;
+- raw exports, databases, local JSONL sessions, private configuration, and raw chat
+  transcripts remain excluded;
+- release gate: full tests, Ruff, pre-commit, package build, CLI version/help,
+  privacy scan, staged diff review, and tag verification must pass.
 
 ## Immediate Next Action
 
-Open a separate release task/thread and provide this note as its initial planning
-context. Do not create the release implementation handoff in this main thread until
-the owner has discussed the deferred decisions in that release thread.
+Commit the complete reviewed release scope and create annotated tag `v0.1.0`. Do not
+push; the owner will push the commit and tag, then make the repository public.

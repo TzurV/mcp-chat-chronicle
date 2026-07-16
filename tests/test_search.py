@@ -121,7 +121,7 @@ def test_provider_since_until_and_tag_filters(tmp_path: Path) -> None:
 
 def test_search_finds_linked_project_name_without_message_match(tmp_path: Path) -> None:
     with connect(tmp_path / "chronicle.db") as conn:
-        project_id = get_or_create_project(conn, name="CAR GUI")
+        project_id = get_or_create_project(conn, name="Synthetic Project Alpha")
         inserted = upsert_conversation(
             conn,
             None,
@@ -136,11 +136,13 @@ def test_search_finds_linked_project_name_without_message_match(tmp_path: Path) 
         )
         rebuild_fts(conn)
 
-        results = search_conversations(conn, "CAR GUI", provider="claude")
-        phrase_results = search_conversations(conn, "CAR GUI", provider="claude", phrase=True)
+        results = search_conversations(conn, "Synthetic Project Alpha", provider="claude")
+        phrase_results = search_conversations(
+            conn, "Synthetic Project Alpha", provider="claude", phrase=True
+        )
 
     assert [result.conversation_id for result in results] == [inserted.conversation_id]
-    assert "CAR GUI" in results[0].snippet
+    assert "Synthetic Project Alpha" in results[0].snippet
     assert [result.conversation_id for result in phrase_results] == [inserted.conversation_id]
 
 
@@ -411,13 +413,11 @@ def test_broad_search_handles_hyphenated_term_as_plain_text(tmp_path: Path) -> N
         "provider:openai_codex",
         '"scan-local"',
         "(scan-local)",
-        r"C:\Users\tzurv\.codex",
+        r"C:\SyntheticUser\.codex",
         "scan/local",
     ],
 )
-def test_broad_search_does_not_raise_on_fts_special_characters(
-    tmp_path: Path, query: str
-) -> None:
+def test_broad_search_does_not_raise_on_fts_special_characters(tmp_path: Path, query: str) -> None:
     with connect(tmp_path / "chronicle.db") as conn:
         upsert_conversation(
             conn,
@@ -546,9 +546,7 @@ def test_recent_conversations_filters_on_last_activity_and_provider(tmp_path: Pa
 
     assert {result.provider for result in provider_results} == {"chatgpt"}
     assert provider_results[0].title == "Updated wins"
-    assert [result.conversation_id for result in window_results] == [
-        created_only.conversation_id
-    ]
+    assert [result.conversation_id for result in window_results] == [created_only.conversation_id]
     assert window_results[0].last_activity_at == "2026-02-15T12:00:00.000000Z"
 
 

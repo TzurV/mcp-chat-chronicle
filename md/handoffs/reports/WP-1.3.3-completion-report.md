@@ -57,13 +57,13 @@ file_keys=file_name,file_uuid
 
 Synthetic exports with exact conversation-to-project UUID references are linked and searchable.
 
-The owner real export has project metadata, including the provided `CAR GUI` project row, but no project-like key anywhere in conversation/message/attachment/file key sets. Therefore reliable project-to-conversation linking is impossible for that export from the available data. The importer does not guess by project name, timestamps, docs, or transcript content.
+The owner real export has project metadata, including a private project row, but no project-like key anywhere in conversation/message/attachment/file key sets. Therefore reliable project-to-conversation linking is impossible for that export from the available data. The importer does not guess by project name, timestamps, docs, or transcript content.
 
 ## Search Behavior
 
 - Linked synthetic project names are indexed in FTS metadata and phrase search.
 - Snippets are generated from existing metadata/transcript corpus; no hidden project metadata is inserted as a synthetic message.
-- Real-export `CAR GUI` search returns no conversations because no real conversations have a reliable project UUID link.
+- A real-export search for the private project returns no conversations because no real conversations have a reliable project UUID link.
 
 ## Validation Commands
 
@@ -92,11 +92,11 @@ All checks passed!
 
 ```text
 poetry run chronicle --help
-                                                                               
- Usage: chronicle [OPTIONS] COMMAND [ARGS]...                                  
-                                                                               
- A local-first, searchable archive of your AI conversations.                   
-                                                                               
+
+ Usage: chronicle [OPTIONS] COMMAND [ARGS]...
+
+ A local-first, searchable archive of your AI conversations.
+
 +- Options -------------------------------------------------------------------+
 | --version          Show the version and exit.                               |
 | --help             Show this message and exit.                              |
@@ -129,7 +129,7 @@ ingest run id: 1
 ```
 
 ```text
-poetry run chronicle search "CAR GUI" --provider claude --db-path C:\tmp\wp133_claude_project_smoke.db
+poetry run chronicle search "<PRIVATE_PROJECT_NAME>" --provider claude --db-path C:\tmp\wp133_claude_project_smoke.db
 db path: C:\tmp\wp133_claude_project_smoke.db
 No results
 ```

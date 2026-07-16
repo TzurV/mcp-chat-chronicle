@@ -2,30 +2,223 @@
 
 *A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, with optional YAML-defined AI tasks and MCP recall planned as separate layers.*
 
-> **Status: core real-history prototype accepted; configurable AI-task foundation is next.** The local DB, official ChatGPT and Claude export importers, OpenAI Codex and Claude Code local extractors, single-source and parent-folder ingest, config/init/collect, scan-local inventory, stats, search, phrase search, open, and recent-activity CLI paths are implemented and exercised against the owner's real archive. Claude project metadata is linked only when reliable conversation references exist. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
+## Start searching in 5 minutes
+
+### 1. Install
+
+You need Python 3.11 or later and [Poetry](https://python-poetry.org/).
+
+```powershell
+git clone https://github.com/TzurV/mcp-chat-chronicle.git
+cd mcp-chat-chronicle
+poetry install
+```
+
+### 2. Initialize local folders and database
+
+```powershell
+poetry run chronicle init
+```
+
+This creates the local database, configuration, and export drop folders:
+
+```text
+.chronicle/chronicle.db
+.chronicle/config.yaml
+exports/openai/
+exports/claude/
+```
+
+These paths are git-ignored. Keep real exports and the local database private.
+
+### 3. Add supported histories
+
+If you already use Codex or Claude Code locally, their histories normally exist in
+the default local stores and need no manual export. ChatGPT and Claude web require
+official exports; place the downloaded files under:
+
+```text
+exports/openai/
+exports/claude/
+```
+
+See the source-specific instructions below.
+
+### 4. Collect
+
+```powershell
+poetry run chronicle collect
+```
+
+Collection is idempotent: rerunning it updates changed conversations and skips
+unchanged ones instead of creating duplicates.
+
+### 5. Search
+
+```powershell
+poetry run chronicle recent -n 20
+poetry run chronicle search "docker network"
+poetry run chronicle search --phrase "YOU are the MANAGER"
+poetry run chronicle open <result-id>
+```
+
+## Supported sources
+
+| Source | Type | Where history comes from | Manual step required? |
+| --- | --- | --- | --- |
+| ChatGPT | Official export | Downloaded ChatGPT data export | Yes |
+| Claude web | Official export | Downloaded Claude data export | Yes |
+| OpenAI Codex | Local store | `%USERPROFILE%\.codex` | No, if Codex has been used locally |
+| Claude Code | Local store | `%USERPROFILE%\.claude\projects` | No, if Claude Code has been used locally |
+
+Codex and Claude Code are the easiest starting point because their histories
+already live locally. ChatGPT and Claude web require an export first.
+
+## How to export ChatGPT history
+
+OpenAI's current web flow is:
+
+1. Sign in to ChatGPT and open the profile menu.
+2. Select **Settings**.
+3. Open **Data Controls**.
+4. Under **Export Data**, select **Export**, then confirm the request.
+5. Wait for the email and download the ZIP file. The download link currently
+   expires after 24 hours.
+6. Place the ZIP file under:
+
+   ```text
+   exports/openai/
+   ```
+
+7. Run:
+
+   ```powershell
+   poetry run chronicle collect
+   ```
+
+Chat Chronicle ingests supported ChatGPT export files from that folder, including
+current split exports containing numbered conversation JSON files. Interface labels
+and export availability can change by account or workspace, so check
+[OpenAI's official export instructions](https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpt-history-and-data)
+if the controls look different.
+
+## How to export Claude history
+
+Anthropic's current flow for individual Claude users is available from the web app
+or Claude Desktop, not the mobile apps:
+
+1. Open Claude and select your initials in the lower-left corner.
+2. Select **Settings**.
+3. Open **Privacy**.
+4. Select **Export data**.
+5. When the export email arrives, download the file while signed in. The download
+   link currently expires after 24 hours.
+6. Place the downloaded export under:
+
+   ```text
+   exports/claude/
+   ```
+
+7. Run:
+
+   ```powershell
+   poetry run chronicle collect
+   ```
+
+Claude's export structure may change over time. Keep the original export file. If
+collection reports warnings, retain the original locally and open an issue with
+only sanitized diagnostics—never attach a private export. Claude for Work export
+permissions differ by plan and role; see
+[Anthropic's official export instructions](https://support.anthropic.com/en/articles/9450526-how-can-i-export-my-claude-data).
+
+## Local sources: Codex and Claude Code
+
+If you use OpenAI Codex locally, Chat Chronicle looks for sessions under:
+
+```text
+%USERPROFILE%\.codex
+```
+
+If you use Claude Code locally, it looks for project sessions under:
+
+```text
+%USERPROFILE%\.claude\projects
+```
+
+Check what Chat Chronicle can see without importing anything:
+
+```powershell
+poetry run chronicle scan-local
+```
+
+`scan-local` is read-only. It reports configured/default source locations and their
+availability without creating a database, importing messages, or modifying the
+archive.
+
+## Search cheat sheet
+
+Recent activity:
+
+```powershell
+poetry run chronicle recent -n 20
+```
+
+Broad search:
+
+```powershell
+poetry run chronicle search "docker network"
+```
+
+Exact phrase search:
+
+```powershell
+poetry run chronicle search --phrase "YOU are the MANAGER"
+```
+
+Limit results to one provider:
+
+```powershell
+poetry run chronicle search "release planning" --provider openai_codex
+```
+
+Open a result:
+
+```powershell
+poetry run chronicle open <result-id>
+```
+
+For ChatGPT and Claude web conversations, `open` uses the stored provider URL when
+available and attempts to launch the default browser. For Codex and Claude Code,
+`open` renders the locally archived transcript.
+
+## What this is not
+
+Chat Chronicle is not a hosted AI memory service, browser extension, or agent
+orchestrator. It is a local archive and search layer for supported AI conversation
+histories.
+
+## Project status
+
+> **Status: Chat Chronicle v0.1.0 first release.** The local DB, official ChatGPT and Claude export importers, OpenAI Codex and Claude Code local extractors, single-source and parent-folder ingest, config/init/collect, scan-local inventory, stats, search, phrase search, open, and recent-activity CLI paths are implemented and exercised against the owner's real archive. Optional AI-task scaffolding is available separately and remains work in progress. Claude project metadata is linked only when reliable conversation references exist. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
 
 ## Why
 
-AI work is scattered across ChatGPT, Claude, Gemini, and coding agents (Claude Code, Cursor, Copilot Chat). Each stores history in an isolated, poorly-searchable silo. Chat Chronicle indexes *events* — which conversation, when, in which tool, and how to get back to it.
+AI work is scattered across ChatGPT, Claude, and coding agents. Each stores history
+in an isolated, poorly searchable silo. Chat Chronicle indexes *events*—which
+conversation, when, in which tool, and how to get back to it.
 
-A **source-agnostic core** is fed by **pluggable, source-specific adapters**. Adding a new source means adding one adapter, not changing the system.
+A **source-agnostic core** is fed by **pluggable, source-specific adapters**. Adding
+a new source means adding one adapter, not changing the storage and search core.
 
 ## Positioning
 
 | Project | What it does | How we differ |
 | --- | --- | --- |
-| [OpenMemory MCP (mem0)](https://mem0.ai/blog/introducing-openmemory-mcp) | Stores distilled facts/preferences about you | We index events, not memories — an archive with a way back to the thread. |
+| [OpenMemory MCP (mem0)](https://mem0.ai/blog/introducing-openmemory-mcp) | Stores distilled facts/preferences about you | We index events, not memories—an archive with a way back to the thread. |
 | [OpenChat](https://github.com/p0u4a/openchat) | Browser extension captures chat traffic | We use official exports plus durable local stores; no extension, and we reach coding agents. |
 | Provider built-in search | Per-silo only | Cross-provider and cross-tool, local, private, scriptable. |
 
-## Quickstart
-
-```bash
-poetry install
-poetry run chronicle --help
-```
-
-## One-command workflow: `init` + `collect`
+## Detailed workflow: `init` + `collect`
 
 For routine use, two commands set up and refresh the archive:
 
@@ -173,205 +366,24 @@ chronicle recent -n 20                                 # recent active chats by 
 chronicle --ai-task list                               # discover configured optional AI tasks
 ```
 
-## Optional YAML-defined AI tasks
+## Advanced: optional local AI tasks
 
-Install the optional LiteLLM-backed layer explicitly; the base archive and all
-normal commands have no AI dependency and make no model calls:
+The core archive and search workflow has no AI dependency and makes no model calls.
+
+Optional AI tasks can run YAML-defined conversation-intelligence jobs through
+LiteLLM, preferably using a local LM Studio profile. These tasks are separate from
+search and must be invoked explicitly.
+
+Quick commands:
 
 ```powershell
 poetry install -E enrich
-poetry run chronicle init
 poetry run chronicle --ai-task list
 poetry run chronicle --ai-task conversation-summary --conversation-id <id> --dry-run
-poetry run chronicle --ai-task work-mode-classification --conversation-id <id>
-poetry run chronicle --ai-task last-activity --conversation-id <id>
-poetry run chronicle --ai-task title-assessment --conversation-id <id>
 ```
 
-### First local AI setup with LM Studio
-
-Chronicle does not install or start a local model runtime. Install LM Studio for
-Windows separately, then use its local OpenAI-compatible server.
-
-For the first smoke test, use this conservative model choice:
-
-```text
-Model: qwen/qwen3.5-4b
-Format: GGUF
-Quantization: Q4_K_M
-```
-
-In LM Studio:
-
-1. Open **Discover** and search for `qwen/qwen3.5-4b`.
-2. Download the LM Studio Community GGUF `Q4_K_M` revision.
-3. Load the model. For the initial short structured extraction test, disable model
-   thinking; the tested 8192-token context is sufficient for a genuinely short
-   conversation. Use 16K or 32K for longer chats when available memory permits.
-4. Open **Developer**, keep the bind address at `127.0.0.1`, set port `1234`,
-   and start the server. Do not bind to `0.0.0.0` unless network exposure and
-   authentication have been deliberately configured.
-
-Initialize AI configuration for repositories that were set up before AI support
-was added. `init` creates missing AI YAML files without replacing the existing DB
-or configuration:
-
-```powershell
-poetry env info --path
-poetry run chronicle init
-poetry install -E enrich
-poetry run chronicle --ai-task list
-```
-
-Verify the local server and obtain the exact model ID it exposes:
-
-```powershell
-lms server status
-(Invoke-RestMethod http://127.0.0.1:1234/v1/models).data.id
-```
-
-Select the chat/generation model from the returned IDs, not an embedding model such
-as `text-embedding-*`. LiteLLM requires its LM Studio provider prefix, so set the
-current PowerShell session to `lm_studio/<returned-chat-model-id>`:
-
-```powershell
-$env:CHRONICLE_LOCAL_MODEL = "lm_studio/<returned-chat-model-id>"
-```
-
-For the recommended first model, the expected value is:
-
-```powershell
-$env:CHRONICLE_LOCAL_MODEL = "lm_studio/qwen3.5-4b"
-```
-
-The prefix is part of LiteLLM routing; LM Studio itself still receives the local
-ID `qwen3.5-4b`. Chronicle rejects an unprefixed value from this default profile
-before making a request. An unauthenticated loopback LM Studio server needs no API
-key, so keep `api_key_env: null` unless authentication was deliberately enabled.
-
-Set `context_window` in `.chronicle/ai-models.yaml` to the context configured when
-the model was loaded. Fresh initialization uses 8192 for the short-smoke profile.
-Chronicle reports selected characters and estimated input/request tokens during
-`--dry-run`, and fails before the model call when the estimate plus requested output
-exceeds the configured window. The estimate is conservative and does not silently
-truncate beyond the selected task's deterministic input selector.
-
-The local template allows 180 seconds per schema-constrained generation and uses no
-automatic retry. On slower local hardware, raise `timeout` deliberately after a
-bounded dry-run; a retry can queue the same expensive generation twice and is not a
-substitute for a realistic timeout.
-
-Select a short or medium real conversation, inspect the request without calling
-the model, then run the first local task:
-
-```powershell
-poetry run chronicle recent -n 5
-poetry run chronicle --ai-task conversation-summary --conversation-id <id> --dry-run --verbose
-poetry run chronicle --ai-task conversation-summary --conversation-id <id>
-```
-
-`--verbose` prints a privacy-safe summary of the effective AI configuration. It
-identifies repository-local configuration versus a `CHAT_CHRONICLE_AI_CONFIG_DIR`
-override and reports the selected profile's timeout, retries, context window,
-structured-output mode, selector/schema, and effective generation limits. It does
-not print the absolute override path, credentials, prompts, transcript text, or
-generated output.
-
-For evidence-bearing tasks, Chronicle also binds the provider JSON Schema to the
-exact normalized message IDs selected for that attempt. This prevents a structured
-provider from choosing excluded or nonexistent IDs; client-side evidence validation
-still rejects any incompatible provider response as a retryable failure.
-
-The default local profile expects `http://127.0.0.1:1234/v1` and strict JSON
-Schema output. Current LM Studio accepts `json_schema` and may reject OpenAI's
-`json_object` mode, so do not use `structured_output: false` as a generic fallback.
-Only disable schema enforcement after an invented direct probe proves that the
-selected provider rejects `json_schema` and accepts `json_object`; Chronicle still
-applies local Pydantic result validation in that mode.
-
-Every executed attempt is appended to `ai_task_results`: validated successes hold
-the structured result and become configuration/input-aware cache hits, while
-sanitized failures hold no result and remain retryable. `--force` bypasses a success
-cache entry and appends another auditable attempt. Keep real structured outputs and
-logs private, and do not enable verbose LiteLLM request/response logging because it
-can expose prompts, transcripts, credentials, titles, and generated content.
-
-`init` copies the tracked privacy-safe templates `ai-tasks.default.yaml` and
-`ai-models.default.yaml` to `.chronicle/ai-tasks.yaml` and
-`.chronicle/ai-models.yaml`. Existing local catalogs are kept unless `--force`
-is explicitly supplied. Prompts/tasks and model profiles are separate,
-strictly validated YAML files. The four enabled production tasks are:
-
-- `conversation-summary`: a 2-5 sentence factual overview with exact start and
-  last-active dates injected deterministically from normalized DB metadata;
-- `work-mode-classification`: whole-conversation classification as `manager`,
-  `executor`, `one_off`, `mixed`, or `unknown`;
-- `last-activity`: recent work and state from only the last 12 meaningful
-  selected messages by default;
-- `title-assessment`: a suggestion-only title check that never updates the
-  stored conversation or source data.
-
-The local LM Studio profile uses a loopback endpoint plus the
-`CHRONICLE_LOCAL_MODEL` environment variable.
-
-For isolated automation or testing, `CHAT_CHRONICLE_AI_CONFIG_DIR` may point at
-the directory containing `ai-tasks.yaml` and `ai-models.yaml`; normal use keeps
-the default `.chronicle` location. Model profiles request strict JSON-schema
-output by default. A provider known not to support it must explicitly set
-`structured_output: false`, which degrades the provider request to JSON-object
-mode while retaining mandatory client-side Pydantic validation.
-
-Generation precedence is per field: the selected model profile supplies safe
-`temperature` and `max_tokens` defaults, and a task may override either or both
-under its own `generation` mapping. Omitted task fields inherit the profile.
-Chronicle sends and caches the resolved effective values. Changing a profile
-default that is masked by a task override therefore does not cause an identical
-request to be executed again.
-
-Runnable tasks always require one `--conversation-id` or a positive bounded
-`--limit`. Loopback profiles run locally by default; cloud or non-loopback
-profiles are blocked unless that invocation includes `--allow-remote`.
-Successful results resume from a configuration/input-aware cache; `--force`
-appends a fresh auditable attempt. In a mixed batch, individual failures are
-stored and reported while successful conversations continue; the command exits
-nonzero when every selected conversation fails. Selected transcript content is
-private: prefer the local profile, inspect task bounds before execution, and use
-`--allow-remote` only when you intentionally authorize transmission to a remote
-provider. These contracts and synthetic tests do not claim real-model quality;
-real-data teacher references and benchmarking are deferred to WP-5.1.2 and WP-5.2.
-
-`chronicle ingest` accepts either a single supported source or a parent directory. A parent directory is scanned for supported child sources such as ChatGPT/OpenAI exports, Claude exports, OpenAI Codex local JSONL sessions, and Claude Code project JSONL sessions. Directories that are already valid single sources, such as `$env:USERPROFILE\.codex` or `$env:USERPROFILE\.claude\projects`, still ingest as one source rather than being expanded file by file.
-
-Example parent-folder ingest:
-
-```powershell
-poetry run chronicle ingest .\exports --provider auto --db-path .\.chronicle\chronicle.db
-```
-
-Re-running the same command is expected to be idempotent: existing conversations should be skipped rather than duplicated.
-
-Example Claude export smoke test:
-
-```powershell
-poetry run chronicle ingest .\exports\claude --provider claude --db-path .\.chronicle\chronicle.db
-poetry run chronicle recent -n 10 --provider claude --db-path .\.chronicle\chronicle.db
-```
-
-`chronicle search` uses broad FTS5 token search by default. Ordinary punctuation in broad queries is treated as safe user text, so inputs such as `scan-local`, `provider:openai_codex`, and path-like strings should return results or `No results` rather than SQLite FTS syntax errors. For exact hyphen/phrase matching such as `YOU are the MANAGER`, use:
-
-```powershell
-poetry run chronicle search --phrase "YOU are the MANAGER" --provider openai_codex --db-path .\.chronicle\chronicle.db
-```
-
-Search is case-insensitive for normal usage. Phrase mode matches the exact word sequence regardless of letter case, and default FTS search also treats case differences as non-significant. For noisy multi-word broad searches with common words such as `you`, `are`, and `the`, the CLI prints a hint suggesting `--phrase`.
-
-`chronicle recent` supports `--provider`, `--since`, `--until`, and `--db-path`. If `-n/--limit` is omitted, it shows up to 10 rows and prints a note explaining how to increase the limit.
-
-`chronicle scan-local` is read-only. It reports configured/default source locations and status without importing data, creating a database, or parsing transcript bodies:
-
-```powershell
-poetry run chronicle scan-local
-```
+For full setup, local-model configuration, privacy gates, caching, schema
+validation, and troubleshooting, see [`docs/ai-tasks.md`](docs/ai-tasks.md).
 
 ## Stack, and what we deliberately did not choose
 
@@ -383,11 +395,17 @@ Not chosen: **DuckDB** (an analytics engine, wrong fit for text recall) · **Mar
 
 ## Privacy
 
-Everything stays on your machine. Local databases and exports are git-ignored; only synthetic fixtures are ever committed. No real chat data lives in this repository.
-
+Your archive stays on your machine. Local databases, official exports, and raw local
+session records are git-ignored and must never be committed. Test fixtures are
+synthetic. The first release includes one deliberate exception: an owner-reviewed,
+sanitized manager-chat transcript under `md/release-artifacts/manager-chat/` that
+documents the project's development process. It contains no raw source record and
+is not loaded into a user's archive automatically. Optional AI tasks are always
+explicit; remote model use requires `--allow-remote` and deliberate authorization.
+Start searching in 5 minutes
 ## Limitations (honest)
 
-- Web-chat history (ChatGPT, Claude, Gemini) is only as fresh as your last export request. Coding-agent history refreshes automatically because those tools keep durable local transcripts.
+- ChatGPT and Claude web history is only as fresh as your last export request. Coding-agent history refreshes automatically because those tools keep durable local transcripts.
 - Coding-agent conversations have no URLs — `chronicle open` renders a local transcript for those.
 - Local-store formats are undocumented and can change with any tool release; a format change degrades to "source skipped with a warning," never a crash.
 

@@ -260,9 +260,7 @@ def test_configured_context_preflight_fails_before_call_and_remains_retryable(
         second = asyncio.run(run_task(**arguments))[0]
         assert first["error"] == second["error"] == "context_length"
         assert client.calls == 0
-        rows = conn.execute(
-            "SELECT status, error FROM ai_task_results ORDER BY id"
-        ).fetchall()
+        rows = conn.execute("SELECT status, error FROM ai_task_results ORDER BY id").fetchall()
         assert len(rows) == 2
         assert all(row["status"] == "failed" for row in rows)
         assert all("context_length" in row["error"] for row in rows)

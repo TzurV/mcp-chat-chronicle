@@ -21,7 +21,7 @@ One documented behavior remains intentionally unchanged: broad search uses token
 | Requirement | Result | Evidence |
 | --- | --- | --- |
 | `chronicle search "scan-local"` no longer crashes | Pass | Manual private DB smoke exited 0 and rendered search results. |
-| FTS punctuation/control-like input is treated as safe text | Pass | New tests cover `provider:openai_codex`, `"scan-local"`, `(scan-local)`, `C:\Users\tzurv\.codex`, and `scan/local`. |
+| FTS punctuation/control-like input is treated as safe text | Pass | New tests cover `provider:openai_codex`, `"scan-local"`, `(scan-local)`, `C:\SyntheticUser\.codex`, and `scan/local`. |
 | Broad search still uses FTS5/BM25 | Pass | Completion report confirms only the bound `MATCH` value changed; diff keeps FTS5 `MATCH`, `bm25(chat_fts)`, and snippets. |
 | `--phrase` exact matching unchanged | Pass | Manual private DB smoke and tests confirm `chronicle search --phrase "scan-local"` still works. |
 | Duplicate default `result ...` rows remain absent | Pass | No CLI regression indicated; WP-2.3.1 behavior was not touched. |

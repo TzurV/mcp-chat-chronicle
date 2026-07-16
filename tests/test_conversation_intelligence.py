@@ -221,9 +221,10 @@ def test_overview_records_message_truncation_and_empty_selection(tmp_path: Path)
             ),
         )
         assert selected.metadata["truncation_details"]
-        assert selected.metadata["truncation_details"][0]["message_id"] in selected.metadata[
-            "message_ids"
-        ]
+        assert (
+            selected.metadata["truncation_details"][0]["message_id"]
+            in selected.metadata["message_ids"]
+        )
 
         empty_id = _seed(
             conn,
@@ -247,7 +248,8 @@ def test_overview_ids_are_structural_despite_prefix_and_quoted_body_collisions(
         _message(
             "user" if index % 2 == 0 else "assistant",
             (
-                f"collision-marker-{index + 1}-" + "x" * 90
+                f"collision-marker-{index + 1}-"
+                + "x" * 90
                 + (" quoted message_id=3" if index == 19 else "")
             ),
             index,
@@ -256,8 +258,10 @@ def test_overview_ids_are_structural_despite_prefix_and_quoted_body_collisions(
     ]
     with connect(tmp_path / "id-collisions.db") as conn:
         conversation_id = _seed(conn, "id-collisions", messages)
-        task = _production_catalog().tasks["work-mode-classification"].model_copy(
-            update={"max_input_chars": 900}
+        task = (
+            _production_catalog()
+            .tasks["work-mode-classification"]
+            .model_copy(update={"max_input_chars": 900})
         )
         first = select_input(conn, conversation_id, task)
         second = select_input(conn, conversation_id, task)
@@ -381,29 +385,27 @@ SYNTHETIC_SCENARIOS = {
 
 
 @pytest.mark.parametrize("scenario", sorted(SYNTHETIC_SCENARIOS))
-def test_provider_neutral_synthetic_scenarios_are_selectable(
-    tmp_path: Path, scenario: str
-) -> None:
+def test_provider_neutral_synthetic_scenarios_are_selectable(tmp_path: Path, scenario: str) -> None:
     messages = [
-        _message(role, body, seq)
-        for seq, (role, body) in enumerate(SYNTHETIC_SCENARIOS[scenario])
+        _message(role, body, seq) for seq, (role, body) in enumerate(SYNTHETIC_SCENARIOS[scenario])
     ]
     with connect(tmp_path / f"scenario-{scenario}.db") as conn:
         conversation_id = _seed(conn, scenario, messages, title=f"Synthetic {scenario}")
-        selector = "recent-meaningful-v1" if scenario in {
-            "completed",
-            "in_progress",
-            "blocked",
-            "awaiting_input",
-            "explicit_action",
-            "inferred_action",
-            "unknown_action",
-        } else "conversation-overview-v1"
-        schema = (
-            "last-activity-v1"
-            if selector == "recent-meaningful-v1"
-            else "title-assessment-v1"
+        selector = (
+            "recent-meaningful-v1"
+            if scenario
+            in {
+                "completed",
+                "in_progress",
+                "blocked",
+                "awaiting_input",
+                "explicit_action",
+                "inferred_action",
+                "unknown_action",
+            }
+            else "conversation-overview-v1"
         )
+        schema = "last-activity-v1" if selector == "recent-meaningful-v1" else "title-assessment-v1"
         selected = select_input(conn, conversation_id, _task(selector, schema))
         assert selected.text
         assert selected.metadata["message_ids"]

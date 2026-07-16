@@ -76,11 +76,15 @@ def _build_definitions(
     env: Mapping[str, str],
 ) -> list[_SourceDefinition]:
     root = _resolve_optional_root(exports_root, base_dir)
-    chatgpt_path = root / "openai" if root is not None else _configured_source_path(
-        config, "chatgpt", base_dir, fallback="exports/openai"
+    chatgpt_path = (
+        root / "openai"
+        if root is not None
+        else _configured_source_path(config, "chatgpt", base_dir, fallback="exports/openai")
     )
-    claude_path = root / "claude" if root is not None else _configured_source_path(
-        config, "claude", base_dir, fallback="exports/claude"
+    claude_path = (
+        root / "claude"
+        if root is not None
+        else _configured_source_path(config, "claude", base_dir, fallback="exports/claude")
     )
 
     return [
