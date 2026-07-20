@@ -9,8 +9,8 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Date | 2026-07-20 |
 | Phase | Post-v0.1.0 AI development corpus and evaluation planning |
 | Last accepted delivery | First-release README, AI-task guide, LinkedIn article, and sanitized manager-chat artifact |
-| Current milestone state | M0/M1/M2 core and real-history prototype accepted; WP-5.1, WP-5.1.1, WP-5.1.3, and WP-5.1.4 accepted; Chat Chronicle v0.1.0 is public; the former automated WP-5.1.2 design is superseded; the approved next AI sequence is frozen private development snapshot, direct FABLE references for 30 conversations x four tasks, selected local runtime integration, and Gemini-judged development evaluation |
-| Next action | Prepare WP-5.1.2B direct-FABLE handoff only after the owner's explicit request; local model shortlist, remote machine, and later independent evaluation-set design remain TBD |
+| Current milestone state | M0/M1/M2 core and real-history prototype accepted; WP-5.1, WP-5.1.1, WP-5.1.2A, WP-5.1.2B, WP-5.1.3, and WP-5.1.4 accepted; Chat Chronicle v0.1.0 is public; the private development basis now contains 30 frozen conversations and 120 FABLE silver references; local runtime integration and Gemini-judged development evaluation remain next |
+| Next action | Discuss and approve the WP-5.2A local model/runtime shortlist before writing its executor handoff; remote machine and later independent evaluation-set design remain TBD |
 | Current branch | `main` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -43,7 +43,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.1.1 | Initial conversation-intelligence task catalog | Accepted | `md/handoffs/WP-5.1.1-initial-conversation-intelligence-tasks.md` | `md/handoffs/reports/WP-5.1.1-completion-report.md` | `md/handoffs/reports/WP-5.1.1-validation-acceptance.md` | Accepted after one rework cycle. Overview selected IDs now flow structurally; decimal-prefix and quoted-body collisions are covered and false evidence fails validation. The earlier review remains the rework record. |
 | WP-5.1.2 | Automated two-teacher reference corpus | Superseded before execution | `md/handoffs/WP-5.1.2-real-data-teacher-reference-corpus.md` | N/A | N/A | Retained as planning history only. Do not execute: the 300-case, GPT/FABLE orchestration and reconciliation design was replaced by WP-5.1.2A/B. |
 | WP-5.1.2A | Frozen private development snapshot | Accepted | `md/handoffs/WP-5.1.2A-frozen-private-development-snapshot.md` | `md/handoffs/reports/WP-5.1.2A-completion-report.md` | `md/handoffs/reports/WP-5.1.2A-validation-review.md` | SQLite-native immutable backup accepted: schema v3, 711 conversations, 28,370 messages, integrity/count/hash/read-only/source-no-write/privacy checks passed. |
-| WP-5.1.2B | Direct FABLE development references | Planned; handoff pending | Pending | Pending | Pending | Freeze 30 conversations, then create four FABLE references per conversation (120 cases) directly in a FABLE chat. No teacher-generation code, human review, second teacher, or secret quarantine; local/private silver development data only. |
+| WP-5.1.2B | Direct FABLE development references | Accepted | `md/handoffs/WP-5.1.2B-direct-fable-development-references.md` | `md/handoffs/reports/WP-5.1.2B-completion-report.md` | `md/handoffs/reports/WP-5.1.2B-validation-review.md` | Accepted after narrow rework: 30 frozen conversations, 120/120 Pydantic-valid FABLE references, deterministic selection/evidence/date/privacy checks, broad helper permissions removed, and UTC provenance corrected without changing references. |
 | WP-5.2A | Small local model/runtime integration | Planned; candidates TBD | Pending | Pending | Pending | Select models/runtimes later. Current machine baseline: i7-1185G7, 31.7 GB RAM, Intel Iris Xe, no NVIDIA runtime; Qwen3.5-4B is installed in LM Studio. |
 | WP-5.2B | Gemini-judged development evaluation harness | Planned after WP-5.1.2B/5.2A | Pending | Pending | Pending | Deterministic task metrics plus a different Gemini model as judge through LiteLLM and local YAML configuration. The 120 cases are development data, not final evaluation data. |
 | WP-5.2C | Remote runs and independent evaluation set | Deferred; details TBD | Pending | Pending | Pending | Stronger remote machine, private transfer, and later untouched evaluation-set size/process require separate owner decisions. |
@@ -151,7 +151,7 @@ If Poetry reports another project environment, the executor must stop and fix th
 1. Treat Chat Chronicle v0.1.0 as the published baseline at commit `1f3fbce` / tag `v0.1.0`.
 2. The owner decides when and how to publish the prepared LinkedIn article; article publication is not inferred from the tracked draft.
 3. Treat WP-5.1.2A as the accepted immutable development basis; the old WP-5.1.2 automation handoff must not be executed.
-4. Prepare WP-5.1.2B only after explicit owner request. Verify the snapshot hash before use, then freeze 30 selected IDs before direct FABLE reference creation.
-5. Define the local model/runtime shortlist before WP-5.2A implementation; use a different Gemini model through LiteLLM/YAML as the WP-5.2B judge.
+4. Treat WP-5.1.2B as the accepted private silver development corpus. Do not use it as final evaluation data or publish private cases.
+5. Define and approve the local model/runtime shortlist before WP-5.2A implementation; use a different Gemini model through LiteLLM/YAML as the WP-5.2B judge.
 6. Defer remote-machine setup and the separate untouched evaluation set to WP-5.2C decisions.
 7. Keep this thread as the main development planning and PM-validation record.
