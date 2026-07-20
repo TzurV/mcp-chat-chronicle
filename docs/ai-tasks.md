@@ -70,6 +70,33 @@ The prefix is part of LiteLLM routing; LM Studio still receives the local ID
 before making a request. An unauthenticated loopback server needs no API key, so
 keep `api_key_env: null` unless authentication was deliberately enabled.
 
+## Optional Llama 3.2 1B evaluation floor
+
+Keep Qwen3.5-4B `Q4_K_M` as the recommended initial functional smoke. For
+evaluation work, the smaller
+`bartowski/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-Q4_K_M.gguf`
+artifact is a useful floor candidate: it is deliberately small enough to expose
+structured-output, instruction-following, latency, and context limitations.
+
+Download that exact artifact in LM Studio, load it with an 8192-token context,
+keep the server on `127.0.0.1:1234`, and verify that the returned generation
+model ID is `llama-3.2-1b-instruct`:
+
+```powershell
+lms load llama-3.2-1b-instruct --context-length 8192 --parallel 1
+lms server status
+(Invoke-RestMethod http://127.0.0.1:1234/v1/models).data.id
+$env:CHRONICLE_LOCAL_MODEL = "lm_studio/llama-3.2-1b-instruct"
+```
+
+Use temperature zero, no automatic retries, and one Chronicle task at a time.
+The model advertises a larger maximum context, but only 8192 was tested for this
+floor integration; advertised capacity is not evidence of useful long-context
+quality or acceptable local latency. A schema-valid response can still be
+semantically weak, while a captured schema failure is expected and useful
+benchmark evidence. Do not relax task schemas or prompts to make a floor-model
+failure pass.
+
 ## Context window, timeout, and dry run
 
 Set `context_window` in `.chronicle/ai-models.yaml` to the context configured when
