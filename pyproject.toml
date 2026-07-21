@@ -32,7 +32,7 @@ Repository = "https://github.com/tzurv/mcp-chat-chronicle"
 chronicle = "chat_chronicle.cli:app"
 
 [tool.poetry]
-packages = [{ include = "chat_chronicle", from = "src" }]
+packages = [{ include = "chat_chronicle", from = "src" }, { include = "bench" }]
 include = [{ path = "src/chat_chronicle/resources/*.yaml", format = ["sdist", "wheel"] }]
 
 [tool.poetry.group.dev.dependencies]

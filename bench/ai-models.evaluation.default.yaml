@@ -1,0 +1,27 @@
+version: 1
+profiles:
+  service-local:
+    model: lm_studio/REPLACE_WITH_ACCEPTED_MODEL_ID
+    api_base: http://127.0.0.1:1234/v1
+    api_key_env: null
+    remote: false
+    timeout: 180
+    retries: 0
+    concurrency: 1
+    structured_output: true
+    context_window: 8192
+    generation:
+      temperature: 0
+      max_tokens: 500
+  gemini-judge:
+    model: gemini/gemini-2.5-flash
+    api_base: null
+    api_key_env: GEMINI_API_KEY
+    remote: true
+    timeout: 180
+    retries: 1
+    concurrency: 1
+    structured_output: true
+    generation:
+      temperature: 0
+      max_tokens: 500

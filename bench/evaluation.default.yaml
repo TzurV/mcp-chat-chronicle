@@ -1,0 +1,43 @@
+version: 1
+corpus_id: synthetic-development-corpus
+expected_conversations: 30
+expected_cases: 120
+tasks:
+  - conversation-summary
+  - work-mode-classification
+  - last-activity
+  - title-assessment
+task_catalog: ../../../../ai-tasks.default.yaml
+model_catalog: ai-models.yaml
+paths:
+  root: ..
+  source: inputs
+  references: references
+  bundle: work/bundle-REPLACE_RUN_ID
+  generation_work: work/generation-REPLACE_RUN_ID
+  candidate_package: work/candidate-package-REPLACE_RUN_ID
+  scoring: runs/REPLACE_RUN_ID
+candidate:
+  id: llama-3.2-1b-instruct-q4_k_m
+  profile: service-local
+  artifact_sha256: REPLACE_WITH_PRIVATE_ACCEPTED_HASH
+  artifact_file: REPLACE_WITH_ACCEPTED_GGUF_FILENAME
+  artifact_path: REPLACE_WITH_LOCAL_ARTIFACT_PATH
+  quantization: Q4_K_M
+  runtime: LM Studio
+  artifact_repository: REPLACE_WITH_ACCEPTED_REPOSITORY
+  artifact_size: 0
+  runtime_version: REPLACE_WITH_RUNTIME_VERSION
+  execution_device: REPLACE_WITH_EXECUTION_DEVICE
+  advertised_context: 8192
+  application_commit: REPLACE_WITH_PINNED_APPLICATION_COMMIT
+  expected_provider: lm_studio
+  expected_model: REPLACE_WITH_ACCEPTED_MODEL_ID
+  allow_dirty_tracked: false
+  tracked_diff_sha256: null
+judge:
+  enabled: false
+  profile: gemini-judge
+  rubric_version: "1"
+  temperature: 0
+  max_tokens: 500
