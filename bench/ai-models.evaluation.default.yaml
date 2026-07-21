@@ -14,9 +14,9 @@ profiles:
       temperature: 0
       max_tokens: 500
   gemini-judge:
-    model: gemini/gemini-2.5-flash
+    model: vertex_ai/gemini-2.5-flash
     api_base: null
-    api_key_env: GEMINI_API_KEY
+    api_key_env: null
     remote: true
     timeout: 180
     retries: 1

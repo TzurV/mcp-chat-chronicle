@@ -370,7 +370,7 @@ description = "Foreign Function Interface for Python calling C code."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"mcp\" and platform_python_implementation != \"PyPy\""
+markers = "(extra == \"mcp\" or extra == \"enrich\") and platform_python_implementation != \"PyPy\""
 files = [
     {file = "cffi-2.1.0-cp310-cp310-macosx_10_15_x86_64.whl", hash = "sha256:b65f590ef2a44640f9a05dbb548a429b4ade77913ce683ac8b1480777658a6c0"},
     {file = "cffi-2.1.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:164bff1657b2a74f0b6d54e11c9b375bc97b931f2ca9c43fcf875838da1570dd"},
@@ -629,7 +629,7 @@ description = "cryptography is a package which provides cryptographic recipes an
 optional = true
 python-versions = "!=3.9.0,!=3.9.1,>=3.9"
 groups = ["main"]
-markers = "extra == \"mcp\""
+markers = "extra == \"mcp\" or extra == \"enrich\""
 files = [
     {file = "cryptography-49.0.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:966fe0e9c67490071f14c0d2b1cb2dfb3023c5ce39457343931415f08382f2db"},
     {file = "cryptography-49.0.0-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:36d1709f992593689b45bda411498d62c6e365f2ca00b84657d4dadd24de16db"},
@@ -767,7 +767,7 @@ description = "Parse Python docstrings in reST, Google and Numpydoc format"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"mcp\""
+markers = "extra == \"enrich\" or extra == \"mcp\""
 files = [
     {file = "docstring_parser-0.18.0-py3-none-any.whl", hash = "sha256:b3fcbed555c47d8479be0796ef7e19c2670d428d72e96da63f3a40122860374b"},
     {file = "docstring_parser-0.18.0.tar.gz", hash = "sha256:292510982205c12b1248696f44959db3cdd1740237a968ea1e2e7a900eeb2015"},
@@ -1178,6 +1178,355 @@ test-full = ["adlfs", "aiohttp (!=4.0.0a0,!=4.0.0a1)", "backports-zstd ; python_
 tqdm = ["tqdm"]
 
 [[package]]
+name = "google-api-core"
+version = "2.32.0"
+description = "Google API client core library"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_api_core-2.32.0-py3-none-any.whl", hash = "sha256:ae1f0d58a6c8869350bf469f8eb3092e7f8c494a942d9525494afb6c162b0904"},
+    {file = "google_api_core-2.32.0.tar.gz", hash = "sha256:2b33aad226b19272458c46abfe5c5a38d9531ece0c44502129a1463ce83674ac"},
+]
+
+[package.dependencies]
+google-auth = ">=2.14.1,<3.0.0"
+googleapis-common-protos = ">=1.63.2,<2.0.0"
+grpcio = [
+    {version = ">=1.49.1,<2.0.0", optional = true, markers = "python_version >= \"3.11\" and extra == \"grpc\""},
+    {version = ">=1.75.1,<2.0.0", optional = true, markers = "python_version >= \"3.14\" and extra == \"grpc\""},
+]
+grpcio-status = [
+    {version = ">=1.49.1,<2.0.0", optional = true, markers = "python_version >= \"3.11\" and extra == \"grpc\""},
+    {version = ">=1.75.1,<2.0.0", optional = true, markers = "python_version >= \"3.14\" and extra == \"grpc\""},
+]
+proto-plus = [
+    {version = ">=1.24.0,<2.0.0"},
+    {version = ">=1.25.0,<2.0.0", markers = "python_version >= \"3.13\""},
+]
+protobuf = ">=5.29.6,<8.0.0"
+requests = ">=2.33.0,<3.0.0"
+
+[package.extras]
+async-rest = ["aiohttp (>=3.13.4)", "google-auth[aiohttp] (>=2.14.1,<3.0.0)"]
+grpc = ["grpcio (>=1.41.0,<2.0.0)", "grpcio (>=1.49.1,<2.0.0) ; python_version >= \"3.11\"", "grpcio (>=1.75.1,<2.0.0) ; python_version >= \"3.14\"", "grpcio-status (>=1.41.0,<2.0.0)", "grpcio-status (>=1.49.1,<2.0.0) ; python_version >= \"3.11\"", "grpcio-status (>=1.75.1,<2.0.0) ; python_version >= \"3.14\""]
+
+[[package]]
+name = "google-auth"
+version = "2.55.2"
+description = "Google Authentication Library"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_auth-2.55.2-py3-none-any.whl", hash = "sha256:d715f265f2cafc6a5f1bf0dc19870d20e3119f6f6682785a250bce3d03d38a3b"},
+    {file = "google_auth-2.55.2.tar.gz", hash = "sha256:97ae7790ff740f2bc9db60eb864a7804f4ac19f5f02c38b3d942f2fea6e9b9ae"},
+]
+
+[package.dependencies]
+cryptography = ">=38.0.3"
+pyasn1-modules = ">=0.2.1"
+requests = {version = ">=2.20.0,<3.0.0", optional = true, markers = "extra == \"requests\""}
+
+[package.extras]
+aiohttp = ["aiohttp (>=3.8.0,<4.0.0)", "requests (>=2.20.0,<3.0.0)"]
+cryptography = ["cryptography (>=38.0.3)"]
+enterprise-cert = ["cryptography (>=38.0.3)"]
+grpc = ["grpcio (>=1.59.0,<2.0.0) ; python_version < \"3.14\"", "grpcio (>=1.75.1,<2.0.0) ; python_version >= \"3.14\""]
+pyjwt = ["pyjwt (>=2.0)"]
+pyopenssl = ["cryptography (>=38.0.3)"]
+reauth = ["pyu2f (>=0.1.5)"]
+requests = ["requests (>=2.20.0,<3.0.0)"]
+rsa = ["rsa (>=3.1.4,<5)"]
+testing = ["aiohttp (>=3.8.0,<4.0.0)", "aioresponses", "flask", "freezegun", "grpcio (>=1.59.0,<2.0.0) ; python_version < \"3.14\"", "grpcio (>=1.75.1,<2.0.0) ; python_version >= \"3.14\"", "packaging", "pyjwt (>=2.0)", "pytest", "pytest-asyncio", "pytest-cov", "pytest-localserver", "pyu2f (>=0.1.5)", "requests (>=2.20.0,<3.0.0)", "responses", "urllib3"]
+urllib3 = ["packaging", "urllib3"]
+
+[[package]]
+name = "google-cloud-aiplatform"
+version = "1.161.0"
+description = "Vertex AI API client library"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_cloud_aiplatform-1.161.0-py2.py3-none-any.whl", hash = "sha256:e24c77461f046cdf846520ab943b7deccdbcbac98a143f24cd4dbab23a68950b"},
+    {file = "google_cloud_aiplatform-1.161.0.tar.gz", hash = "sha256:e520fb9c4b703dd5b44563b7c6d56724402eb6d4089918fdd6aef4184a4c38f9"},
+]
+
+[package.dependencies]
+certifi = ">=2023.7.22"
+docstring_parser = "<1"
+google-api-core = {version = ">=1.34.1,<2.0.dev0 || >=2.8.dev0,<3.0.0", extras = ["grpc"]}
+google-auth = ">=2.47.0,<3.0.0"
+google-cloud-bigquery = ">=1.15.0,<3.20.0 || >3.20.0,<4.0.0"
+google-cloud-resource-manager = ">=1.3.3,<3.0.0"
+google-cloud-storage = [
+    {version = ">=1.32.0,<4.0.0", markers = "python_version < \"3.13\""},
+    {version = ">=3.10.0,<4.0.0", markers = "python_version >= \"3.13\""},
+]
+google-genai = {version = ">=1.66.0,<3.0.0", markers = "python_version >= \"3.10\""}
+packaging = ">=14.3"
+proto-plus = ">=1.22.3,<2.0.0"
+protobuf = ">=3.20.2,<4.21.0 || >4.21.0,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4.21.4 || >4.21.4,<4.21.5 || >4.21.5,<7.0.0"
+pydantic = "<3"
+typing_extensions = "*"
+
+[package.extras]
+adk = ["google-adk (>=1.5.0,<3.0.0)"]
+adk-testing = ["absl-py", "aiohttp", "cloudpickle (>=3.0,<4.0)", "google-adk (>=1.5.0,<3.0.0)", "google-cloud-trace (<2)", "opentelemetry-exporter-gcp-logging (>=1.11.0a0,<2.0.0)", "opentelemetry-exporter-gcp-trace (<2)", "opentelemetry-exporter-otlp-proto-http (<2)", "opentelemetry-instrumentation-google-genai (>=0.3b0,<1.0.0)", "opentelemetry-sdk (<2)", "pydantic (>=2.11.1,<3)", "pytest-xdist", "typing_extensions"]
+ag2 = ["ag2[gemini]", "openinference-instrumentation-autogen (>=0.1.6,<0.2)"]
+ag2-testing = ["absl-py", "ag2[gemini]", "aiohttp", "cloudpickle (>=3.0,<4.0)", "google-cloud-trace (<2)", "openinference-instrumentation-autogen (>=0.1.6,<0.2)", "opentelemetry-exporter-gcp-logging (>=1.11.0a0,<2.0.0)", "opentelemetry-exporter-gcp-trace (<2)", "opentelemetry-exporter-otlp-proto-http (<2)", "opentelemetry-instrumentation-google-genai (>=0.3b0,<1.0.0)", "opentelemetry-sdk (<2)", "pydantic (>=2.11.1,<3)", "pytest-xdist", "typing_extensions"]
+agent-engines = ["aiohttp", "cloudpickle (>=3.0,<4.0)", "google-cloud-iam", "google-cloud-logging (<4)", "google-cloud-trace (<2)", "opentelemetry-exporter-gcp-logging (>=1.11.0a0,<2.0.0)", "opentelemetry-exporter-gcp-trace (<2)", "opentelemetry-exporter-otlp-proto-http (<2)", "opentelemetry-sdk (<2)", "packaging (>=24.0)", "pydantic (>=2.11.1,<3)", "typing_extensions"]
+autologging = ["mlflow (>=1.27.0) ; python_version >= \"3.13\"", "mlflow (>=1.27.0,<=2.16.0) ; python_version < \"3.13\""]
+cloud-profiler = ["tensorboard-plugin-profile (>=2.4.0,<2.18.0)", "werkzeug (>=2.0.0,<4.0.0)"]
+datasets = ["pyarrow (>=10.0.1) ; python_version == \"3.10\"", "pyarrow (>=10.0.1) ; python_version == \"3.11\"", "pyarrow (>=14.0.0) ; python_version >= \"3.12\"", "pyarrow (>=3.0.0,<8.0.0) ; python_version < \"3.10\""]
+endpoint = ["requests (>=2.28.1)", "requests-toolbelt (<=1.0.0)"]
+evaluation = ["jsonschema", "litellm (>=1.83.7,<1.86.0)", "pandas (>=1.0.0)", "pyyaml", "ruamel.yaml", "scikit-learn (<1.6.0) ; python_version <= \"3.10\"", "scikit-learn ; python_version > \"3.10\"", "tqdm (>=4.23.0)"]
+full = ["docker (>=5.0.3)", "explainable-ai-sdk (>=1.0.0) ; python_version < \"3.13\"", "fastapi (>=0.71.0,<=0.124.4)", "google-cloud-bigquery", "google-cloud-bigquery-storage", "google-vizier (>=0.1.6)", "httpx (>=0.23.0,<=0.28.1)", "immutabledict", "jsonschema", "lit-nlp (==0.4.0) ; python_version < \"3.13\"", "litellm (>=1.83.7,<1.86.0)", "mlflow (>=1.27.0) ; python_version >= \"3.13\"", "mlflow (>=1.27.0,<=2.16.0) ; python_version < \"3.13\"", "numpy (>=1.15.0)", "pandas (>=1.0.0)", "pyarrow (>=10.0.1) ; python_version == \"3.10\"", "pyarrow (>=10.0.1) ; python_version == \"3.11\"", "pyarrow (>=14.0.0) ; python_version >= \"3.12\"", "pyarrow (>=3.0.0,<8.0.0) ; python_version < \"3.10\"", "pyarrow (>=6.0.1)", "pyyaml", "pyyaml (>=5.3.1,<7)", "ray[default] (>=2.4,<2.5.dev0 || >2.9.0,!=2.9.1,!=2.9.2,<2.10.dev0 || ==2.33.* || >=2.42.dev0,<=2.42.0) ; python_version < \"3.11\"", "ray[default] (>=2.5,<=2.47.1) ; python_version == \"3.11\"", "requests (>=2.28.1)", "requests-toolbelt (<=1.0.0)", "ruamel.yaml", "scikit-learn (<1.6.0) ; python_version <= \"3.10\"", "scikit-learn ; python_version > \"3.10\"", "starlette (>=0.17.1)", "tensorboard-plugin-profile (>=2.4.0,<2.18.0)", "tensorflow (>=2.3.0,<3.0.0) ; python_version < \"3.13\"", "tensorflow (>=2.3.0,<3.0.0) ; python_version < \"3.13\"", "tqdm (>=4.23.0)", "urllib3 (>=1.21.1,<1.27)", "uvicorn[standard] (>=0.16.0)", "werkzeug (>=2.0.0,<4.0.0)"]
+langchain = ["langchain (>=1.0.0,<2.0.0)", "langchain-classic", "langchain-core (>=1.0.0,<2.0.0)", "langchain-google-genai (>=4.0.0,<4.2.3)", "langgraph (>=1.0.0,<2.0.0)", "openinference-instrumentation-langchain (>=0.1.19,<0.2)"]
+langchain-testing = ["absl-py", "aiohttp", "cloudpickle (>=3.0,<4.0)", "google-cloud-trace (<2)", "langchain (>=1.0.0,<2.0.0)", "langchain-classic", "langchain-core (>=1.0.0,<2.0.0)", "langchain-google-genai (>=4.0.0,<4.2.3)", "langgraph (>=1.0.0,<2.0.0)", "openinference-instrumentation-langchain (>=0.1.19,<0.2)", "opentelemetry-exporter-gcp-logging (>=1.11.0a0,<2.0.0)", "opentelemetry-exporter-gcp-trace (<2)", "opentelemetry-exporter-otlp-proto-http (<2)", "opentelemetry-instrumentation-google-genai (>=0.3b0,<1.0.0)", "opentelemetry-sdk (<2)", "pydantic (>=2.11.1,<3)", "pytest-xdist", "typing_extensions"]
+lit = ["explainable-ai-sdk (>=1.0.0) ; python_version < \"3.13\"", "lit-nlp (==0.4.0) ; python_version < \"3.13\"", "pandas (>=1.0.0)", "tensorflow (>=2.3.0,<3.0.0) ; python_version < \"3.13\""]
+llama-index = ["llama-index", "llama-index-llms-google-genai", "openinference-instrumentation-llama-index (>=3.0,<4.0)"]
+llama-index-testing = ["absl-py", "aiohttp", "cloudpickle (>=3.0,<4.0)", "google-cloud-trace (<2)", "llama-index", "llama-index-llms-google-genai", "openinference-instrumentation-llama-index (>=3.0,<4.0)", "opentelemetry-exporter-gcp-logging (>=1.11.0a0,<2.0.0)", "opentelemetry-exporter-gcp-trace (<2)", "opentelemetry-exporter-otlp-proto-http (<2)", "opentelemetry-instrumentation-google-genai (>=0.3b0,<1.0.0)", "opentelemetry-sdk (<2)", "pydantic (>=2.11.1,<3)", "pytest-xdist", "typing_extensions"]
+metadata = ["numpy (>=1.15.0)", "pandas (>=1.0.0)"]
+pipelines = ["pyyaml (>=5.3.1,<7)"]
+prediction = ["docker (>=5.0.3)", "fastapi (>=0.71.0,<=0.124.4)", "httpx (>=0.23.0,<=0.28.1)", "starlette (>=0.17.1)", "uvicorn[standard] (>=0.16.0)"]
+private-endpoints = ["requests (>=2.28.1)", "urllib3 (>=1.21.1,<1.27)"]
+ray = ["google-cloud-bigquery", "google-cloud-bigquery-storage", "immutabledict", "pandas (>=1.0.0)", "pyarrow (>=6.0.1)", "ray[default] (>=2.4,<2.5.dev0 || >2.9.0,!=2.9.1,!=2.9.2,<2.10.dev0 || ==2.33.* || >=2.42.dev0,<=2.42.0) ; python_version < \"3.11\"", "ray[default] (>=2.5,<=2.47.1) ; python_version == \"3.11\""]
+ray-testing = ["google-cloud-bigquery", "google-cloud-bigquery-storage", "immutabledict", "pandas (>=1.0.0)", "pyarrow (>=6.0.1)", "pytest-xdist", "ray[default] (>=2.4,<2.5.dev0 || >2.9.0,!=2.9.1,!=2.9.2,<2.10.dev0 || ==2.33.* || >=2.42.dev0,<=2.42.0) ; python_version < \"3.11\"", "ray[default] (>=2.5,<=2.47.1) ; python_version == \"3.11\"", "ray[train]", "scikit-learn (<1.6.0)", "tensorflow ; python_version < \"3.13\"", "torch (>=2.0.0,<2.1.0)", "xgboost", "xgboost_ray"]
+reasoningengine = ["aiohttp", "cloudpickle (>=3.0,<4.0)", "google-cloud-trace (<2)", "opentelemetry-exporter-gcp-logging (>=1.11.0a0,<2.0.0)", "opentelemetry-exporter-gcp-trace (<2)", "opentelemetry-exporter-otlp-proto-http (<2)", "opentelemetry-instrumentation-google-genai (>=0.3b0,<1.0.0)", "opentelemetry-sdk (<2)", "pydantic (>=2.11.1,<3)", "typing_extensions"]
+tensorboard = ["tensorboard-plugin-profile (>=2.4.0,<2.18.0)", "werkzeug (>=2.0.0,<4.0.0)"]
+testing = ["Pillow", "aiohttp", "bigframes ; python_version >= \"3.10\" and python_version < \"3.14\"", "docker (>=5.0.3)", "explainable-ai-sdk (>=1.0.0) ; python_version < \"3.13\"", "fastapi (>=0.71.0,<=0.124.4)", "google-api-core (>=2.11,<3.0.0)", "google-cloud-bigquery", "google-cloud-bigquery-storage", "google-cloud-iam", "google-vizier (>=0.1.6)", "google-vizier (>=0.1.6)", "grpcio-testing", "grpcio-tools (>=1.63.0) ; python_version >= \"3.13\"", "httpx (>=0.23.0,<=0.28.1)", "immutabledict", "immutabledict", "ipython", "jsonschema", "kfp (>=2.6.0,<3.0.0) ; python_version < \"3.13\"", "lit-nlp (==0.4.0) ; python_version < \"3.13\"", "litellm (>=1.83.7,<1.86.0)", "mlflow (>=1.27.0) ; python_version >= \"3.13\"", "mlflow (>=1.27.0,<=2.16.0) ; python_version < \"3.13\"", "mock", "nltk", "numpy (>=1.15.0)", "pandas (>=1.0.0)", "protobuf (<=5.29.4) ; python_version < \"3.14\"", "protobuf (>=5.29.4) ; python_version >= \"3.14\"", "pyarrow (>=10.0.1) ; python_version == \"3.10\"", "pyarrow (>=10.0.1) ; python_version == \"3.11\"", "pyarrow (>=14.0.0) ; python_version >= \"3.12\"", "pyarrow (>=3.0.0,<8.0.0) ; python_version < \"3.10\"", "pyarrow (>=6.0.1)", "pytest-asyncio", "pytest-cov", "pytest-xdist", "pyyaml", "pyyaml (>=5.3.1,<7)", "ray[default] (>=2.4,<2.5.dev0 || >2.9.0,!=2.9.1,!=2.9.2,<2.10.dev0 || ==2.33.* || >=2.42.dev0,<=2.42.0) ; python_version < \"3.11\"", "ray[default] (>=2.5,<=2.47.1) ; python_version == \"3.11\"", "requests (>=2.28.1)", "requests-toolbelt (<=1.0.0)", "requests-toolbelt (<=1.0.0)", "ruamel.yaml", "scikit-learn (<1.6.0) ; python_version <= \"3.10\"", "scikit-learn (<1.6.0) ; python_version <= \"3.10\"", "scikit-learn ; python_version > \"3.10\"", "scikit-learn ; python_version > \"3.10\"", "sentencepiece (>=0.2.0)", "starlette (>=0.17.1)", "tensorboard-plugin-profile (>=2.4.0,<2.18.0)", "tensorboard-plugin-profile (>=2.4.0,<2.18.0)", "tensorflow (==2.14.1) ; python_version <= \"3.11\"", "tensorflow (==2.19.0) ; python_version > \"3.11\" and python_version < \"3.13\"", "tensorflow (>=2.3.0,<3.0.0) ; python_version < \"3.13\"", "tensorflow (>=2.3.0,<3.0.0) ; python_version < \"3.13\"", "torch (>=2.0.0,<2.1.0) ; python_version <= \"3.11\"", "torch (>=2.2.0) ; python_version > \"3.11\" and python_version < \"3.13\"", "tqdm (>=4.23.0)", "urllib3 (>=1.21.1,<1.27)", "uvicorn[standard] (>=0.16.0)", "werkzeug (>=2.0.0,<4.0.0)", "werkzeug (>=2.0.0,<4.0.0)", "xgboost"]
+tokenization = ["sentencepiece (>=0.2.0)"]
+vizier = ["google-vizier (>=0.1.6)"]
+xai = ["tensorflow (>=2.3.0,<3.0.0) ; python_version < \"3.13\""]
+
+[[package]]
+name = "google-cloud-bigquery"
+version = "3.42.2"
+description = "Google BigQuery API client library"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_cloud_bigquery-3.42.2-py3-none-any.whl", hash = "sha256:41658c19e8ed5b83307011b4e55aca3b1f72052545a22788f1d637984615173f"},
+    {file = "google_cloud_bigquery-3.42.2.tar.gz", hash = "sha256:08d4b264e5ee4790f719724c76b538f204b7190999328a2f1a6a95eaab74ca39"},
+]
+
+[package.dependencies]
+google-api-core = {version = ">=2.25.0,<3.0.0", extras = ["grpc"]}
+google-auth = {version = ">=2.14.1,<3.0.0", extras = ["pyopenssl"]}
+google-cloud-core = ">=2.4.1,<3.0.0"
+google-resumable-media = ">=2.0.0,<3.0.0"
+packaging = ">=24.2.0"
+python-dateutil = ">=2.8.2,<3.0.0"
+requests = ">=2.21.0,<3.0.0"
+
+[package.extras]
+all = ["google-cloud-bigquery[bigquery-v2,bqstorage,geopandas,ipython,ipywidgets,matplotlib,opentelemetry,pandas,tqdm]"]
+bigquery-v2 = ["proto-plus (>=1.22.3,<2.0.0)", "protobuf (>=3.20.2,!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<7.0.0)"]
+bqstorage = ["google-cloud-bigquery-storage (>=2.18.0,<3.0.0)", "grpcio (>=1.47.0,<2.0.0)", "grpcio (>=1.49.1,<2.0.0) ; python_version >= \"3.11\"", "grpcio (>=1.75.1,<2.0.0) ; python_version >= \"3.14\"", "pyarrow (>=4.0.0)"]
+geopandas = ["Shapely (>=1.8.4,<3.0.0)", "geopandas (>=0.9.0,<2.0.0)"]
+ipython = ["bigquery-magics (>=0.6.0)", "ipython (>=7.23.1)"]
+ipywidgets = ["ipykernel (>=6.2.0)", "ipywidgets (>=7.7.1)"]
+matplotlib = ["matplotlib (>=3.10.3)"]
+opentelemetry = ["opentelemetry-api (>=1.1.0)", "opentelemetry-instrumentation (>=0.20b0)", "opentelemetry-sdk (>=1.1.0)"]
+pandas = ["db-dtypes (>=1.0.4,<2.0.0)", "grpcio (>=1.47.0,<2.0.0)", "grpcio (>=1.49.1,<2.0.0) ; python_version >= \"3.11\"", "grpcio (>=1.75.1,<2.0.0) ; python_version >= \"3.14\"", "pandas (>=1.3.0)", "pandas-gbq (>=0.26.1)", "pyarrow (>=3.0.0)"]
+tqdm = ["tqdm (>=4.23.4,<5.0.0)"]
+
+[[package]]
+name = "google-cloud-core"
+version = "2.6.0"
+description = "Google Cloud API client core library"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_cloud_core-2.6.0-py3-none-any.whl", hash = "sha256:6d63ac8e5eca6d9e4319d0a1e2265fadcd7f1049904378caecfa01cf52dd869e"},
+    {file = "google_cloud_core-2.6.0.tar.gz", hash = "sha256:e76149739f90fac1fc6757c09f47eaccb3145b54adbd7759b0f7c4b235f46c83"},
+]
+
+[package.dependencies]
+google-api-core = ">=2.11.0,<3.0.0"
+google-auth = ">=2.14.1,<2.24.0 || >2.24.0,<2.25.0 || >2.25.0,<3.0.0"
+
+[package.extras]
+grpc = ["grpcio (>=1.47.0,<2.0.0) ; python_version < \"3.14\"", "grpcio (>=1.75.1,<2.0.0) ; python_version >= \"3.14\"", "grpcio-status (>=1.47.0,<2.0.0)"]
+
+[[package]]
+name = "google-cloud-resource-manager"
+version = "1.18.0"
+description = "Google Cloud Resource Manager API client library"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_cloud_resource_manager-1.18.0-py3-none-any.whl", hash = "sha256:69bab144acd75878ebe44b720903dc3d140cb7d3be3261eaa8bc81e48afaff33"},
+    {file = "google_cloud_resource_manager-1.18.0.tar.gz", hash = "sha256:db689f800a14c66d041196a7fbb8bb8aae8dc87f28c2929e101a5ec766b15512"},
+]
+
+[package.dependencies]
+google-api-core = {version = ">=2.17.1,<3.0.0", extras = ["grpc"]}
+google-auth = ">=2.14.1,<2.24.0 || >2.24.0,<2.25.0 || >2.25.0,<3.0.0"
+grpc-google-iam-v1 = ">=0.14.0,<1.0.0"
+grpcio = [
+    {version = ">=1.59.0,<2.0.0"},
+    {version = ">=1.75.1,<2.0.0", markers = "python_version >= \"3.14\""},
+]
+proto-plus = [
+    {version = ">=1.22.3,<2.0.0"},
+    {version = ">=1.25.0,<2.0.0", markers = "python_version >= \"3.13\""},
+]
+protobuf = ">=4.25.8,<8.0.0"
+
+[[package]]
+name = "google-cloud-storage"
+version = "3.13.0"
+description = "Google Cloud Storage API client library"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_cloud_storage-3.13.0-py3-none-any.whl", hash = "sha256:648af3ef8a6acc674e1359d3c920c67eb89a7a5ab66b336bd3ac43fed6b5ab84"},
+    {file = "google_cloud_storage-3.13.0.tar.gz", hash = "sha256:d11d8706ea1520fba0f21043bcb7897caf7015d76ce1ad9a4f60237e4d7a9f6c"},
+]
+
+[package.dependencies]
+google-api-core = ">=2.27.0,<3.0.0"
+google-auth = ">=2.26.1,<3.0.0"
+google-cloud-core = ">=2.4.2,<3.0.0"
+google-crc32c = ">=1.6.0,<2.0.0"
+google-resumable-media = ">=2.7.2,<3.0.0"
+requests = ">=2.22.0,<3.0.0"
+
+[package.extras]
+grpc = ["google-api-core[grpc] (>=2.27.0,<3.0.0)", "grpc-google-iam-v1 (>=0.14.0,<1.0.0)", "grpcio (>=1.59.0,<2.0.0) ; python_version < \"3.14\"", "grpcio (>=1.75.1,<2.0.0) ; python_version >= \"3.14\"", "grpcio-status (>=1.59.0,<2.0.0) ; python_version < \"3.14\"", "grpcio-status (>=1.75.1,<2.0.0) ; python_version >= \"3.14\"", "proto-plus (>=1.22.3,<2.0.0) ; python_version < \"3.13\"", "proto-plus (>=1.25.0,<2.0.0) ; python_version >= \"3.13\"", "protobuf (>=4.25.8,<8.0.0)"]
+protobuf = ["protobuf (>=3.20.2,<7.0.0)"]
+testing = ["PyYAML", "black", "brotli", "coverage", "flake8", "google-cloud-iam", "google-cloud-kms", "google-cloud-pubsub", "google-cloud-testutils", "google-cloud-testutils", "mock", "numpy", "opentelemetry-sdk", "psutil", "py-cpuinfo", "pyopenssl", "pytest", "pytest-asyncio", "pytest-benchmark", "pytest-cov", "pytest-rerunfailures", "pytest-xdist"]
+tracing = ["opentelemetry-api (>=1.1.0,<2.0.0)"]
+
+[[package]]
+name = "google-crc32c"
+version = "1.8.0"
+description = "A python wrapper of the C library 'Google CRC32C'"
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_crc32c-1.8.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:0470b8c3d73b5f4e3300165498e4cf25221c7eb37f1159e221d1825b6df8a7ff"},
+    {file = "google_crc32c-1.8.0-cp310-cp310-macosx_12_0_x86_64.whl", hash = "sha256:119fcd90c57c89f30040b47c211acee231b25a45d225e3225294386f5d258288"},
+    {file = "google_crc32c-1.8.0-cp310-cp310-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:6f35aaffc8ccd81ba3162443fabb920e65b1f20ab1952a31b13173a67811467d"},
+    {file = "google_crc32c-1.8.0-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:864abafe7d6e2c4c66395c1eb0fe12dc891879769b52a3d56499612ca93b6092"},
+    {file = "google_crc32c-1.8.0-cp310-cp310-win_amd64.whl", hash = "sha256:db3fe8eaf0612fc8b20fa21a5f25bd785bc3cd5be69f8f3412b0ac2ffd49e733"},
+    {file = "google_crc32c-1.8.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:014a7e68d623e9a4222d663931febc3033c5c7c9730785727de2a81f87d5bab8"},
+    {file = "google_crc32c-1.8.0-cp311-cp311-macosx_12_0_x86_64.whl", hash = "sha256:86cfc00fe45a0ac7359e5214a1704e51a99e757d0272554874f419f79838c5f7"},
+    {file = "google_crc32c-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:19b40d637a54cb71e0829179f6cb41835f0fbd9e8eb60552152a8b52c36cbe15"},
+    {file = "google_crc32c-1.8.0-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:17446feb05abddc187e5441a45971b8394ea4c1b6efd88ab0af393fd9e0a156a"},
+    {file = "google_crc32c-1.8.0-cp311-cp311-win_amd64.whl", hash = "sha256:71734788a88f551fbd6a97be9668a0020698e07b2bf5b3aa26a36c10cdfb27b2"},
+    {file = "google_crc32c-1.8.0-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:4b8286b659c1335172e39563ab0a768b8015e88e08329fa5321f774275fc3113"},
+    {file = "google_crc32c-1.8.0-cp312-cp312-macosx_12_0_x86_64.whl", hash = "sha256:2a3dc3318507de089c5384cc74d54318401410f82aa65b2d9cdde9d297aca7cb"},
+    {file = "google_crc32c-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:14f87e04d613dfa218d6135e81b78272c3b904e2a7053b841481b38a7d901411"},
+    {file = "google_crc32c-1.8.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cb5c869c2923d56cb0c8e6bcdd73c009c36ae39b652dbe46a05eb4ef0ad01454"},
+    {file = "google_crc32c-1.8.0-cp312-cp312-win_amd64.whl", hash = "sha256:3cc0c8912038065eafa603b238abf252e204accab2a704c63b9e14837a854962"},
+    {file = "google_crc32c-1.8.0-cp313-cp313-macosx_12_0_arm64.whl", hash = "sha256:3ebb04528e83b2634857f43f9bb8ef5b2bbe7f10f140daeb01b58f972d04736b"},
+    {file = "google_crc32c-1.8.0-cp313-cp313-macosx_12_0_x86_64.whl", hash = "sha256:450dc98429d3e33ed2926fc99ee81001928d63460f8538f21a5d6060912a8e27"},
+    {file = "google_crc32c-1.8.0-cp313-cp313-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:3b9776774b24ba76831609ffbabce8cdf6fa2bd5e9df37b594221c7e333a81fa"},
+    {file = "google_crc32c-1.8.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:89c17d53d75562edfff86679244830599ee0a48efc216200691de8b02ab6b2b8"},
+    {file = "google_crc32c-1.8.0-cp313-cp313-win_amd64.whl", hash = "sha256:57a50a9035b75643996fbf224d6661e386c7162d1dfdab9bc4ca790947d1007f"},
+    {file = "google_crc32c-1.8.0-cp314-cp314-macosx_12_0_arm64.whl", hash = "sha256:e6584b12cb06796d285d09e33f63309a09368b9d806a551d8036a4207ea43697"},
+    {file = "google_crc32c-1.8.0-cp314-cp314-macosx_12_0_x86_64.whl", hash = "sha256:f4b51844ef67d6cf2e9425983274da75f18b1597bb2c998e1c0a0e8d46f8f651"},
+    {file = "google_crc32c-1.8.0-cp314-cp314-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:b0d1a7afc6e8e4635564ba8aa5c0548e3173e41b6384d7711a9123165f582de2"},
+    {file = "google_crc32c-1.8.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:8b3f68782f3cbd1bce027e48768293072813469af6a61a86f6bb4977a4380f21"},
+    {file = "google_crc32c-1.8.0-cp314-cp314-win_amd64.whl", hash = "sha256:d511b3153e7011a27ab6ee6bb3a5404a55b994dc1a7322c0b87b29606d9790e2"},
+    {file = "google_crc32c-1.8.0-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:ba6aba18daf4d36ad4412feede6221414692f44d17e5428bdd81ad3fc1eee5dc"},
+    {file = "google_crc32c-1.8.0-cp39-cp39-macosx_12_0_x86_64.whl", hash = "sha256:87b0072c4ecc9505cfa16ee734b00cd7721d20a0f595be4d40d3d21b41f65ae2"},
+    {file = "google_crc32c-1.8.0-cp39-cp39-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:3d488e98b18809f5e322978d4506373599c0c13e6c5ad13e53bb44758e18d215"},
+    {file = "google_crc32c-1.8.0-cp39-cp39-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:01f126a5cfddc378290de52095e2c7052be2ba7656a9f0caf4bcd1bfb1833f8a"},
+    {file = "google_crc32c-1.8.0-cp39-cp39-win_amd64.whl", hash = "sha256:61f58b28e0b21fcb249a8247ad0db2e64114e201e2e9b4200af020f3b6242c9f"},
+    {file = "google_crc32c-1.8.0-pp311-pypy311_pp73-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:87fa445064e7db928226b2e6f0d5304ab4cd0339e664a4e9a25029f384d9bb93"},
+    {file = "google_crc32c-1.8.0-pp311-pypy311_pp73-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:f639065ea2042d5c034bf258a9f085eaa7af0cd250667c0635a3118e8f92c69c"},
+    {file = "google_crc32c-1.8.0.tar.gz", hash = "sha256:a428e25fb7691024de47fecfbff7ff957214da51eddded0da0ae0e0f03a2cf79"},
+]
+
+[[package]]
+name = "google-genai"
+version = "2.12.1"
+description = "GenAI Python SDK"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_genai-2.12.1-py3-none-any.whl", hash = "sha256:686d5ec39bda345151d3ed1bac3915f01f49138b1ea519af2eb98f11cc55ebc4"},
+    {file = "google_genai-2.12.1.tar.gz", hash = "sha256:78c25217885d63dc430ca7c4526853512b164a25a93a8a0d0af5b85971aa1db0"},
+]
+
+[package.dependencies]
+anyio = ">=4.8.0,<5.0.0"
+distro = ">=1.7.0,<2"
+google-auth = {version = ">=2.48.1,<2.56.0", extras = ["requests"]}
+httpx = ">=0.28.1,<1.0.0"
+pydantic = ">=2.12.5,<3.0.0"
+requests = ">=2.28.1,<3.0.0"
+sniffio = "*"
+tenacity = ">=8.2.3,<9.2.0"
+typing-extensions = ">=4.14.0,<5.0.0"
+websockets = ">=13.0.0,<17.0"
+
+[package.extras]
+aiohttp = ["aiohttp (>=3.10.11,<4.0.0)"]
+local-tokenizer = ["pillow", "protobuf", "sentencepiece (>=0.2.0)", "torch", "torchvision", "transformers"]
+pyopenssl = ["pyopenssl"]
+
+[[package]]
+name = "google-resumable-media"
+version = "2.10.0"
+description = "Utilities for Google Media Downloads and Resumable Uploads"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "google_resumable_media-2.10.0-py3-none-any.whl", hash = "sha256:88152884bee37b2bf36a0ab81ad8c7fd12212c9803dd981d77c1b35b02d34e7c"},
+    {file = "google_resumable_media-2.10.0.tar.gz", hash = "sha256:e324bc9d0fdae4c52a08ae90456edc4e71ece858399e1217ac0eb3a51d6bc6ee"},
+]
+
+[package.dependencies]
+google-crc32c = ">=1.0.0,<2.0.0"
+
+[package.extras]
+aiohttp = ["aiohttp (>=3.6.2,<4.0.0)", "google-auth (>=1.22.0,<2.0.0)"]
+requests = ["requests (>=2.18.0,<3.0.0)"]
+
+[[package]]
+name = "googleapis-common-protos"
+version = "1.75.0"
+description = "Common protobufs used in Google APIs"
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "googleapis_common_protos-1.75.0-py3-none-any.whl", hash = "sha256:961ed60399c457ceb0ee8f285a84c870aabc9c6a832b9d37bb281b5bebde43ed"},
+    {file = "googleapis_common_protos-1.75.0.tar.gz", hash = "sha256:53a062ff3c32552fbd62c11fe23768b78e4ddf0494d5e5fd97d3f4689c75fbbd"},
+]
+
+[package.dependencies]
+grpcio = {version = ">=1.44.0,<2.0.0", optional = true, markers = "extra == \"grpc\""}
+protobuf = ">=4.25.8,<8.0.0"
+
+[package.extras]
+grpc = ["grpcio (>=1.44.0,<2.0.0)"]
+
+[[package]]
 name = "griffelib"
 version = "2.1.0"
 description = "Signatures for entire Python programs. Extract the structure, the frame, the skeleton of your project, to generate API documentation or find breaking changes in your API."
@@ -1192,6 +1541,110 @@ files = [
 
 [package.extras]
 pypi = ["pip (>=24.0)", "platformdirs (>=4.2)", "wheel (>=0.42)"]
+
+[[package]]
+name = "grpc-google-iam-v1"
+version = "0.14.4"
+description = "IAM API client library"
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "grpc_google_iam_v1-0.14.4-py3-none-any.whl", hash = "sha256:412facc320fcbd94034b4df3d557662051d4d8adfa86e0ddb4dca70a3f739964"},
+    {file = "grpc_google_iam_v1-0.14.4.tar.gz", hash = "sha256:392b3796947ed6334e61171d9ab06bf7eb357f554e5fc7556ad7aab6d0e17038"},
+]
+
+[package.dependencies]
+googleapis-common-protos = {version = ">=1.63.2,<2.0.0", extras = ["grpc"]}
+grpcio = ">=1.44.0,<2.0.0"
+protobuf = ">=4.25.8,<8.0.0"
+
+[[package]]
+name = "grpcio"
+version = "1.82.1"
+description = "HTTP/2-based RPC framework"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "grpcio-1.82.1-cp310-cp310-linux_armv7l.whl", hash = "sha256:91859d1cac5f47caec5fc40e9f827500cdb54ce5b36450dc9a65616b5af49c17"},
+    {file = "grpcio-1.82.1-cp310-cp310-macosx_11_0_universal2.whl", hash = "sha256:c80c9741dcef192f669876a81957cf7713b441c2f0c43631350d75fa49321d31"},
+    {file = "grpcio-1.82.1-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:b89cff456796d2f0581783726ad017a2c70aff2d27b0f05504c34e2e417f7560"},
+    {file = "grpcio-1.82.1-cp310-cp310-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:d6e8a08f7038ba7a77f71e250804e4aba84fe91d22cfc54ff43c07b7529c4728"},
+    {file = "grpcio-1.82.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:50fd2fe83426b1b1c6cdc4d72d555223b7dddf8ce07c5bac218b13fc6d684c6f"},
+    {file = "grpcio-1.82.1-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:b758540a24d5394a9c578bf9f6126389f474b106ac3d9df1d53de56cb14c9fd9"},
+    {file = "grpcio-1.82.1-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:c4ba4aac238f685743575d9d700003ac16537cce26e7c774993134f530652464"},
+    {file = "grpcio-1.82.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:ed6fc621d6f366c88a60f0b971d5afd21d441d9aa561ee688de5b7acdb2cf901"},
+    {file = "grpcio-1.82.1-cp310-cp310-win32.whl", hash = "sha256:bd2f45e46fff5b91c10997d0743a987517a7dde67c64c592835c2dcaac66f587"},
+    {file = "grpcio-1.82.1-cp310-cp310-win_amd64.whl", hash = "sha256:5e171d5f0d6a0af78ea7512783f170a44f80c165259d8773e3a354a7f991f2b5"},
+    {file = "grpcio-1.82.1-cp311-cp311-linux_armv7l.whl", hash = "sha256:0ddb18a9a9e1f46692b3567ae4abb3f8d117ce6afea48650f8eca06d8ab5d06f"},
+    {file = "grpcio-1.82.1-cp311-cp311-macosx_11_0_universal2.whl", hash = "sha256:cf855b1af246720f567b0ce5d0724d45dfa4188eecc3296a2a69257b11b9e94b"},
+    {file = "grpcio-1.82.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:ddb30cb13e25bc13cea70ffc69d6d90c49d36ea6c1d4549e6912f70177834cac"},
+    {file = "grpcio-1.82.1-cp311-cp311-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:1e822b2774f719c017cbe700b6e47173b6ae290fb84906f52a5a3c2c60b62e1e"},
+    {file = "grpcio-1.82.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:5dafb1ece8ed45dee7c738f166ec82e19673221ed5ab8967f72858a4685345b2"},
+    {file = "grpcio-1.82.1-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:e06503106e7271e0a49fd5a1ac04747f1e47e87d900476db6fe45bc87ee411f4"},
+    {file = "grpcio-1.82.1-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:ff99bc8cafb6a952201c37b995f425e641c93ffa6e072258525feab57290141d"},
+    {file = "grpcio-1.82.1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:644ae1b94266ac785330f4590a69e52b6a7eb73029043a02209db81c81397d69"},
+    {file = "grpcio-1.82.1-cp311-cp311-win32.whl", hash = "sha256:e203d2e19d471630084a16c815616f8211dff21c268ab3c5f5bf38417832e074"},
+    {file = "grpcio-1.82.1-cp311-cp311-win_amd64.whl", hash = "sha256:0d8299c285fe6cc6a1f56badf8d3bc5078c8d20273ee64bafa3783b4bc29a769"},
+    {file = "grpcio-1.82.1-cp312-cp312-linux_armv7l.whl", hash = "sha256:c09bd5fa0d5b1fbd773ec349fe61441c3e4ebf168c229aa7538a820bdfad6a58"},
+    {file = "grpcio-1.82.1-cp312-cp312-macosx_11_0_universal2.whl", hash = "sha256:1eae24810720734598e3e6a1a528d5de0f265fe3fc86575e9ecce424b9ec7379"},
+    {file = "grpcio-1.82.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:a6bd5daf5bde7b24d7ad2cbaf8bf9eac620d96222016bb5e7ddde930dec0673f"},
+    {file = "grpcio-1.82.1-cp312-cp312-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:1ecfde669cb687ac020d31ff76debe5dc7a62213335f02262eb6625628da1c03"},
+    {file = "grpcio-1.82.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:011c8badee95734dee8bf05ce3464756a0ac3ebb8d443afd20c0e2b5e4640ad9"},
+    {file = "grpcio-1.82.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:b85f4564926fb23114d239392bdcae200db1e6179629edd7d7ab0ab89c96a197"},
+    {file = "grpcio-1.82.1-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:2c0c8270833395644c3fe6b6a806397955a2bc0538000a19a78b90c05a6c16e0"},
+    {file = "grpcio-1.82.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:2ba199205ff46c7778290fe1673c91ac8e7e45678dd5c86e9e56fa33ec8788f6"},
+    {file = "grpcio-1.82.1-cp312-cp312-win32.whl", hash = "sha256:06127691866e295c14e84a1fb86356dd962254f6abd0da4ca4b001eea9e89438"},
+    {file = "grpcio-1.82.1-cp312-cp312-win_amd64.whl", hash = "sha256:1fa3223a3a2e1db74f4c2b255189eb7ea875dfba56e221d252ee3fc7b204778e"},
+    {file = "grpcio-1.82.1-cp313-cp313-linux_armv7l.whl", hash = "sha256:b454a2d97bfab7565683a02345f86bd182ab69fd7c2bdb7414171e7538f266b1"},
+    {file = "grpcio-1.82.1-cp313-cp313-macosx_11_0_universal2.whl", hash = "sha256:3dde70abfc80b3be11de53ba0d601c439e7fb2afd3583ad1788d1146bec92fdc"},
+    {file = "grpcio-1.82.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:f5523099c98c292ea1ae08e617249db760c56a78f8deae879027fe7d1ffbcbf6"},
+    {file = "grpcio-1.82.1-cp313-cp313-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:5e5c4dc0a59b0f8490a6bdfd6fc8395b9d8ad8a8407c7d67ca7b5bba15c0877f"},
+    {file = "grpcio-1.82.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:c40d94ba820329cc191981bc22fa6f6eed0799c6d921f3c6709521d59d4a2fd7"},
+    {file = "grpcio-1.82.1-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:4c816180e31e273caaec6f8bd86a8392499d5bbb26f41da44e3dce48bde69095"},
+    {file = "grpcio-1.82.1-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:e31fd780b261830720cb70b0fd8f0aa51d49e75a66d7464ad2e31d4b765f2580"},
+    {file = "grpcio-1.82.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:9d76152d7c31d7210d4a106e5d8b64da5bba5d6abf11be30e2f7b0a0c59bbcbf"},
+    {file = "grpcio-1.82.1-cp313-cp313-win32.whl", hash = "sha256:38e9dcb5258226fb3282630b31b16a968df52c8c6ad514af540646e0a4578f8a"},
+    {file = "grpcio-1.82.1-cp313-cp313-win_amd64.whl", hash = "sha256:3dbfb52c36d9511ac2b8e6c94fdde837b393ae520cc321f52a333a2deedf5a90"},
+    {file = "grpcio-1.82.1-cp314-cp314-linux_armv7l.whl", hash = "sha256:35f990f7784c8fd2872644f07f96ebb4d9e48e145a190ab80d0280af91a1bfb2"},
+    {file = "grpcio-1.82.1-cp314-cp314-macosx_11_0_universal2.whl", hash = "sha256:46536a4a1f4434df3c851b9254ff6fc7df5705b273681a15ca277d5921c178a0"},
+    {file = "grpcio-1.82.1-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:d6650a7c1ebb7921c70e12a385439a8118efb99e669fa9ed31cf25db1843937c"},
+    {file = "grpcio-1.82.1-cp314-cp314-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:b8e110c66df5204c0506d6c8787b35d48b8b699ef5aa366d6c4d67325c67fe9a"},
+    {file = "grpcio-1.82.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:f853eae07235a51a27bb5d6a9a175a59ca55dc9b99edc6ce2f76f07332d333ae"},
+    {file = "grpcio-1.82.1-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:60b0f2c95337694fc094b77d9f60f50566c84b5677393e342eb98daeee242d98"},
+    {file = "grpcio-1.82.1-cp314-cp314-musllinux_1_2_i686.whl", hash = "sha256:b064fc444812bdaa9825d33c26f8d732d63ee6a5d78557c1faf92c98687fed27"},
+    {file = "grpcio-1.82.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:7d7ede11d747b4e1bd05e3bc0260e155b65a88735a895a10f6521f19b889511e"},
+    {file = "grpcio-1.82.1-cp314-cp314-win32.whl", hash = "sha256:3d21f19838dc255ecbb79321b15ae9b98fbddff4c3d4aedb0a81bdd7f4ab572a"},
+    {file = "grpcio-1.82.1-cp314-cp314-win_amd64.whl", hash = "sha256:e20f1edbb15f99e3128ec86433f9785fd5a451d8f115e74fe0056134f092a9d5"},
+    {file = "grpcio-1.82.1.tar.gz", hash = "sha256:707b24abd90fcb1e45bcc080577da1dbf9971d107490589b9539af8e1e77b4b5"},
+]
+
+[package.dependencies]
+typing-extensions = ">=4.12,<5.0"
+
+[package.extras]
+protobuf = ["grpcio-tools (>=1.82.1)"]
+
+[[package]]
+name = "grpcio-status"
+version = "1.81.1"
+description = "Status proto mapping for gRPC"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "grpcio_status-1.81.1-py3-none-any.whl", hash = "sha256:08072fa9995f4a95c647fc6f4f85e2411573d00087bcabdf30f260114338f232"},
+    {file = "grpcio_status-1.81.1.tar.gz", hash = "sha256:9389a03e746017b10f0630c064289201458f3ce01f5d7ef4b0bebc1ef6cf82ad"},
+]
+
+[package.dependencies]
+googleapis-common-protos = ">=1.5.5"
+grpcio = ">=1.81.1"
+protobuf = ">=6.33.5,<8.0.0"
 
 [[package]]
 name = "h11"
@@ -1382,7 +1835,7 @@ description = "Read metadata from Python packages"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"enrich\" or (extra == \"mcp\" or extra == \"enrich\") and python_version == \"3.11\""
+markers = "extra == \"enrich\" or (extra == \"enrich\" or extra == \"mcp\") and python_version == \"3.11\""
 files = [
     {file = "importlib_metadata-9.0.0-py3-none-any.whl", hash = "sha256:2d21d1cc5a017bd0559e36150c21c830ab1dc304dedd1b7ea85d20f45ef3edd7"},
     {file = "importlib_metadata-9.0.0.tar.gz", hash = "sha256:a4f57ab599e6a2e3016d7595cfd72eb4661a5106e787a95bcc90c7105b831efc"},
@@ -1773,6 +2226,7 @@ files = [
 aiohttp = ">=3.10"
 click = "*"
 fastuuid = ">=0.13.0"
+google-cloud-aiplatform = {version = ">=1.38.0", optional = true, markers = "extra == \"google\""}
 httpx = ">=0.23.0"
 importlib-metadata = ">=6.8.0"
 jinja2 = ">=3.1.2,<4.0.0"
@@ -2423,6 +2877,46 @@ files = [
 ]
 
 [[package]]
+name = "proto-plus"
+version = "1.28.1"
+description = "Beautiful, Pythonic protocol buffers"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "proto_plus-1.28.1-py3-none-any.whl", hash = "sha256:6660f5f1970874bdcfc3088b435188a36a37bd3596668f7d726417c4ae8cfbed"},
+    {file = "proto_plus-1.28.1.tar.gz", hash = "sha256:832e68e7fe064cf90ab153b6e5eb935b27891bb89aaeb68b115e9b702f6cb168"},
+]
+
+[package.dependencies]
+protobuf = ">=4.25.8,<8.0.0"
+
+[package.extras]
+testing = ["google-api-core (>=1.31.5)"]
+
+[[package]]
+name = "protobuf"
+version = "6.33.6"
+description = ""
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "protobuf-6.33.6-cp310-abi3-win32.whl", hash = "sha256:7d29d9b65f8afef196f8334e80d6bc1d5d4adedb449971fefd3723824e6e77d3"},
+    {file = "protobuf-6.33.6-cp310-abi3-win_amd64.whl", hash = "sha256:0cd27b587afca21b7cfa59a74dcbd48a50f0a6400cfb59391340ad729d91d326"},
+    {file = "protobuf-6.33.6-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:9720e6961b251bde64edfdab7d500725a2af5280f3f4c87e57c0208376aa8c3a"},
+    {file = "protobuf-6.33.6-cp39-abi3-manylinux2014_aarch64.whl", hash = "sha256:e2afbae9b8e1825e3529f88d514754e094278bb95eadc0e199751cdd9a2e82a2"},
+    {file = "protobuf-6.33.6-cp39-abi3-manylinux2014_s390x.whl", hash = "sha256:c96c37eec15086b79762ed265d59ab204dabc53056e3443e702d2681f4b39ce3"},
+    {file = "protobuf-6.33.6-cp39-abi3-manylinux2014_x86_64.whl", hash = "sha256:e9db7e292e0ab79dd108d7f1a94fe31601ce1ee3f7b79e0692043423020b0593"},
+    {file = "protobuf-6.33.6-cp39-cp39-win32.whl", hash = "sha256:bd56799fb262994b2c2faa1799693c95cc2e22c62f56fb43af311cae45d26f0e"},
+    {file = "protobuf-6.33.6-cp39-cp39-win_amd64.whl", hash = "sha256:f443a394af5ed23672bc6c486be138628fbe5c651ccbc536873d7da23d1868cf"},
+    {file = "protobuf-6.33.6-py3-none-any.whl", hash = "sha256:77179e006c476e69bf8e8ce866640091ec42e1beb80b213c3900006ecfba6901"},
+    {file = "protobuf-6.33.6.tar.gz", hash = "sha256:a6768d25248312c297558af96a9f9c929e8c4cee0659cb07e780731095f38135"},
+]
+
+[[package]]
 name = "py-key-value-aio"
 version = "0.4.5"
 description = "Async Key-Value Store - A pluggable interface for KV Stores"
@@ -2470,13 +2964,42 @@ vault = ["hvac (>=2.3.0)", "types-hvac (>=2.3.0)"]
 wrappers-encryption = ["cryptography (>=45.0.0)"]
 
 [[package]]
+name = "pyasn1"
+version = "0.6.4"
+description = "Pure-Python implementation of ASN.1 types and DER/BER/CER codecs (X.208)"
+optional = true
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "pyasn1-0.6.4-py3-none-any.whl", hash = "sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b"},
+    {file = "pyasn1-0.6.4.tar.gz", hash = "sha256:9c447d8431c947fe4c8febc4ed9e760bc29011a5b01e5c74b67025bd9fb8ce81"},
+]
+
+[[package]]
+name = "pyasn1-modules"
+version = "0.4.2"
+description = "A collection of ASN.1-based protocols modules"
+optional = true
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "pyasn1_modules-0.4.2-py3-none-any.whl", hash = "sha256:29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a"},
+    {file = "pyasn1_modules-0.4.2.tar.gz", hash = "sha256:677091de870a80aae844b1ca6134f54652fa2c8c5a52aa396440ac3106e941e6"},
+]
+
+[package.dependencies]
+pyasn1 = ">=0.6.1,<0.7.0"
+
+[[package]]
 name = "pycparser"
 version = "3.0"
 description = "C parser in Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"mcp\" and platform_python_implementation != \"PyPy\" and implementation_name != \"PyPy\""
+markers = "(extra == \"mcp\" or extra == \"enrich\") and platform_python_implementation != \"PyPy\" and implementation_name != \"PyPy\""
 files = [
     {file = "pycparser-3.0-py3-none-any.whl", hash = "sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992"},
     {file = "pycparser-3.0.tar.gz", hash = "sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"},
@@ -2731,6 +3254,22 @@ pygments = ">=2.7.2"
 
 [package.extras]
 dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "requests", "setuptools", "xmlschema"]
+
+[[package]]
+name = "python-dateutil"
+version = "2.9.0.post0"
+description = "Extensions to the standard Python datetime module"
+optional = true
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3"},
+    {file = "python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"},
+]
+
+[package.dependencies]
+six = ">=1.5"
 
 [[package]]
 name = "python-discovery"
@@ -3301,6 +3840,19 @@ files = [
 ]
 
 [[package]]
+name = "six"
+version = "1.17.0"
+description = "Python 2 and 3 compatibility utilities"
+optional = true
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
+    {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
+]
+
+[[package]]
 name = "sniffio"
 version = "1.3.1"
 description = "Sniff out which async library your code is running under"
@@ -3356,6 +3908,23 @@ typing-extensions = {version = ">=4.10.0", markers = "python_version < \"3.13\""
 
 [package.extras]
 full = ["httpx (>=0.27.0,<0.29.0)", "httpx2 (>=2.0.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
+
+[[package]]
+name = "tenacity"
+version = "9.1.4"
+description = "Retry code until it succeeds"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"enrich\""
+files = [
+    {file = "tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55"},
+    {file = "tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a"},
+]
+
+[package.extras]
+doc = ["reno", "sphinx"]
+test = ["pytest", "tornado (>=4.5)", "typeguard"]
 
 [[package]]
 name = "tiktoken"
@@ -3733,7 +4302,7 @@ description = "An implementation of the WebSocket Protocol (RFC 6455 & 7692)"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"mcp\""
+markers = "extra == \"enrich\" or extra == \"mcp\""
 files = [
     {file = "websockets-16.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:04cdd5d2d1dacbad0a7bf36ccbcd3ccd5a30ee188f2560b7a62a30d14107b31a"},
     {file = "websockets-16.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:8ff32bb86522a9e5e31439a58addbb0166f0204d64066fb955265c4e214160f0"},
@@ -3925,7 +4494,7 @@ description = "Backport of pathlib-compatible object wrapper for zip files"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"enrich\" or (extra == \"mcp\" or extra == \"enrich\") and python_version == \"3.11\""
+markers = "extra == \"enrich\" or (extra == \"enrich\" or extra == \"mcp\") and python_version == \"3.11\""
 files = [
     {file = "zipp-4.1.0-py3-none-any.whl", hash = "sha256:25ad4e16390cd314347dd8f1de67a2ac538ae658ed4ab9db16029c07c188e97f"},
     {file = "zipp-4.1.0.tar.gz", hash = "sha256:4cb57381f544315db7688e976e922a2b18cdb513d21cc194eb42232ba2a3e602"},
@@ -3946,4 +4515,4 @@ mcp = ["fastmcp"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "b3fb2e166bfc6362a693769ac74b4d52ef1142fa222675e9a229944eecf51890"
+content-hash = "8bddf2b2e3acb200acd740f0f75970e1bc6862842b438a664fcf94cf4a24f693"

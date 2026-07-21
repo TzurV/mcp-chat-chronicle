@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-enrich = ["litellm (>=1.74,<2.0)"]
+enrich = ["litellm[google] (>=1.74,<2.0)"]
 mcp = ["fastmcp (>=2.0,<4.0)"]
 
 [project.urls]
