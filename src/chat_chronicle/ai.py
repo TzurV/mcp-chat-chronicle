@@ -449,7 +449,12 @@ class LiteLLMClient:
                 api_key=request.api_key,
             )
             if request.reasoning_effort is not None:
-                completion_kwargs["reasoning_effort"] = request.reasoning_effort
+                if request.model.startswith("lm_studio/"):
+                    completion_kwargs["extra_body"] = {
+                        "reasoning_effort": request.reasoning_effort
+                    }
+                else:
+                    completion_kwargs["reasoning_effort"] = request.reasoning_effort
             response = await litellm.acompletion(**completion_kwargs)
             choices = getattr(response, "choices", None)
             if not choices or getattr(choices[0], "message", None) is None:

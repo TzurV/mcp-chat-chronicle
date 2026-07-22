@@ -100,6 +100,31 @@ def test_adapter_passes_reasoning_effort_and_normalizes_finish_reason(
     }
 
 
+def test_adapter_passes_lm_studio_reasoning_effort_in_request_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    async def completion(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"result":"ok"}'))],
+            model="lm_studio/qwen3.5-4b",
+        )
+
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(acompletion=completion))
+    request = CompletionRequest(
+        **{
+            **_request().__dict__,
+            "model": "lm_studio/qwen3.5-4b",
+            "reasoning_effort": "none",
+        }
+    )
+    asyncio.run(LiteLLMClient().complete(request))
+    assert "reasoning_effort" not in captured
+    assert captured["extra_body"] == {"reasoning_effort": "none"}
+
+
 def test_lm_studio_route_propagates_api_base_without_key_and_reports_route_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
