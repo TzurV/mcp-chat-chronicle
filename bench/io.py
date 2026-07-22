@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -36,7 +37,7 @@ def atomic_json(path: Path, value: Any) -> None:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        _replace_with_retry(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -53,10 +54,22 @@ def atomic_text(path: Path, value: str) -> None:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        _replace_with_retry(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def _replace_with_retry(source: str, destination: Path) -> None:
+    """Tolerate brief Windows sharing violations during atomic finalization."""
+    for attempt in range(5):
+        try:
+            os.replace(source, destination)
+            return
+        except OSError as exc:
+            if getattr(exc, "winerror", None) not in {5, 32} or attempt == 4:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def checksums(root: Path, *, excluded: set[str] | None = None) -> dict[str, str]:

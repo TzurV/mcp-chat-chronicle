@@ -21,7 +21,7 @@ from bench.core import (
     verify,
 )
 from bench.implementation import ImplementationIdentity
-from bench.io import deterministic_zip, safe_extract, verify_checksums, write_checksums
+from bench.io import atomic_json, deterministic_zip, safe_extract, verify_checksums, write_checksums
 from bench.judge import RUBRICS, provider_judge_schema, score_with_judge
 from bench.models import JUDGE_RATIONALE_MAX_LENGTH, EvaluationConfig, JudgeResult
 from bench.paths import resolve_member
@@ -50,6 +50,30 @@ def test_candidate_text_may_use_provenance_words_without_defining_provenance(
     )
     with pytest.raises(ValueError, match="forbidden provenance"):
         _scan_leakage(tmp_path, [])
+
+
+def test_atomic_json_retries_windows_sharing_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "result.json"
+    real_replace = os.replace
+    calls = 0
+
+    def sharing_violation_once(source: str, target: Path) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            error = PermissionError("synthetic sharing violation")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        real_replace(source, target)
+
+    monkeypatch.setattr("bench.io.os.replace", sharing_violation_once)
+
+    atomic_json(destination, {"status": "complete"})
+
+    assert calls == 2
+    assert json.loads(destination.read_text(encoding="utf-8")) == {"status": "complete"}
 
 
 def config_data() -> dict[str, object]:
