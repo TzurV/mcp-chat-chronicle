@@ -14,6 +14,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
@@ -275,6 +276,14 @@ def _profile_identity(profile: Any) -> dict[str, Any]:
     return identity
 
 
+def _candidate_identity(config: EvaluationConfig) -> dict[str, Any]:
+    """Keep the accepted implicit-local identity stable while naming hosted execution."""
+    identity = config.candidate.model_dump(mode="json")
+    if config.candidate.execution == "local-artifact":
+        identity.pop("execution", None)
+    return identity
+
+
 def _bundle_manifest(
     config: EvaluationConfig,
     cases: list[BundleCase],
@@ -291,7 +300,7 @@ def _bundle_manifest(
         "scope": scope.model_dump(mode="json"),
         "cases": entries,
         "application_version": application_version,
-        "required_candidate": config.candidate.model_dump(mode="json"),
+        "required_candidate": _candidate_identity(config),
         "required_profile": _profile_identity(profile),
         "content_id": digest(
             {"scope": scope.model_dump(mode="json"), "cases": entries}
@@ -341,7 +350,15 @@ async def generate(
     client: LLMClient | None = None,
     retry_failures: bool = False,
     implementation_probe: Callable[[], ImplementationIdentity] | None = None,
+    allow_remote: bool = False,
+    confirm_private_eval: bool = False,
 ) -> dict[str, Any]:
+    if config.candidate.execution == "hosted-api" and not (
+        allow_remote and confirm_private_eval
+    ):
+        raise ValueError(
+            "hosted candidate generation requires --allow-remote --confirm-private-eval"
+        )
     client = client or LiteLLMClient()
     with tempfile.TemporaryDirectory() as temporary:
         bundle = _open_package(bundle_path, Path(temporary))
@@ -360,8 +377,8 @@ async def generate(
         models = load_model_catalog(_relative(config_path, config.model_catalog))
         profile = models.profiles[config.candidate.profile]
         resolved = resolve_model(profile)
-        if manifest.get("required_candidate") != config.candidate.model_dump(
-            mode="json"
+        if manifest.get("required_candidate") != _candidate_identity(
+            config
         ) or manifest.get("required_profile") != _profile_identity(profile):
             raise ValueError("candidate configuration does not match prepared bundle")
         _validate_artifact(config, config_path)
@@ -391,7 +408,7 @@ async def generate(
             base_identity = digest(
                 {
                     "case": case.fingerprint,
-                    "candidate": config.candidate.model_dump(mode="json"),
+                    "candidate": _candidate_identity(config),
                     "profile": _profile_identity(profile),
                 }
             )
@@ -428,6 +445,7 @@ async def generate(
                     api_base=profile.api_base,
                     api_key=resolved.get("api_key"),
                     context_window=profile.context_window,
+                    reasoning_effort=profile.reasoning_effort,
                 )
                 response = await client.complete(request)
                 if (
@@ -477,6 +495,8 @@ async def generate(
 
 
 def _validate_artifact(config: EvaluationConfig, config_path: Path) -> None:
+    if config.candidate.execution == "hosted-api":
+        return
     if not config.candidate.artifact_path:
         raise ValueError("candidate artifact_path is required for generation preflight")
     raw = Path(config.candidate.artifact_path)
@@ -586,6 +606,22 @@ def package_candidate(
     models = load_model_catalog(_relative(config_path, config.model_catalog))
     profile = models.profiles[config.candidate.profile]
     resolved = resolve_model(profile)
+    try:
+        litellm_version = version("litellm")
+    except PackageNotFoundError:
+        litellm_version = "unavailable"
+    runtime = {
+        "structured_output": profile.structured_output,
+        "configured_context": profile.context_window,
+        "timeout": profile.timeout,
+        "retries": 0,
+        "concurrency": profile.concurrency,
+        "litellm_version": litellm_version,
+    }
+    if config.candidate.execution == "local-artifact":
+        runtime.update({"os": platform.system(), "architecture": platform.machine()})
+    else:
+        runtime["kind"] = "hosted-api"
     manifest = {
         "version": 1,
         "source_bundle_content_id": digest(
@@ -604,22 +640,16 @@ def package_candidate(
             "dirty_tracked": measured.dirty_tracked,
             "tracked_diff_sha256": measured.tracked_diff_sha256,
         },
-        "candidate": config.candidate.model_dump(mode="json"),
+        "candidate": _candidate_identity(config),
         "resolved_model": resolved["model"],
         "resolved_providers": sorted(
             {item.provider for item in baseline if item.provider is not None}
         ),
         "actual_models": sorted({item.model for item in baseline if item.model is not None}),
-        "api_base_class": "loopback",
-        "runtime": {
-            "os": platform.system(),
-            "architecture": platform.machine(),
-            "structured_output": profile.structured_output,
-            "configured_context": profile.context_window,
-            "timeout": profile.timeout,
-            "retries": 0,
-            "concurrency": profile.concurrency,
-        },
+        "api_base_class": (
+            "hosted-provider" if config.candidate.execution == "hosted-api" else "loopback"
+        ),
+        "runtime": runtime,
         "generation_by_task": {
             item["task"]: BundleCase.model_validate_json(
                 (bundle / "cases" / f"{item['alias']}.json").read_text(encoding="utf-8")
@@ -752,7 +782,7 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
         }
         if accounting_file != expected_accounting:
             raise ValueError("candidate case-accounting file differs from manifest")
-        if manifest["candidate"] != config.candidate.model_dump(mode="json"):
+        if manifest["candidate"] != _candidate_identity(config):
             raise ValueError("candidate artifact/config identity mismatch")
         expected_application = {
             "version": application_version,
@@ -776,6 +806,8 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
             "retries": 0,
             "concurrency": profile.concurrency,
         }
+        if config.candidate.execution == "hosted-api":
+            expected_runtime["kind"] = "hosted-api"
         if manifest.get("resolved_model") != resolved["model"] or any(
             manifest.get("runtime", {}).get(key) != value for key, value in expected_runtime.items()
         ):
@@ -1092,7 +1124,16 @@ def score(package_path: Path, config: EvaluationConfig, config_path: Path) -> di
         )
         if run_manifest_path.exists() and judge_metrics is not None:
             if prior_run.get("deterministic_only") is not False:
-                raise ValueError("judged scoring manifest is inconsistent")
+                _validate_recoverable_judge_finalize(
+                    output_root, judge_metrics, verification["scope"]
+                )
+                prior_run.update(
+                    deterministic_only=False,
+                    judge_profile=config.judge.profile,
+                    rubric_version=config.judge.rubric_version,
+                    updated_at_utc=utc_now(),
+                )
+                atomic_json(run_manifest_path, prior_run)
         write_aggregate_reports(output_root, metrics, judge_metrics)
         if not run_manifest_path.exists():
             atomic_json(
@@ -1106,6 +1147,23 @@ def score(package_path: Path, config: EvaluationConfig, config_path: Path) -> di
                 },
             )
         return metrics
+
+
+def _validate_recoverable_judge_finalize(
+    output_root: Path,
+    metrics: dict[str, Any],
+    scope: dict[str, Any],
+) -> None:
+    attempts = list((output_root / "judge" / "attempts").glob("*/*/*.json"))
+    scores = output_root / "judge" / "case-scores.jsonl"
+    if (
+        metrics.get("scope") != scope
+        or metrics.get("eligible") != metrics.get("completed", 0) + metrics.get("failed", 0)
+        or metrics.get("total_attempts") != len(attempts)
+        or not scores.is_file()
+        or len(scores.read_text(encoding="utf-8").splitlines()) != scope["case_count"]
+    ):
+        raise ValueError("judged scoring manifest is inconsistent")
 
 
 def _require_matching_artifact(path: Path, value: Any) -> None:

@@ -42,6 +42,54 @@ storage, deletion timing, and pinned candidate readiness. Transfer is manual.
 
 ## Candidate generation
 
+### Candidate provenance
+
+Candidate provenance has two mutually exclusive forms:
+
+- `local-artifact` pins an artifact hash/file, quantization, local runtime and version,
+  execution device, and optional advertised context;
+- `hosted-api` pins the logical profile and resolved provider/model identity, and omits
+  GGUF, artifact path/hash, quantization, local runtime, and device fields. Never use
+  placeholder local values for a hosted service.
+
+A provider-generic hosted model profile has this shape:
+
+```yaml
+profiles:
+  hosted-candidate:
+    model: provider/model-id
+    api_base: null
+    api_key_env: PROVIDER_API_KEY  # omit or set null for ADC-style authentication
+    remote: true
+    timeout: 180
+    retries: 0
+    concurrency: 1
+    structured_output: true
+    reasoning_effort: none
+    generation:
+      temperature: 0
+      max_tokens: 500
+```
+
+The corresponding evaluation candidate contains no local-artifact fields:
+
+```yaml
+candidate:
+  execution: hosted-api
+  id: hosted-candidate-logical-id
+  profile: hosted-candidate
+  application_commit: REPLACE_WITH_PINNED_COMMIT
+  expected_provider: provider
+  expected_model: model-id
+  allow_dirty_tracked: false
+  tracked_diff_sha256: null
+```
+
+Use unique bundle, generation-work, package, scoring, and judge-cache paths for every
+candidate and judge configuration. Changing the candidate changes bundle/package identity and
+requires new generation. Changing only the judge does not: verify and score the same immutable
+candidate package in a new scoring directory.
+
 On the approved candidate machine, verify the repository environment and local runtime first:
 
 ```powershell
@@ -50,6 +98,21 @@ lms ls --json
 lms server status
 poetry run python -m bench generate --bundle <copied-input-bundle> --config <remote-candidate-config>
 ```
+
+For a hosted candidate, generation must instead include both explicit authorization flags:
+
+```powershell
+poetry run python -m bench generate `
+  --bundle <copied-input-bundle> `
+  --config <hosted-candidate-config> `
+  --allow-remote `
+  --confirm-private-eval
+```
+
+Both flags are checked before bundle reads and provider calls. Authorized hosted generation
+discloses the selected application-owned system/user prompts, structured response schema, and
+selected private conversation content to the configured provider. It does not disclose FABLE
+references or judge data. Credentials remain environment-owned and are never packaged.
 
 The configured GGUF file is hashed before the first model call. Ordinary reruns resume matching
 completed attempts. `--retry-failures` appends a new attempt without changing the baseline.
@@ -74,6 +137,10 @@ poetry run python -m bench score --package <returned-candidate-package> --config
 These commands do not contact the candidate runtime or a judge. Verification reconstructs all
 cases from the local accepted inputs and contracts before accepting the returned package.
 
+Always run both commands after hosted generation. Candidate packages retain resolved model/profile,
+application, request, timing, usage, retry, failure, and LiteLLM provenance without machine-private
+paths or credentials.
+
 ## Authorized Vertex AI scoring
 
 Only after PM review and explicit owner approval:
@@ -82,13 +149,16 @@ Only after PM review and explicit owner approval:
 poetry run python -m bench score --package <returned-candidate-package> --config .\.chronicle\eval\dev-v1\config\evaluation.yaml --with-judge --allow-remote --confirm-private-eval
 ```
 
-The accepted judge route is `vertex_ai/gemini-2.5-flash` using Google Application Default
-Credentials and externally supplied Vertex project/location environment variables. No
-`GEMINI_API_KEY` is required and there is no API-key fallback. Before private judging, run the
-four-task synthetic exact-schema gate and require four accepted results.
+The primary judge default is `vertex_ai/gemini-3.1-pro-preview`, rubric version `1`, temperature
+`0`, and a 1,000-token output cap. It uses Google Application Default Credentials and externally
+supplied Vertex project/location environment variables. No `GEMINI_API_KEY` is required and there
+is no API-key fallback. Gemini 2.5 Flash may be configured in a distinct scoring run for diagnostic
+judge-sensitivity analysis, but it is not a competing default and must not be mixed into the
+primary comparison. Before private judging, run the four-task synthetic exact-schema gate and
+require four accepted results.
 
-The Gemini judge profile sets `reasoning_effort: none`. This provider-neutral LiteLLM setting
-disables Gemini 2.5 Flash thinking for the bounded structured verdict. Reasoning effort is a
+The primary judge profile sets `reasoning_effort: none`. This provider-neutral LiteLLM setting
+requests the validated bounded reasoning policy for the structured verdict. Reasoning effort is a
 strict optional model-profile field; omitted local profiles preserve their prior request and cache
 identity. Judge failures retain only normalized finish category, response presence/character
 count, and allowlisted numeric usage counters—never response content.
@@ -114,6 +184,21 @@ For verification that must never disclose again, add `--judge-cache-only` alongs
 judge authorization flags. Any cache miss fails before provider execution. Same-package reruns
 recompute deterministic metrics, preserve accepted judge metrics and judged manifest identity,
 and render aggregate JSON/Markdown canonically with one judge section.
+
+Candidate and judge request identities are independent. A different judge profile or generation
+policy gets a distinct cache and scoring path but reuses the verified candidate package. A
+cache-only replay guarantees zero provider calls: it exits unsuccessfully rather than filling a
+missing cache entry. Preserve attempt-file and aggregate identities when recording that proof.
+
+Preview model aliases can drift even when YAML and rubric versions are fixed. Record the exact
+logical model ID, region, LiteLLM version, profile/config hash, rubric/provider/application contract
+versions, UTC run window, generation settings, and allowed response usage/finish metadata. Run
+candidate comparisons within a bounded time window or repeat a fixed anchor package after a
+preview endpoint changes. Provider account/project identity must not enter portable artifacts or
+tracked reports.
+
+Before a 120-case or multi-model matrix, consider adding a provider-independent `bench compare`
+command for privacy-safe aggregation. It is intentionally not part of the current harness.
 
 After local verification succeeds and the owner confirms retention is no longer required,
 manually delete the remote input bundle, generation work, package copy, and invalid raw output.

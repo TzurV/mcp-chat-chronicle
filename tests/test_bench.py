@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import shutil
 import zipfile
 from pathlib import Path
@@ -27,7 +28,7 @@ from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from chat_chronicle.ai import CompletionResponse, LLMError, canonical_hash
-from chat_chronicle.ai_config import AIConfigError
+from chat_chronicle.ai_config import AIConfigError, load_model_catalog, resolve_model
 
 
 def config_data() -> dict[str, object]:
@@ -76,6 +77,22 @@ def test_config_is_strict_and_accounted() -> None:
     bad["expected_cases"] = 7
     with pytest.raises(ValidationError, match="expected_cases"):
         EvaluationConfig.model_validate(bad)
+
+
+def test_tracked_templates_pin_primary_judge_policy() -> None:
+    repository = Path(__file__).parents[1]
+    evaluation_data = yaml.safe_load(
+        (repository / "bench" / "evaluation.default.yaml").read_text(encoding="utf-8")
+    )
+    config = EvaluationConfig.model_validate(evaluation_data)
+    models = load_model_catalog(repository / "bench" / "ai-models.evaluation.default.yaml")
+    profile = models.profiles[config.judge.profile]
+
+    assert resolve_model(profile)["model"] == "vertex_ai/gemini-3.1-pro-preview"
+    assert config.judge.rubric_version == "1"
+    assert config.judge.temperature == 0
+    assert config.judge.max_tokens == 1000
+    assert profile.reasoning_effort == "none"
 
 
 def test_deterministic_archive_is_path_independent(tmp_path: Path) -> None:
@@ -299,13 +316,178 @@ def with_run_paths(config: EvaluationConfig, label: str) -> EvaluationConfig:
     return config.model_copy(update={"paths": paths})
 
 
+def hosted_workspace(
+    tmp_path: Path, conversation_count: int = 2
+) -> tuple[EvaluationConfig, Path]:
+    local, config_path = synthetic_workspace(tmp_path, conversation_count=conversation_count)
+    models_path = Path(local.model_catalog)
+    model_data = yaml.safe_load(models_path.read_text(encoding="utf-8"))
+    model_data["profiles"]["hosted"] = {
+        **model_data["profiles"]["local"],
+        "model": "vertex_ai/synthetic-candidate",
+        "api_base": None,
+        "remote": True,
+    }
+    models_path.write_text(yaml.safe_dump(model_data, sort_keys=False), encoding="utf-8")
+    hosted = local.candidate.model_copy(
+        update={
+            "execution": "hosted-api",
+            "profile": "hosted",
+            "artifact_sha256": None,
+            "artifact_file": None,
+            "quantization": None,
+            "runtime": None,
+            "artifact_repository": None,
+            "artifact_size": None,
+            "runtime_version": None,
+            "execution_device": None,
+            "artifact_path": None,
+        }
+    )
+    return local.model_copy(update={"candidate": hosted}), config_path
+
+
+def test_candidate_provenance_is_strictly_local_or_hosted(tmp_path: Path) -> None:
+    hosted, _ = hosted_workspace(tmp_path)
+    assert hosted.candidate.execution == "hosted-api"
+    assert hosted.candidate.artifact_sha256 is None
+    mixed = hosted.candidate.model_dump(mode="json")
+    mixed["artifact_file"] = "fake.gguf"
+    with pytest.raises(ValidationError, match="hosted-api candidate forbids"):
+        type(hosted.candidate).model_validate(mixed)
+
+
+def test_hosted_generation_requires_both_authorization_flags(tmp_path: Path) -> None:
+    hosted, config_path = hosted_workspace(tmp_path)
+    client = SyntheticClient()
+    for allow_remote, confirm_private_eval in ((False, False), (True, False), (False, True)):
+        with pytest.raises(ValueError, match="hosted candidate generation requires"):
+            asyncio.run(
+                generate(
+                    tmp_path / "not-read.zip",
+                    hosted,
+                    config_path,
+                    client=client,
+                    allow_remote=allow_remote,
+                    confirm_private_eval=confirm_private_eval,
+                )
+            )
+    assert client.calls == 0
+
+
+def test_hosted_candidate_packages_without_fake_local_provenance(tmp_path: Path) -> None:
+    hosted, config_path = hosted_workspace(tmp_path)
+    models_path = Path(hosted.model_catalog)
+    model_data = yaml.safe_load(models_path.read_text(encoding="utf-8"))
+    model_data["profiles"]["hosted"]["reasoning_effort"] = "none"
+    models_path.write_text(yaml.safe_dump(model_data, sort_keys=False), encoding="utf-8")
+    prepared = prepare(hosted, config_path)
+    client = SyntheticClient()
+    generated = asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            hosted,
+            config_path,
+            client=client,
+            implementation_probe=clean_test_identity,
+            allow_remote=True,
+            confirm_private_eval=True,
+        )
+    )
+    package = tmp_path / "private" / "work" / "package-one"
+    manifest = json.loads((package / "candidate-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["candidate"]["execution"] == "hosted-api"
+    assert manifest["candidate"]["artifact_sha256"] is None
+    assert manifest["api_base_class"] == "hosted-provider"
+    assert manifest["runtime"]["kind"] == "hosted-api"
+    assert manifest["runtime"]["litellm_version"]
+    assert {request.reasoning_effort for request in client.requests} == {"none"}
+    assert verify(Path(generated["archive"]), hosted, config_path)["valid"] is True
+
+
+@pytest.mark.skipif(
+    os.environ.get("CHRONICLE_RUN_VERTEX_SYNTHETIC_GATE") != "1",
+    reason="explicit opt-in required for synthetic Vertex provider calls",
+)
+def test_vertex_hosted_candidate_and_pro_judge_synthetic_gate(tmp_path: Path) -> None:
+    hosted, config_path = hosted_workspace(tmp_path, conversation_count=1)
+    models_path = Path(hosted.model_catalog)
+    model_data = yaml.safe_load(models_path.read_text(encoding="utf-8"))
+    model_data["profiles"]["hosted"].update(
+        model="vertex_ai/gemini-3.5-flash",
+        reasoning_effort="none",
+        timeout=180,
+    )
+    model_data["profiles"]["judge"].update(
+        model="vertex_ai/gemini-3.1-pro-preview",
+        reasoning_effort="none",
+        timeout=180,
+    )
+    models_path.write_text(yaml.safe_dump(model_data, sort_keys=False), encoding="utf-8")
+    candidate = hosted.candidate.model_copy(
+        update={"expected_provider": "vertex_ai", "expected_model": "gemini-3.5-flash"}
+    )
+    hosted = hosted.model_copy(update={"candidate": candidate})
+    prepared = prepare(hosted, config_path)
+    generated = asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            hosted,
+            config_path,
+            implementation_probe=clean_test_identity,
+            allow_remote=True,
+            confirm_private_eval=True,
+        )
+    )
+    package = Path(generated["archive"])
+    candidate_gate = verify(package, hosted, config_path)
+    assert candidate_gate["expected"] == 4
+    assert candidate_gate["success"] + candidate_gate["failed"] == 4
+
+    judge_candidate = hosted.candidate.model_copy(
+        update={"expected_provider": "synthetic", "expected_model": "candidate"}
+    )
+    judge_config = with_run_paths(
+        hosted.model_copy(update={"candidate": judge_candidate}), "vertex-judge-gate"
+    )
+    judge_prepared = prepare(judge_config, config_path)
+    judge_generated = asyncio.run(
+        generate(
+            Path(judge_prepared["archive"]),
+            judge_config,
+            config_path,
+            client=SyntheticClient(),
+            implementation_probe=clean_test_identity,
+            allow_remote=True,
+            confirm_private_eval=True,
+        )
+    )
+    judge_package = Path(judge_generated["archive"])
+    assert verify(judge_package, judge_config, config_path)["success"] == 4
+    score(judge_package, judge_config, config_path)
+    judged = asyncio.run(score_with_judge(judge_package, judge_config, config_path))
+    assert judged["completed"] == 4
+    cached = asyncio.run(
+        score_with_judge(
+            judge_package,
+            judge_config,
+            config_path,
+            client=NoCallJudge(),
+            cache_only=True,
+        )
+    )
+    assert cached == judged
+
+
 class SyntheticClient:
     def __init__(self, *, invalid_once: bool = False) -> None:
         self.calls = 0
         self.invalid_once = invalid_once
+        self.requests = []
 
     async def complete(self, request):
         self.calls += 1
+        self.requests.append(request)
         properties = request.response_schema["properties"]
         evidence = properties["evidence_message_ids"]["items"]["enum"][0]
         if self.invalid_once and "recent_work" in properties:
@@ -1007,6 +1189,35 @@ def test_interrupted_aggregate_is_rebuilt_without_judge_call(tmp_path: Path) -> 
     assert no_call.calls == 0
     assert aggregate["judge_semantic"] == judged
     assert markdown.count("## Judge coverage") == 1
+
+
+def test_interrupted_judge_finalize_repairs_manifest_without_call(tmp_path: Path) -> None:
+    config, config_path, package = successful_package(tmp_path)
+    judge = SyntheticJudge()
+    judged = asyncio.run(score_with_judge(package, config, config_path, client=judge))
+    run_root = tmp_path / "private" / "runs" / "run-one"
+    manifest_path = run_root / "run-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["deterministic_only"] = True
+    manifest.pop("judge_profile")
+    manifest.pop("rubric_version")
+    write_json(manifest_path, manifest)
+    deterministic = json.loads(
+        (run_root / "deterministic" / "metrics.json").read_text(encoding="utf-8")
+    )
+    write_json(run_root / "reports" / "aggregate.json", deterministic)
+
+    score(package, config, config_path)
+    repaired = json.loads(manifest_path.read_text(encoding="utf-8"))
+    aggregate = json.loads((run_root / "reports" / "aggregate.json").read_text(encoding="utf-8"))
+    assert repaired["deterministic_only"] is False
+    assert repaired["judge_profile"] == config.judge.profile
+    assert aggregate["judge_semantic"] == judged
+    no_call = NoCallJudge()
+    assert asyncio.run(
+        score_with_judge(package, config, config_path, client=no_call, cache_only=True)
+    ) == judged
+    assert no_call.calls == 0
 
 
 def test_cache_only_miss_stops_before_provider_call(tmp_path: Path) -> None:

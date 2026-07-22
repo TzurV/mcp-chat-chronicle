@@ -43,6 +43,7 @@ _SAFE_ERRORS = (
     "candidate artifact_path is required",
     "candidate artifact file identity mismatch",
     "candidate artifact size/hash mismatch",
+    "hosted candidate generation requires --allow-remote --confirm-private-eval",
     "measured application commit does not match pinned identity",
     "tracked implementation is dirty or has an unapproved diff",
     "candidate response provider/model identity mismatch",
@@ -100,8 +101,10 @@ def generate(
     bundle: Path = typer.Option(...),
     config: Path = typer.Option(...),
     retry_failures: bool = typer.Option(False),
+    allow_remote: bool = typer.Option(False),
+    confirm_private_eval: bool = typer.Option(False),
 ) -> None:
-    """Generate candidates from a self-contained private bundle."""
+    """Generate candidates; hosted APIs require explicit private-data authorization."""
     try:
         loaded = load_config(config)
         emit(
@@ -111,6 +114,8 @@ def generate(
                     loaded,
                     config.resolve(),
                     retry_failures=retry_failures,
+                    allow_remote=allow_remote,
+                    confirm_private_eval=confirm_private_eval,
                 )
             ),
             artifact_label="candidate-package-archive",

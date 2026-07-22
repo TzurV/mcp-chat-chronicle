@@ -405,6 +405,25 @@ workflow. It supports separate preparation, candidate generation, package
 verification, deterministic scoring, and optional LLM judging. Private corpora,
 candidate outputs, and scoring artifacts stay under git-ignored `.chronicle/eval/`.
 
+Candidates may be local artifacts or hosted APIs. Hosted profiles use explicit
+`execution: hosted-api` provenance (with no invented GGUF, quantization, runtime, or
+device fields) and generation requires both privacy gates:
+
+```powershell
+poetry run python -m bench generate `
+  --bundle <candidate-input-bundle> `
+  --config $CONFIG `
+  --allow-remote `
+  --confirm-private-eval
+```
+
+This discloses the selected task prompts and conversation content to the configured
+candidate provider. Candidate and judge identities and caches are independent, so a
+new judge can score an immutable package without regenerating candidates.
+The primary semantic default is Gemini 3.1 Pro Preview with rubric v1,
+temperature 0, and a 1,000-token cap; Gemini 2.5 Flash results are diagnostic
+judge-sensitivity evidence, not a competing default.
+
 After preparing a private evaluation config and generating a candidate package,
 verification and deterministic scoring need neither the candidate model runtime nor
 a judge:

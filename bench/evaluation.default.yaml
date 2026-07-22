@@ -40,4 +40,4 @@ judge:
   profile: gemini-judge
   rubric_version: "1"
   temperature: 0
-  max_tokens: 500
+  max_tokens: 1000

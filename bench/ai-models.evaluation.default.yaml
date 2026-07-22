@@ -13,8 +13,21 @@ profiles:
     generation:
       temperature: 0
       max_tokens: 500
+  hosted-candidate-example:
+    model: vertex_ai/REPLACE_WITH_HOSTED_MODEL_ID
+    api_base: null
+    api_key_env: null
+    remote: true
+    timeout: 180
+    retries: 0
+    concurrency: 1
+    structured_output: true
+    reasoning_effort: none
+    generation:
+      temperature: 0
+      max_tokens: 500
   gemini-judge:
-    model: vertex_ai/gemini-2.5-flash
+    model: vertex_ai/gemini-3.1-pro-preview
     api_base: null
     api_key_env: null
     remote: true

@@ -31,16 +31,17 @@ class Paths(StrictModel):
 
 
 class Candidate(StrictModel):
+    execution: Literal["local-artifact", "hosted-api"] = "local-artifact"
     id: str
     profile: str
-    artifact_sha256: str
-    artifact_file: str
-    quantization: str = "Q4_K_M"
-    runtime: str = "LM Studio"
-    artifact_repository: str = "unknown"
-    artifact_size: int = Field(default=0, ge=0)
-    runtime_version: str = "unknown"
-    execution_device: str = "unknown"
+    artifact_sha256: str | None = None
+    artifact_file: str | None = None
+    quantization: str | None = "Q4_K_M"
+    runtime: str | None = "LM Studio"
+    artifact_repository: str | None = "unknown"
+    artifact_size: int | None = Field(default=0, ge=0)
+    runtime_version: str | None = "unknown"
+    execution_device: str | None = "unknown"
     advertised_context: int | None = Field(default=None, gt=0)
     application_commit: str = "unknown"
     artifact_path: str | None = Field(default=None, exclude=True)
@@ -49,10 +50,50 @@ class Candidate(StrictModel):
     allow_dirty_tracked: bool = False
     tracked_diff_sha256: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def hosted_defaults(cls, value: Any) -> Any:
+        if isinstance(value, dict) and value.get("execution") == "hosted-api":
+            value = dict(value)
+            for name in (
+                "artifact_sha256",
+                "artifact_file",
+                "quantization",
+                "runtime",
+                "artifact_repository",
+                "artifact_size",
+                "runtime_version",
+                "execution_device",
+            ):
+                value.setdefault(name, None)
+        return value
+
     @model_validator(mode="after")
     def dirty_policy(self) -> Candidate:
         if self.allow_dirty_tracked != (self.tracked_diff_sha256 is not None):
             raise ValueError("allow_dirty_tracked requires exactly one pinned tracked_diff_sha256")
+        local_fields = {
+            "artifact_sha256": self.artifact_sha256,
+            "artifact_file": self.artifact_file,
+            "quantization": self.quantization,
+            "runtime": self.runtime,
+            "artifact_repository": self.artifact_repository,
+            "artifact_size": self.artifact_size,
+            "runtime_version": self.runtime_version,
+            "execution_device": self.execution_device,
+        }
+        if self.execution == "local-artifact":
+            missing = [name for name, value in local_fields.items() if value in (None, "")]
+            if missing:
+                raise ValueError(
+                    "local-artifact candidate requires local provenance fields: "
+                    + ", ".join(missing)
+                )
+        elif any(value is not None for value in local_fields.values()):
+            present = [name for name, value in local_fields.items() if value is not None]
+            raise ValueError(
+                "hosted-api candidate forbids local provenance fields: " + ", ".join(present)
+            )
         return self
 
 
@@ -114,6 +155,7 @@ class Attempt(StrictModel):
     model: str | None = None
     latency_ms: int
     usage: dict[str, Any] | None = None
+    retry_count: int = Field(default=0, ge=0)
     started_at: str
     completed_at: str
 

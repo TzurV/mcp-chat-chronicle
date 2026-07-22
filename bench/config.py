@@ -35,8 +35,12 @@ def load_config(path: Path) -> EvaluationConfig:
         raise AIConfigError(f"Missing task definitions: {', '.join(missing_tasks)}")
     if missing_profiles:
         raise AIConfigError(f"Missing model profiles: {', '.join(missing_profiles)}")
-    if is_remote_profile(models.profiles[config.candidate.profile]):
-        raise AIConfigError("candidate profile must be local")
+    candidate_remote = is_remote_profile(models.profiles[config.candidate.profile])
+    if candidate_remote != (config.candidate.execution == "hosted-api"):
+        raise AIConfigError(
+            "candidate execution must match model profile locality "
+            "(local-artifact/local profile or hosted-api/remote profile)"
+        )
     if not is_remote_profile(models.profiles[config.judge.profile]):
         raise AIConfigError("judge profile must be remote")
     return config
