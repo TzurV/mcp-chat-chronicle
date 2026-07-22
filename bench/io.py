@@ -26,11 +26,31 @@ def digest(value: Any) -> str:
 
 
 def atomic_json(path: Path, value: Any) -> None:
+    payload = canonical_bytes(value)
+    if path.exists() and path.read_bytes() == payload:
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(fd, "wb") as handle:
-            handle.write(canonical_bytes(value))
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def atomic_text(path: Path, value: str) -> None:
+    payload = value.encode("utf-8")
+    if path.exists() and path.read_bytes() == payload:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)

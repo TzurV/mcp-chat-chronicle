@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 TASK_ORDER = (
     "conversation-summary",
@@ -12,6 +12,8 @@ TASK_ORDER = (
     "last-activity",
     "title-assessment",
 )
+
+JUDGE_RATIONALE_MAX_LENGTH = 500
 
 
 class StrictModel(BaseModel):
@@ -175,10 +177,10 @@ class JudgeResult(StrictModel):
     case_fingerprint: str
     task: str
     status: Literal["success"]
-    scores: dict[str, int]
-    rationale: str = Field(min_length=1, max_length=500)
-    evidence_message_ids: list[int] = Field(default_factory=list)
-    unsupported_claim_count: int = Field(default=0, ge=0)
+    scores: dict[str, StrictInt]
+    rationale: str = Field(min_length=1, max_length=JUDGE_RATIONALE_MAX_LENGTH)
+    evidence_message_ids: list[StrictInt] = Field(default_factory=list)
+    unsupported_claim_count: StrictInt = Field(default=0, ge=0)
 
     @field_validator("scores")
     @classmethod

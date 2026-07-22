@@ -91,6 +91,20 @@ def test_model_catalog_strict_version_and_missing_environment(
         resolve_model(ModelProfile(model="mock", api_key_env="SYNTHETIC_MODEL_KEY"))
 
 
+def test_reasoning_effort_is_strict_and_round_trips(tmp_path: Path) -> None:
+    path = tmp_path / "models.yaml"
+    path.write_text(
+        "version: 1\nprofiles:\n  judge:\n    model: mock/judge\n"
+        "    reasoning_effort: none\n",
+        encoding="utf-8",
+    )
+    profile = load_model_catalog(path).profiles["judge"]
+    assert profile.reasoning_effort == "none"
+    assert profile.model_dump(mode="json")["reasoning_effort"] == "none"
+    with pytest.raises(ValueError, match="reasoning_effort"):
+        ModelProfile(model="mock/judge", reasoning_effort="unrestricted")
+
+
 def test_lm_studio_environment_model_requires_litellm_provider_prefix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

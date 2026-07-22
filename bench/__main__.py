@@ -54,6 +54,10 @@ _SAFE_ERRORS = (
     "reference ",
     "evaluation path",
     "evaluation input/output paths overlap",
+    "judge cache miss in cache-only mode",
+    "--judge-cache-only requires --with-judge",
+    "deterministic artifact mismatch:",
+    "judged scoring manifest is inconsistent",
 )
 
 
@@ -140,6 +144,7 @@ def score(
     allow_remote: bool = typer.Option(False),
     confirm_private_eval: bool = typer.Option(False),
     retry_judge_failures: bool = typer.Option(False),
+    judge_cache_only: bool = typer.Option(False, "--judge-cache-only"),
 ) -> None:
     """Score locally; remote judging requires all explicit authorization flags."""
     try:
@@ -148,6 +153,8 @@ def score(
             raise ValueError("judge is disabled in evaluation configuration")
         if with_judge and not (allow_remote and confirm_private_eval):
             raise ValueError("judge requires --with-judge --allow-remote --confirm-private-eval")
+        if judge_cache_only and not with_judge:
+            raise ValueError("--judge-cache-only requires --with-judge")
         if with_judge:
             score_package(package.resolve(), loaded, config.resolve())
             emit(
@@ -157,6 +164,7 @@ def score(
                         loaded,
                         config.resolve(),
                         retry_failures=retry_judge_failures,
+                        cache_only=judge_cache_only,
                     )
                 )
             )

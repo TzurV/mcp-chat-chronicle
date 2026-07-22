@@ -74,22 +74,46 @@ poetry run python -m bench score --package <returned-candidate-package> --config
 These commands do not contact the candidate runtime or a judge. Verification reconstructs all
 cases from the local accepted inputs and contracts before accepting the returned package.
 
-## Authorized Gemini scoring
+## Authorized Vertex AI scoring
 
 Only after PM review and explicit owner approval:
 
 ```powershell
-$env:GEMINI_API_KEY = "<set only in this shell>"
 poetry run python -m bench score --package <returned-candidate-package> --config .\.chronicle\eval\dev-v1\config\evaluation.yaml --with-judge --allow-remote --confirm-private-eval
 ```
 
-Selected source, candidate result, and the FABLE reference are disclosed to the configured
-remote judge. Candidate model identity is not included in judge prompts. Cached matching
-results resume without another disclosure.
+The accepted judge route is `vertex_ai/gemini-2.5-flash` using Google Application Default
+Credentials and externally supplied Vertex project/location environment variables. No
+`GEMINI_API_KEY` is required and there is no API-key fallback. Before private judging, run the
+four-task synthetic exact-schema gate and require four accepted results.
+
+The Gemini judge profile sets `reasoning_effort: none`. This provider-neutral LiteLLM setting
+disables Gemini 2.5 Flash thinking for the bounded structured verdict. Reasoning effort is a
+strict optional model-profile field; omitted local profiles preserve their prior request and cache
+identity. Judge failures retain only normalized finish category, response presence/character
+count, and allowlisted numeric usage counters—never response content.
+
+The provider-facing controlled-generation schema is deliberately separate from the strict
+application `JudgeResult` schema. The provider schema uses the verified Vertex JSON Schema
+subset and fixes the exact rubric dimensions for each task; application validation remains
+authoritative for identity, rationale, evidence, and all cross-field checks. Judge cache identity
+binds both schema names, versions, and hashes, plus the response normalizer and request-builder
+versions and the task-specific dimension identity.
+
+Selected source, candidate result, and the FABLE reference are disclosed to the configured remote
+judge. Candidate model identity is not included in judge prompts. Matching successful results
+resume without another disclosure. Historical failed runs are immutable and retained. A private
+retry uses a fresh approved scoring run identity, or `--retry-judge-failures` where an explicit
+append-only retry of the same contract is intended.
 
 To retry only cached judge failures while preserving their baseline attempts, add
 `--retry-judge-failures`. Successful matching judge results remain cached and are not retried by
 that option.
+
+For verification that must never disclose again, add `--judge-cache-only` alongside the three
+judge authorization flags. Any cache miss fails before provider execution. Same-package reruns
+recompute deterministic metrics, preserve accepted judge metrics and judged manifest identity,
+and render aggregate JSON/Markdown canonically with one judge section.
 
 After local verification succeeds and the owner confirms retention is no longer required,
 manually delete the remote input bundle, generation work, package copy, and invalid raw output.

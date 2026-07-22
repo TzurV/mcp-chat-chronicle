@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
 import platform
 import re
@@ -41,6 +42,7 @@ from .config import _relative
 from .implementation import ImplementationIdentity, measure_implementation
 from .io import (
     atomic_json,
+    atomic_text,
     deterministic_zip,
     digest,
     digest_bytes,
@@ -266,6 +268,13 @@ def prepare(
     }
 
 
+def _profile_identity(profile: Any) -> dict[str, Any]:
+    identity = profile.model_dump(mode="json")
+    if identity.get("reasoning_effort") is None:
+        identity.pop("reasoning_effort", None)
+    return identity
+
+
 def _bundle_manifest(
     config: EvaluationConfig,
     cases: list[BundleCase],
@@ -283,7 +292,7 @@ def _bundle_manifest(
         "cases": entries,
         "application_version": application_version,
         "required_candidate": config.candidate.model_dump(mode="json"),
-        "required_profile": profile.model_dump(mode="json"),
+        "required_profile": _profile_identity(profile),
         "content_id": digest(
             {"scope": scope.model_dump(mode="json"), "cases": entries}
         ),
@@ -353,7 +362,7 @@ async def generate(
         resolved = resolve_model(profile)
         if manifest.get("required_candidate") != config.candidate.model_dump(
             mode="json"
-        ) or manifest.get("required_profile") != profile.model_dump(mode="json"):
+        ) or manifest.get("required_profile") != _profile_identity(profile):
             raise ValueError("candidate configuration does not match prepared bundle")
         _validate_artifact(config, config_path)
         measured = (implementation_probe or measure_implementation)()
@@ -383,7 +392,7 @@ async def generate(
                 {
                     "case": case.fingerprint,
                     "candidate": config.candidate.model_dump(mode="json"),
-                    "profile": profile.model_dump(mode="json"),
+                    "profile": _profile_identity(profile),
                 }
             )
             matching = [item for item in prior if item.attempt_id.startswith(base_identity)]
@@ -1068,28 +1077,109 @@ def score(package_path: Path, config: EvaluationConfig, config_path: Path) -> di
                 raise ValueError("scoring directory belongs to a different candidate package")
         deterministic = output_root / "deterministic"
         deterministic.mkdir(parents=True, exist_ok=True)
-        (deterministic / "case-scores.jsonl").write_text(
-            "".join(json.dumps(item, sort_keys=True) + "\n" for item in case_scores),
-            encoding="utf-8",
-        )
+        case_scores_text = "".join(json.dumps(item, sort_keys=True) + "\n" for item in case_scores)
+        _require_matching_artifact(deterministic / "metrics.json", metrics)
+        _require_matching_text(deterministic / "case-scores.jsonl", case_scores_text)
+        atomic_text(deterministic / "case-scores.jsonl", case_scores_text)
         atomic_json(output_root / "verification.json", verification)
         atomic_json(deterministic / "metrics.json", metrics)
         _write_matrices(deterministic, matrices)
-        reports = output_root / "reports"
-        reports.mkdir(exist_ok=True)
-        atomic_json(reports / "aggregate.json", metrics)
-        (reports / "aggregate.md").write_text(_aggregate_markdown(metrics), encoding="utf-8")
-        atomic_json(
-            run_manifest_path,
-            {
-                "version": 1,
-                "deterministic_only": True,
-                "package_content_id": verification["content_id"],
-                "scope": verification["scope"],
-                "created_at_utc": utc_now(),
-            },
+        judge_metrics_path = output_root / "judge" / "metrics.json"
+        judge_metrics = (
+            json.loads(judge_metrics_path.read_text(encoding="utf-8"))
+            if judge_metrics_path.exists()
+            else None
         )
+        if run_manifest_path.exists() and judge_metrics is not None:
+            if prior_run.get("deterministic_only") is not False:
+                raise ValueError("judged scoring manifest is inconsistent")
+        write_aggregate_reports(output_root, metrics, judge_metrics)
+        if not run_manifest_path.exists():
+            atomic_json(
+                run_manifest_path,
+                {
+                    "version": 1,
+                    "deterministic_only": True,
+                    "package_content_id": verification["content_id"],
+                    "scope": verification["scope"],
+                    "created_at_utc": utc_now(),
+                },
+            )
         return metrics
+
+
+def _require_matching_artifact(path: Path, value: Any) -> None:
+    if not path.exists():
+        return
+    existing = json.loads(path.read_text(encoding="utf-8"))
+    if existing != value:
+        location = _first_difference_path(existing, value)
+        raise ValueError(
+            f"deterministic artifact mismatch: {path.name} semantic at {location}"
+        )
+
+
+def _require_matching_text(path: Path, value: str) -> None:
+    if not path.exists() or path.read_bytes() == value.encode("utf-8"):
+        return
+    existing = path.read_text(encoding="utf-8")
+    if existing.replace("\r\n", "\n") == value.replace("\r\n", "\n"):
+        return  # Accepted newline-only legacy serialization; caller migrates atomically.
+    if path.suffix == ".jsonl":
+        try:
+            old_rows = [json.loads(line) for line in existing.splitlines()]
+            new_rows = [json.loads(line) for line in value.splitlines()]
+        except json.JSONDecodeError:
+            pass
+        else:
+            if old_rows == new_rows:
+                return  # Accepted canonical-format-only legacy serialization.
+    if path.suffix == ".csv":
+        if list(csv.reader(io.StringIO(existing))) == list(csv.reader(io.StringIO(value))):
+            return  # Accepted CSV serialization-only legacy representation.
+    raise ValueError(f"deterministic artifact mismatch: {path.name} semantic")
+
+
+def _first_difference_path(existing: Any, expected: Any, path: str = "$") -> str:
+    if type(existing) is not type(expected):
+        return path
+    if isinstance(existing, dict):
+        for key in sorted(set(existing) | set(expected)):
+            child = f"{path}.{key}"
+            if key not in existing or key not in expected:
+                return child
+            if existing[key] != expected[key]:
+                return _first_difference_path(existing[key], expected[key], child)
+    elif isinstance(existing, list):
+        for index, (old, new) in enumerate(zip(existing, expected, strict=False)):
+            if old != new:
+                return _first_difference_path(old, new, f"{path}[{index}]")
+        if len(existing) != len(expected):
+            return f"{path}.length"
+    return path
+
+
+def write_aggregate_reports(
+    output_root: Path,
+    deterministic_metrics: dict[str, Any],
+    judge_metrics: dict[str, Any] | None,
+) -> None:
+    aggregate = dict(deterministic_metrics)
+    markdown = _aggregate_markdown(deterministic_metrics)
+    if judge_metrics is not None:
+        aggregate["judge_semantic"] = judge_metrics
+        markdown += _judge_markdown(judge_metrics)
+    reports = output_root / "reports"
+    atomic_json(reports / "aggregate.json", aggregate)
+    atomic_text(reports / "aggregate.md", markdown)
+
+
+def _judge_markdown(metrics: dict[str, Any]) -> str:
+    return (
+        "\n## Judge coverage\n\n"
+        f"Eligible: {metrics['eligible']}  \nCompleted: {metrics['completed']}  \n"
+        f"Failed: {metrics['failed']}  \nSkipped invalid: {metrics['skipped_invalid']}\n"
+    )
 
 
 def _write_matrices(root: Path, matrices: dict[str, dict[str, dict[str, int]]]) -> None:
@@ -1099,12 +1189,16 @@ def _write_matrices(root: Path, matrices: dict[str, dict[str, dict[str, int]]]) 
         "title_fit": "title-fit-confusion.csv",
     }
     for key, matrix in matrices.items():
+        buffer = io.StringIO(newline="")
         columns = list(next(iter(matrix.values())))
-        with (root / names[key]).open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.writer(handle)
-            writer.writerow(["expected\\actual", *columns])
-            for label, counts in matrix.items():
-                writer.writerow([label, *(counts[column] for column in columns)])
+        writer = csv.writer(buffer)
+        writer.writerow(["expected\\actual", *columns])
+        for label, counts in matrix.items():
+            writer.writerow([label, *(counts[column] for column in columns)])
+        value = buffer.getvalue()
+        path = root / names[key]
+        _require_matching_text(path, value)
+        atomic_text(path, value)
 
 
 def _aggregate_markdown(metrics: dict[str, Any]) -> str:

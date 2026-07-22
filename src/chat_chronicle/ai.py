@@ -379,6 +379,7 @@ class CompletionRequest:
     api_key: str | None = None
     context_window: int | None = None
     estimated_input_tokens: int | None = None
+    reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = None
 
 
 @dataclass(frozen=True)
@@ -387,6 +388,24 @@ class CompletionResponse:
     provider: str
     model: str
     usage: dict[str, Any] | None = None
+    finish_reason: str = "unknown"
+
+
+_FINISH_REASONS = {
+    "stop": "stop",
+    "length": "length",
+    "max_tokens": "length",
+    "content_filter": "content_filter",
+    "content_filtered": "content_filter",
+    "safety": "content_filter",
+    "tool_calls": "tool_calls",
+    "function_call": "tool_calls",
+}
+
+
+def _normalized_finish_reason(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    return _FINISH_REASONS.get(normalized, "other" if normalized else "unknown")
 
 
 class LLMClient(Protocol):
@@ -418,7 +437,7 @@ class LiteLLMClient:
             else {"type": "json_object"}
         )
         try:
-            response = await litellm.acompletion(
+            completion_kwargs = dict(
                 model=request.model,
                 messages=request.messages,
                 response_format=response_format,
@@ -429,6 +448,9 @@ class LiteLLMClient:
                 api_base=request.api_base,
                 api_key=request.api_key,
             )
+            if request.reasoning_effort is not None:
+                completion_kwargs["reasoning_effort"] = request.reasoning_effort
+            response = await litellm.acompletion(**completion_kwargs)
             choices = getattr(response, "choices", None)
             if not choices or getattr(choices[0], "message", None) is None:
                 raise LLMError("provider_response", "Provider returned no completion choice.")
@@ -449,6 +471,9 @@ class LiteLLMClient:
                 provider=provider,
                 model=actual_model,
                 usage=usage,
+                finish_reason=_normalized_finish_reason(
+                    getattr(choices[0], "finish_reason", None)
+                ),
             )
         except LLMError:
             raise
@@ -799,6 +824,7 @@ def prepare_attempt(
             api_key=resolved.get("api_key"),
             context_window=profile.context_window,
             estimated_input_tokens=estimated_input_tokens,
+            reasoning_effort=profile.reasoning_effort,
         ),
         input_hash=canonical_hash(input_payload),
         prompt_hash=canonical_hash({"system": system, "user": user}),

@@ -113,6 +113,7 @@ class ModelProfile(_StrictModel):
     concurrency: int = Field(default=1, gt=0, le=16)
     structured_output: bool = True
     context_window: int | None = Field(default=None, gt=0, le=10_000_000)
+    reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = None
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
 
 
@@ -209,6 +210,9 @@ def resolve_model(profile: ModelProfile) -> dict[str, Any]:
             "for LM Studio use 'lm_studio/<model-id>'."
         )
     result = profile.model_dump(mode="json")
+    # The newly optional request control must not perturb existing identities when omitted.
+    if profile.reasoning_effort is None:
+        result.pop("reasoning_effort")
     result["model"] = model
     if profile.api_key_env:
         key = os.environ.get(profile.api_key_env)

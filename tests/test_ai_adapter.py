@@ -60,8 +60,44 @@ def test_adapter_sends_json_schema_and_normalizes_response(
     assert captured["response_format"]["json_schema"]["schema"] == _request().response_schema
     assert captured["num_retries"] == 1
     assert captured["model"] == "mock/model"
+    assert "reasoning_effort" not in captured
     assert result.provider == "mock-provider"
     assert result.model == "mock-model"
+    assert result.finish_reason == "unknown"
+
+
+def test_adapter_passes_reasoning_effort_and_normalizes_finish_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    async def completion(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content='{"result":"ok"}'),
+                    finish_reason="MAX_TOKENS",
+                )
+            ],
+            model="mock",
+            usage=SimpleNamespace(
+                model_dump=lambda: {
+                    "completion_tokens": 10,
+                    "completion_tokens_details": {"reasoning_tokens": 4},
+                }
+            ),
+        )
+
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(acompletion=completion))
+    request = CompletionRequest(**{**_request().__dict__, "reasoning_effort": "none"})
+    result = asyncio.run(LiteLLMClient().complete(request))
+    assert captured["reasoning_effort"] == "none"
+    assert result.finish_reason == "length"
+    assert result.usage == {
+        "completion_tokens": 10,
+        "completion_tokens_details": {"reasoning_tokens": 4},
+    }
 
 
 def test_lm_studio_route_propagates_api_base_without_key_and_reports_route_provider(

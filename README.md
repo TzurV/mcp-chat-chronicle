@@ -42,16 +42,24 @@ exports/openai/
 exports/claude/
 ```
 
+Check which local stores and export locations are currently available:
+
+```powershell
+poetry run chronicle scan-local
+```
+
 See the source-specific instructions below.
 
 ### 4. Collect
 
 ```powershell
 poetry run chronicle collect
+poetry run chronicle stats
 ```
 
 Collection is idempotent: rerunning it updates changed conversations and skips
-unchanged ones instead of creating duplicates.
+unchanged ones instead of creating duplicates. `stats` confirms the resulting
+conversation/message counts and recent ingest status by provider.
 
 ### 5. Search
 
@@ -199,7 +207,7 @@ histories.
 
 ## Project status
 
-> **Status: Chat Chronicle v0.1.0 first release.** The local DB, official ChatGPT and Claude export importers, OpenAI Codex and Claude Code local extractors, single-source and parent-folder ingest, config/init/collect, scan-local inventory, stats, search, phrase search, open, and recent-activity CLI paths are implemented and exercised against the owner's real archive. Optional AI-task scaffolding is available separately and remains work in progress. Claude project metadata is linked only when reliable conversation references exist. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
+> **Status: v0.1.0 is the published source baseline; development continues on `main`.** The local DB, official ChatGPT and Claude export importers, OpenAI Codex and Claude Code local extractors, config/init/collect, scan-local inventory, stats, search, phrase search, open, and recent-activity CLI paths are implemented and exercised against the owner's real archive. YAML-defined AI tasks now run through LiteLLM with strict schemas, caching, and explicit local/remote controls. A private development evaluation harness supports split candidate generation, local deterministic scoring, and optional cached Gemini judging. Claude project metadata is linked only when reliable conversation references exist. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
 
 ## Why
 
@@ -374,6 +382,11 @@ Optional AI tasks can run YAML-defined conversation-intelligence jobs through
 LiteLLM, preferably using a local LM Studio profile. These tasks are separate from
 search and must be invoked explicitly.
 
+The initial task catalog provides conversation summaries, work-mode classification,
+last-activity descriptions, and title assessment. Prompts and model profiles live in
+the git-ignored `.chronicle/ai-tasks.yaml` and `.chronicle/ai-models.yaml`; validated
+output contracts and cache/provenance handling remain application-owned.
+
 Quick commands:
 
 ```powershell
@@ -384,6 +397,44 @@ poetry run chronicle --ai-task conversation-summary --conversation-id <id> --dry
 
 For full setup, local-model configuration, privacy gates, caching, schema
 validation, and troubleshooting, see [`docs/ai-tasks.md`](docs/ai-tasks.md).
+
+## Development evaluation harness (optional)
+
+The evaluation harness is development tooling, not part of the five-minute archive
+workflow. It supports separate preparation, candidate generation, package
+verification, deterministic scoring, and optional LLM judging. Private corpora,
+candidate outputs, and scoring artifacts stay under git-ignored `.chronicle/eval/`.
+
+After preparing a private evaluation config and generating a candidate package,
+verification and deterministic scoring need neither the candidate model runtime nor
+a judge:
+
+```powershell
+$CONFIG = ".\.chronicle\eval\dev-v1\config\evaluation.yaml"
+$PACKAGE = "<path-to-candidate-package.zip>"
+
+poetry run python -m bench verify --package $PACKAGE --config $CONFIG
+poetry run python -m bench score --package $PACKAGE --config $CONFIG --deterministic-only
+```
+
+To reconstruct reports from already cached judge attempts without permitting a new
+provider call:
+
+```powershell
+poetry run python -m bench score `
+  --package $PACKAGE `
+  --config $CONFIG `
+  --with-judge `
+  --allow-remote `
+  --confirm-private-eval `
+  --judge-cache-only
+```
+
+`--judge-cache-only` fails before provider execution if any required cache entry is
+missing. Omitting it from a judge-enabled run can disclose the selected source,
+candidate result, and private development reference to the configured remote judge.
+See [`docs/development-evaluation.md`](docs/development-evaluation.md) for corpus
+preparation, transfer, authorization, and report interpretation.
 
 ## Stack, and what we deliberately did not choose
 
@@ -402,7 +453,7 @@ sanitized manager-chat transcript under `md/release-artifacts/manager-chat/` tha
 documents the project's development process. It contains no raw source record and
 is not loaded into a user's archive automatically. Optional AI tasks are always
 explicit; remote model use requires `--allow-remote` and deliberate authorization.
-Start searching in 5 minutes
+
 ## Limitations (honest)
 
 - ChatGPT and Claude web history is only as fresh as your last export request. Coding-agent history refreshes automatically because those tools keep durable local transcripts.

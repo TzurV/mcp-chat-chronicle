@@ -20,8 +20,8 @@ from bench.core import (
 )
 from bench.implementation import ImplementationIdentity
 from bench.io import deterministic_zip, safe_extract, verify_checksums, write_checksums
-from bench.judge import score_with_judge
-from bench.models import EvaluationConfig
+from bench.judge import RUBRICS, provider_judge_schema, score_with_judge
+from bench.models import JUDGE_RATIONALE_MAX_LENGTH, EvaluationConfig, JudgeResult
 from bench.paths import resolve_member
 from pydantic import ValidationError
 from typer.testing import CliRunner
@@ -342,6 +342,14 @@ class SyntheticClient:
         return CompletionResponse(json.dumps(value), "synthetic", "candidate", {"total_tokens": 10})
 
 
+class InvalidLastActivityClient(SyntheticClient):
+    async def complete(self, request):
+        if "recent_work" in request.response_schema["properties"]:
+            self.calls += 1
+            return CompletionResponse("not-json", "synthetic", "candidate")
+        return await super().complete(request)
+
+
 class SyntheticJudge:
     def __init__(self) -> None:
         self.calls = 0
@@ -425,6 +433,120 @@ class JudgeFailureClient:
         if self.failure == "schema":
             return CompletionResponse("{}", "gemini", "gemini-2.5-flash")
         raise RuntimeError("programming defect")
+
+
+class InvalidJsonMetadataJudge(SyntheticJudge):
+    async def complete(self, request):
+        self.calls += 1
+        return CompletionResponse(
+            "PRIVATE-MARKER-not-json",
+            "gemini",
+            "gemini-2.5-flash",
+            {
+                "prompt_tokens": 20,
+                "completion_tokens": 500,
+                "completion_tokens_details": {"reasoning_tokens": 450},
+                "private_value": "PRIVATE-MARKER",
+            },
+            finish_reason="length",
+        )
+
+
+class NoCallJudge:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def complete(self, request):
+        self.calls += 1
+        raise AssertionError("provider call forbidden")
+
+
+def _schema_keywords(value):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield key
+            yield from _schema_keywords(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _schema_keywords(child)
+
+
+@pytest.mark.parametrize("task", RUBRICS)
+def test_vertex_provider_judge_schema_is_exact_and_deterministic(task: str) -> None:
+    schema = provider_judge_schema(task)
+    assert schema == provider_judge_schema(task)
+    assert schema["required"] == list(schema["properties"])
+    scores = schema["properties"]["scores"]
+    assert tuple(scores["properties"]) == RUBRICS[task]
+    assert scores["required"] == list(RUBRICS[task])
+    assert scores["additionalProperties"] is False
+    allowed = {
+        "type",
+        "properties",
+        "required",
+        "additionalProperties",
+        "enum",
+        "items",
+        "minimum",
+        "maximum",
+        "maxLength",
+        "description",
+        *schema["properties"],
+        *RUBRICS[task],
+    }
+    assert set(_schema_keywords(schema)) <= allowed
+    assert not ({"const", "default", "minLength"} & set(_schema_keywords(schema)))
+    rationale = schema["properties"]["rationale"]
+    assert rationale["maxLength"] == JUDGE_RATIONALE_MAX_LENGTH
+    assert "concise" in rationale["description"]
+    assert "no chain-of-thought" in rationale["description"]
+
+
+def test_judge_rationale_bound_is_authoritative_and_never_repaired() -> None:
+    base = {
+        "case_alias": "synthetic",
+        "case_fingerprint": "fingerprint",
+        "task": "conversation-summary",
+        "status": "success",
+        "scores": {name: 4 for name in RUBRICS["conversation-summary"]},
+        "evidence_message_ids": [1],
+        "unsupported_claim_count": 0,
+    }
+    accepted = JudgeResult.model_validate(
+        {**base, "rationale": "x" * JUDGE_RATIONALE_MAX_LENGTH}
+    )
+    assert len(accepted.rationale) == JUDGE_RATIONALE_MAX_LENGTH
+    with pytest.raises(ValidationError, match="string_too_long"):
+        JudgeResult.model_validate(
+            {**base, "rationale": "x" * (JUDGE_RATIONALE_MAX_LENGTH + 1)}
+        )
+
+
+def test_six_eligible_two_invalid_judge_accounting(tmp_path: Path) -> None:
+    config, config_path = synthetic_workspace(tmp_path)
+    prepared = prepare(config, config_path)
+    generated = asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            config,
+            config_path,
+            client=InvalidLastActivityClient(),
+            implementation_probe=clean_test_identity,
+        )
+    )
+    package = Path(generated["archive"])
+    score(package, config, config_path)
+    client = SyntheticJudge()
+    metrics = asyncio.run(score_with_judge(package, config, config_path, client=client))
+    assert metrics["eligible"] == 6
+    assert metrics["completed"] == 6
+    assert metrics["failed"] == 0
+    assert metrics["skipped_invalid"] == 2
+    assert client.calls == 6
+    assert metrics["dimension_means"]
+    resumed = asyncio.run(score_with_judge(package, config, config_path, client=client))
+    assert resumed == metrics
+    assert client.calls == 6
 
 
 def test_synthetic_cross_stage_and_append_only_retry(tmp_path: Path) -> None:
@@ -797,6 +919,133 @@ def test_judge_schema_failure_is_cached_safely(tmp_path: Path) -> None:
         encoding="utf-8"
     )
     assert "provider-controlled" not in output
+
+
+def test_invalid_json_failure_retains_only_bounded_response_metadata(tmp_path: Path) -> None:
+    config, config_path, package = successful_package(tmp_path)
+    client = InvalidJsonMetadataJudge()
+    metrics = asyncio.run(score_with_judge(package, config, config_path, client=client))
+    assert metrics["failure_categories"] == {"provider_invalid_json": 8}
+    output = (tmp_path / "private" / "runs" / "run-one" / "judge" / "case-scores.jsonl").read_text(
+        encoding="utf-8"
+    )
+    assert "PRIVATE-MARKER" not in output
+    records = [json.loads(line) for line in output.splitlines()]
+    assert all(record["response_metadata"] == {
+        "finish_reason": "length",
+        "response_present": True,
+        "response_characters": len("PRIVATE-MARKER-not-json"),
+        "usage": {
+            "completion_tokens": 500,
+            "prompt_tokens": 20,
+            "reasoning_tokens": 450,
+        },
+    } for record in records)
+
+
+def test_reasoning_setting_change_invalidates_judge_cache(tmp_path: Path) -> None:
+    config, config_path, package = successful_package(tmp_path)
+    first = SyntheticJudge()
+    asyncio.run(score_with_judge(package, config, config_path, client=first))
+    assert first.calls == 8
+    models_path = Path(config.model_catalog)
+    model_data = yaml.safe_load(models_path.read_text(encoding="utf-8"))
+    model_data["profiles"]["judge"]["reasoning_effort"] = "none"
+    models_path.write_text(yaml.safe_dump(model_data, sort_keys=False), encoding="utf-8")
+    second = SyntheticJudge()
+    asyncio.run(score_with_judge(package, config, config_path, client=second))
+    assert second.calls == 8
+
+
+def test_repeated_scoring_preserves_judge_reports_and_attempts(tmp_path: Path) -> None:
+    config, config_path, package = successful_package(tmp_path)
+    judge = SyntheticJudge()
+    first = asyncio.run(score_with_judge(package, config, config_path, client=judge))
+    run_root = tmp_path / "private" / "runs" / "run-one"
+    attempts = sorted((run_root / "judge" / "attempts").glob("*/*/*.json"))
+    before = hashlib.sha256(b"".join(path.read_bytes() for path in attempts)).hexdigest()
+
+    score(package, config, config_path)
+    no_call = NoCallJudge()
+    second = asyncio.run(
+        score_with_judge(package, config, config_path, client=no_call, cache_only=True)
+    )
+
+    after_attempts = sorted((run_root / "judge" / "attempts").glob("*/*/*.json"))
+    after = hashlib.sha256(b"".join(path.read_bytes() for path in after_attempts)).hexdigest()
+    aggregate = json.loads((run_root / "reports" / "aggregate.json").read_text(encoding="utf-8"))
+    markdown = (run_root / "reports" / "aggregate.md").read_text(encoding="utf-8")
+    manifest = json.loads((run_root / "run-manifest.json").read_text(encoding="utf-8"))
+    assert second == first
+    assert no_call.calls == 0
+    assert len(after_attempts) == len(attempts) == 8
+    assert after == before
+    assert aggregate["judge_semantic"] == first
+    assert markdown.count("## Judge coverage") == 1
+    assert manifest["deterministic_only"] is False
+
+
+def test_interrupted_aggregate_is_rebuilt_without_judge_call(tmp_path: Path) -> None:
+    config, config_path, package = successful_package(tmp_path)
+    judge = SyntheticJudge()
+    judged = asyncio.run(score_with_judge(package, config, config_path, client=judge))
+    run_root = tmp_path / "private" / "runs" / "run-one"
+    deterministic = json.loads(
+        (run_root / "deterministic" / "metrics.json").read_text(encoding="utf-8")
+    )
+    write_json(run_root / "reports" / "aggregate.json", deterministic)
+    (run_root / "reports" / "aggregate.md").write_text("interrupted", encoding="utf-8")
+
+    score(package, config, config_path)
+    no_call = NoCallJudge()
+    resumed = asyncio.run(
+        score_with_judge(package, config, config_path, client=no_call, cache_only=True)
+    )
+    aggregate = json.loads((run_root / "reports" / "aggregate.json").read_text(encoding="utf-8"))
+    markdown = (run_root / "reports" / "aggregate.md").read_text(encoding="utf-8")
+    assert resumed == judged
+    assert no_call.calls == 0
+    assert aggregate["judge_semantic"] == judged
+    assert markdown.count("## Judge coverage") == 1
+
+
+def test_cache_only_miss_stops_before_provider_call(tmp_path: Path) -> None:
+    config, config_path, package = successful_package(tmp_path)
+    no_call = NoCallJudge()
+    with pytest.raises(ValueError, match="cache miss"):
+        asyncio.run(
+            score_with_judge(package, config, config_path, client=no_call, cache_only=True)
+        )
+    assert no_call.calls == 0
+
+
+def test_repeated_score_rejects_changed_deterministic_artifact(tmp_path: Path) -> None:
+    config, config_path, package = successful_package(tmp_path)
+    metrics_path = tmp_path / "private" / "runs" / "run-one" / "deterministic" / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics["runtime_reliability"]["expected"] += 1
+    write_json(metrics_path, metrics)
+    with pytest.raises(
+        ValueError,
+        match=r"metrics\.json semantic at \$\.runtime_reliability\.expected",
+    ):
+        score(package, config, config_path)
+
+
+def test_legacy_csv_newlines_are_migrated_without_semantic_change(tmp_path: Path) -> None:
+    config, config_path, package = successful_package(tmp_path)
+    matrix = (
+        tmp_path
+        / "private"
+        / "runs"
+        / "run-one"
+        / "deterministic"
+        / "work-mode-confusion.csv"
+    )
+    original = matrix.read_bytes()
+    matrix.write_bytes(original.replace(b"\r\n", b"\n"))
+    score(package, config, config_path)
+    assert matrix.read_bytes() == original
 
 
 def test_unexpected_judge_programming_error_aborts_without_cache(tmp_path: Path) -> None:

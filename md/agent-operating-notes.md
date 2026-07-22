@@ -86,3 +86,32 @@ To reduce wasted retries:
 - Avoid PowerShell pipelines for file slicing or filtering when a direct `rg` query will work.
 - Avoid parallel PowerShell reads unless the time savings are worth a possible retry.
 - If an important `poetry run ...` command fails only with the launcher error, retry the exact command once with sandbox escalation and record that escalation was for sandbox validation only.
+
+## Real-Data Development Policy
+
+This project is also a learning exercise. The owner prefers early testing against the available
+real conversation corpus rather than requiring synthetic-only provider development, even when
+that accepts a measured reduction in privacy. Synthetic fixtures remain required for committed,
+repeatable, network-independent CI coverage, but they are not a prerequisite that must completely
+prove an integration before a bounded real-data smoke can begin.
+
+Future plans and executor handoffs should:
+
+1. use a small representative real-data scope early, normally one or two conversations, alongside
+   synthetic contract tests;
+2. state the remote provider, disclosed fields, conversation scope, maximum calls/retries, and
+   expected cost boundary once at the start of the development gate;
+3. allow a bounded diagnostic and correction loop inside that approved scope instead of stopping
+   after every recoverable provider/schema observation;
+4. stop immediately for scope expansion, unexpected sensitive fields, credentials exposure,
+   unbounded retries/cost, destructive behavior, or a materially different provider;
+5. keep real inputs, model responses, databases, evaluation packages, and diagnostic artifacts
+   ignored and untracked unless the owner explicitly approves publication;
+6. redact private content from tracked reports while retaining useful aggregate evidence;
+7. exercise first-run, rerun, cache, report, and recovery behavior during the same real-data smoke;
+8. prefer one completion report with gate addenda over repeated handoffs for narrow issues within
+   the same approved objective.
+
+The owner accepting more privacy exposure for development is not blanket authorization to upload
+the full corpus or use arbitrary providers. Handoffs must still define a bounded disclosure scope,
+but should make that authorization broad enough to complete a practical integration cycle.

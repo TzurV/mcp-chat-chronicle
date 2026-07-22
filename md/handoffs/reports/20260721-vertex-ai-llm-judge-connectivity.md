@@ -85,3 +85,40 @@ Results:
 - the accidental empty shell-redirection artifact `1.74` was removed and not tracked.
 
 This report confirms provider connectivity only. It does not record an authorized private-corpus judge run or replace the explicit `--with-judge --allow-remote --confirm-private-eval` controls required for real evaluation scoring.
+
+## Structured-output compatibility addendum
+
+The sentinel test above proved authentication and transport, not compatibility with Chronicle's
+judge output contract. The first judge attempt passed `JudgeResult.model_json_schema()` directly
+through LiteLLM. That application schema contained provider-risky constructs, including a
+single-value `const`, string-length constraints, defaults, and an open-ended score mapping. Vertex
+returned responses, but none reached an accepted application result.
+
+WP-5.2B1.1 implements the boundary separation by generating a small task-specific provider schema containing
+only the verified Vertex JSON Schema subset. It requires the exact rubric score properties and
+uses a one-value string enum for success. The unchanged strict application model and case-level
+checks remain authoritative after JSON parsing. Cache identity now binds both schema layers and
+the normalizer/request-construction versions, so the historical failures cannot be reused by the
+corrected contract. The first synthetic compatibility-gate call still returned invalid JSON, so
+end-to-end judge-contract compatibility is not yet accepted and no private retry was attempted.
+This addendum does not revise the narrower claim made by the original connectivity test.
+
+### Reasoning-control rework
+
+The follow-up gate configured LiteLLM `reasoning_effort: none`, which maps Gemini 2.5 Flash to a
+zero thinking budget. All four real synthetic task contracts then completed with normalized finish
+category `stop` and strict application validation; the identical rerun made zero provider calls.
+This supports output-budget exhaustion from automatic thinking as the cause of the earlier invalid
+JSON boundary, without changing the provider schema. The subsequent private gate completed five
+of six eligible cases; one response finished normally but exceeded the application rationale
+length bound. That semantic gate therefore remains incomplete.
+
+### Rationale-contract rework
+
+Provider schema version 3 added the existing 500-character application limit and concise,
+no-chain-of-thought guidance to `rationale`. The revised real synthetic gate passed 4/4 and its
+identical rerun made zero calls. The fresh private gate then passed 6 completed, 0 failed, and 2
+skipped-invalid cases. The local rerun defect was a Windows newline-comparison false positive in
+the first confusion-matrix CSV, not a semantic difference. After canonical/idempotent report
+rework, the guarded `--judge-cache-only` command exited zero, retained the same six attempts, and
+made zero additional Vertex calls.
