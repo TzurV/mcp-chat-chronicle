@@ -866,16 +866,26 @@ def _scan_leakage(root: Path, authority: list[BundleCase]) -> None:
     all_text = "\n".join(
         path.read_text(encoding="utf-8", errors="replace") for path in [*text_files, *json_files]
     )
-    lowered = all_text.lower()
-    forbidden_keys = ("api_key", "credential", "password", "teacher_model", "fable")
-    if any(key in lowered for key in forbidden_keys):
-        raise ValueError("candidate package contains forbidden provenance")
     if re.search(r"(?i)(bearer\s+[A-Za-z0-9._~+/=-]{12,}|api[_-]?key\s*[:=])", all_text):
         raise ValueError("candidate package contains secret-shaped content")
     if any(str(case.selected["transcript"]) in all_text for case in authority):
         raise ValueError("candidate package contains a complete source transcript")
     for path in json_files:
-        _reject_absolute_values(json.loads(path.read_text(encoding="utf-8")))
+        value = json.loads(path.read_text(encoding="utf-8"))
+        _reject_forbidden_keys(value)
+        _reject_absolute_values(value)
+
+
+def _reject_forbidden_keys(value: Any) -> None:
+    forbidden = {"api_key", "credential", "password", "teacher_model", "fable"}
+    if isinstance(value, dict):
+        if any(str(key).lower() in forbidden for key in value):
+            raise ValueError("candidate package contains forbidden provenance")
+        for item in value.values():
+            _reject_forbidden_keys(item)
+    elif isinstance(value, list):
+        for item in value:
+            _reject_forbidden_keys(item)
 
 
 def _reject_absolute_values(value: Any) -> None:

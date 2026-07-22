@@ -12,6 +12,7 @@ import pytest
 import yaml
 from bench import __main__ as bench_cli
 from bench.core import (
+    _scan_leakage,
     _validate_implementation,
     build_authority,
     generate,
@@ -29,6 +30,26 @@ from typer.testing import CliRunner
 
 from chat_chronicle.ai import CompletionResponse, LLMError, canonical_hash
 from chat_chronicle.ai_config import AIConfigError, load_model_catalog, resolve_model
+
+
+def test_candidate_text_may_use_provenance_words_without_defining_provenance(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "candidate.json").write_text(
+        json.dumps({"result": {"summary": "Credential rotation was discussed."}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "raw.txt").write_text(
+        "A credential-related response that contains no secret.", encoding="utf-8"
+    )
+
+    _scan_leakage(tmp_path, [])
+
+    (tmp_path / "candidate.json").write_text(
+        json.dumps({"credential": "forbidden provenance field"}), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="forbidden provenance"):
+        _scan_leakage(tmp_path, [])
 
 
 def config_data() -> dict[str, object]:
