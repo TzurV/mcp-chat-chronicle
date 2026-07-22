@@ -343,6 +343,18 @@ def _attempts(case_dir: Path) -> list[Attempt]:
     ]
 
 
+def _authoritative_attempt(case_dir: Path) -> Attempt:
+    attempts = _attempts(case_dir)
+    if not attempts:
+        raise ValueError("candidate case has no attempts")
+    index = json.loads((case_dir / "index.json").read_text(encoding="utf-8"))
+    attempt_id = index.get("current_attempt", index.get("baseline_attempt"))
+    try:
+        return next(item for item in attempts if item.attempt_id == attempt_id)
+    except StopIteration as exc:
+        raise ValueError("candidate authoritative attempt pointer is invalid") from exc
+
+
 async def generate(
     bundle_path: Path,
     config: EvaluationConfig,
@@ -487,6 +499,7 @@ async def generate(
                 case_dir / "index.json",
                 {
                     "baseline_attempt": prior[0].attempt_id if prior else attempt_id,
+                    "current_attempt": attempt_id,
                     "attempts": [item.attempt_id for item in prior] + [attempt_id],
                 },
             )
@@ -598,11 +611,14 @@ def package_candidate(
         raw_source = work / "raw-invalid" / alias
         if raw_source.exists():
             shutil.copytree(raw_source, destination / "raw-invalid" / alias)
-    baseline = [_attempts(path)[0] for path in sorted((destination / "results").iterdir())]
+    case_paths = sorted((destination / "results").iterdir())
+    attempts_by_case = [_attempts(path) for path in case_paths]
+    baseline = [items[0] for items in attempts_by_case]
+    current = [_authoritative_attempt(path) for path in case_paths]
     all_attempts = [
         item for path in sorted((destination / "results").iterdir()) for item in _attempts(path)
     ]
-    success = sum(item.status == "success" for item in baseline)
+    success = sum(item.status == "success" for item in current)
     models = load_model_catalog(_relative(config_path, config.model_catalog))
     profile = models.profiles[config.candidate.profile]
     resolved = resolve_model(profile)
@@ -643,9 +659,9 @@ def package_candidate(
         "candidate": _candidate_identity(config),
         "resolved_model": resolved["model"],
         "resolved_providers": sorted(
-            {item.provider for item in baseline if item.provider is not None}
+            {item.provider for item in current if item.provider is not None}
         ),
-        "actual_models": sorted({item.model for item in baseline if item.model is not None}),
+        "actual_models": sorted({item.model for item in current if item.model is not None}),
         "api_base_class": (
             "hosted-provider" if config.candidate.execution == "hosted-api" else "loopback"
         ),
@@ -658,7 +674,7 @@ def package_candidate(
         },
         "run_started_utc": run_started,
         "run_completed_utc": utc_now(),
-        "usage_available": sum(item.usage is not None for item in baseline),
+        "usage_available": sum(item.usage is not None for item in current),
         "no_references_or_judge_results": True,
     }
     atomic_json(destination / "candidate-manifest.json", manifest)
@@ -675,7 +691,7 @@ def package_candidate(
             "success": success,
             "failed": len(baseline) - success,
             "failure_boundaries": dict(
-                Counter(item.failure_boundary for item in baseline if item.failure_boundary)
+                Counter(item.failure_boundary for item in current if item.failure_boundary)
             ),
         },
     )
@@ -712,6 +728,7 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
             if item != {"alias": case.alias, "fingerprint": case.fingerprint, "task": case.task}:
                 raise ValueError("candidate case identity differs from local authority")
         baseline: list[Attempt] = []
+        current: list[Attempt] = []
         all_attempts: list[Attempt] = []
         referenced_raw: set[str] = set()
         for alias, case in expected.items():
@@ -722,6 +739,15 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
                 raise ValueError("candidate attempt index mismatch")
             if index["baseline_attempt"] != attempts[0].attempt_id:
                 raise ValueError("candidate baseline pointer mismatch")
+            if "current_attempt" in index:
+                current_id = index["current_attempt"]
+                if current_id not in {item.attempt_id for item in attempts}:
+                    raise ValueError("candidate current pointer is invalid")
+                if current_id != attempts[-1].attempt_id:
+                    raise ValueError("candidate current pointer must reference latest attempt")
+                authoritative = attempts[-1]
+            else:
+                authoritative = attempts[0]
             for attempt in attempts:
                 if attempt.alias != alias or attempt.case_fingerprint != case.fingerprint:
                     raise ValueError("candidate attempt authority mismatch")
@@ -754,6 +780,7 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
                 if raw is not None and not raw.is_file():
                     raise ValueError("candidate raw evidence is missing")
             baseline.append(attempts[0])
+            current.append(authoritative)
             all_attempts.extend(attempts)
         actual_raw = (
             {path.relative_to(root).as_posix() for path in (root / "raw-invalid").rglob("*.txt")}
@@ -762,8 +789,8 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
         )
         if actual_raw != referenced_raw:
             raise ValueError("candidate raw evidence accounting mismatch")
-        success = sum(item.status == "success" for item in baseline)
-        accounting = (len(baseline), success, len(baseline) - success, len(all_attempts))
+        success = sum(item.status == "success" for item in current)
+        accounting = (len(current), success, len(current) - success, len(all_attempts))
         if manifest.get("expected") != scope.case_count:
             raise ValueError("candidate expected count differs from declared scope")
         if accounting != (
@@ -994,7 +1021,7 @@ def score(package_path: Path, config: EvaluationConfig, config_path: Path) -> di
         )
         validate_reference_authority(authority, inputs, references)
         baselines = {
-            path.parent.name: _attempts(path.parent)[0]
+            path.parent.name: _authoritative_attempt(path.parent)
             for path in root.glob("results/*/index.json")
         }
         case_scores: list[dict[str, Any]] = []

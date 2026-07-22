@@ -812,7 +812,9 @@ def test_synthetic_cross_stage_and_append_only_retry(tmp_path: Path) -> None:
     changed = config.model_copy(update={"judge": changed_judge})
     asyncio.run(score_with_judge(first_package, changed, config_path, client=judge))
     assert judge.calls == 14
-    second_paths = config.paths.model_copy(update={"candidate_package": "work/package-two"})
+    second_paths = config.paths.model_copy(
+        update={"candidate_package": "work/package-two", "scoring": "runs/run-two"}
+    )
     second = config.model_copy(update={"paths": second_paths})
     asyncio.run(
         generate(
@@ -829,6 +831,65 @@ def test_synthetic_cross_stage_and_append_only_retry(tmp_path: Path) -> None:
     )
     assert len(attempts) == 9
     assert any(path.name == "0002.json" for path in attempts)
+    retried_package = tmp_path / "private" / "work" / "package-two.zip"
+    retried_verification = verify(retried_package, second, config_path)
+    assert retried_verification["success"] == 8
+    retried_metrics = score(retried_package, second, config_path)
+    assert retried_metrics["runtime_reliability"]["valid"] == 8
+    retried_judge = SyntheticJudge()
+    retried_judge_metrics = asyncio.run(
+        score_with_judge(retried_package, second, config_path, client=retried_judge)
+    )
+    assert retried_judge_metrics["completed"] == 8
+    assert retried_judge_metrics["skipped_invalid"] == 0
+    assert retried_judge.calls == 8
+
+    legacy_package = tmp_path / "private" / "work" / "package-legacy"
+    shutil.copytree(tmp_path / "private" / "work" / "package-two", legacy_package)
+    baseline_success = 0
+    for index_path in legacy_package.glob("results/*/index.json"):
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        index.pop("current_attempt")
+        write_json(index_path, index)
+        baseline_path = index_path.parent / "attempts" / "0001.json"
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        baseline_success += baseline["status"] == "success"
+    legacy_manifest_path = legacy_package / "candidate-manifest.json"
+    legacy_manifest = json.loads(legacy_manifest_path.read_text(encoding="utf-8"))
+    legacy_manifest["success"] = baseline_success
+    legacy_manifest["failed"] = legacy_manifest["completed"] - baseline_success
+    write_json(legacy_manifest_path, legacy_manifest)
+    write_json(
+        legacy_package / "case-accounting.json",
+        {
+            key: legacy_manifest[key]
+            for key in ("expected", "completed", "success", "failed", "total_attempts")
+        },
+    )
+    write_json(
+        legacy_package / "generation-summary.json",
+        {
+            "success": baseline_success,
+            "failed": 8 - baseline_success,
+            "failure_boundaries": {"invalid_json": 1},
+        },
+    )
+    write_checksums(legacy_package)
+    legacy_paths = second.paths.model_copy(update={"scoring": "runs/run-legacy"})
+    legacy_config = second.model_copy(update={"paths": legacy_paths})
+    legacy_verification = verify(legacy_package, legacy_config, config_path)
+    assert legacy_verification["success"] == 7
+    assert score(legacy_package, legacy_config, config_path)["runtime_reliability"]["valid"] == 7
+
+    invalid_package = tmp_path / "private" / "work" / "package-invalid-current"
+    shutil.copytree(tmp_path / "private" / "work" / "package-two", invalid_package)
+    invalid_index_path = next(invalid_package.glob("results/*/index.json"))
+    invalid_index = json.loads(invalid_index_path.read_text(encoding="utf-8"))
+    invalid_index["current_attempt"] = "not-an-attempt"
+    write_json(invalid_index_path, invalid_index)
+    write_checksums(invalid_package)
+    with pytest.raises(ValueError, match="current pointer is invalid"):
+        verify(invalid_package, second, config_path)
 
     package_dir = tmp_path / "private" / "work" / "package-one"
     attempt_path = next(package_dir.glob("results/*/attempts/0001.json"))

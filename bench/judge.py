@@ -16,7 +16,7 @@ from chat_chronicle.ai_config import load_model_catalog, resolve_model
 
 from .config import _relative
 from .core import (
-    _attempts,
+    _authoritative_attempt,
     _open_package,
     build_authority,
     utc_now,
@@ -215,7 +215,7 @@ async def score_with_judge(
         )
         validate_reference_authority(authority, inputs, references)
         baselines = {
-            path.parent.name: _attempts(path.parent)[0]
+            path.parent.name: _authoritative_attempt(path.parent)
             for path in package.glob("results/*/index.json")
         }
         records: list[dict[str, Any]] = []
