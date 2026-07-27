@@ -384,7 +384,10 @@ Small (≈1 evening on FastMCP) but strategically load-bearing — it's the demo
 
 **WP-4.1 FastMCP recall program.** *(approved next; split for objective PM validation)*
 
-**WP-4.1A FastMCP core server.**
+**WP-4.1A FastMCP core server.** *(accepted 2026-07-27; handoff:
+`md/handoffs/WP-4.1A-fastmcp-core-server.md`; completion:
+`md/handoffs/reports/WP-4.1A-completion-report.md`; validation:
+`md/handoffs/reports/WP-4.1A-validation-review.md`)*
 *Objective:* Deliver one local, read-only MCP server whose protocol and tool behavior
 can be accepted without configuring an external AI client.
 *Tasks:* Add `mcp_server.py`, lazy optional FastMCP loading, stdio transport, and the
@@ -406,8 +409,8 @@ protocol; tool calls leave the database byte/count/schema state unchanged; the o
 dependency does not break the base CLI; Windows and Ubuntu CI pass.
 *Handoff:* `md/handoffs/WP-4.1A-fastmcp-core-server.md`.
 
-**WP-4.1B Local-client integration and end-to-end validation.** *(gated on PM acceptance
-of WP-4.1A)*
+**WP-4.1B Local-client integration and end-to-end validation.** *(next; WP-4.1A
+acceptance gate satisfied)*
 *Objective:* Configure and document the accepted local stdio server across Codex and
 Claude client surfaces, then validate bounded real-history recall.
 *Tasks:* Add setup/troubleshooting instructions for Codex desktop/CLI/IDE, ChatGPT

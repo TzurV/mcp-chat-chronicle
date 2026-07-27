@@ -92,6 +92,39 @@ _SUPPORTED_PROVIDERS = {
     _PROVIDER_CLAUDE_CODE,
     _PROVIDER_OPENAI_CODEX,
 }
+
+
+@app.command()
+def serve(
+    db_path: Annotated[
+        Path | None,
+        typer.Option(
+            help=(
+                "SQLite database path. Overrides CHAT_CHRONICLE_DB, "
+                ".chronicle/config.yaml paths.db, and the built-in default."
+            )
+        ),
+    ] = None,
+) -> None:
+    """Serve exactly three read-only recall tools over MCP stdio transport.
+
+    The archive is opened without initialization or migration. Database
+    precedence is --db-path, CHAT_CHRONICLE_DB, config paths.db, then the
+    built-in .chronicle/chronicle.db default.
+    """
+    effective_db = _resolve_effective_db_path(db_path)
+    resolved_db = _connect_db_display_path(effective_db)
+    try:
+        from chat_chronicle.mcp_server import run_server
+    except ModuleNotFoundError as exc:
+        if exc.name in {"fastmcp", "mcp"} or (exc.name or "").startswith(("fastmcp.", "mcp.")):
+            _fail("MCP support is not installed. Run: poetry install -E mcp")
+        raise
+
+    try:
+        run_server(resolved_db)
+    except RuntimeError as exc:
+        _fail(str(exc))
 _CONVERSATIONS_FILENAME = "conversations.json"
 _SPLIT_CONVERSATIONS_GLOB = "conversations-*.json"
 _SKIPPED_DIR_NAMES = frozenset(
