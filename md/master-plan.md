@@ -69,7 +69,11 @@ Distinctive angles to lead with: the **adapter/source-class architecture**, the 
 
 ### 1.6 Known constraints (do not re-litigate — verified 2026-07)
 - MCP servers only see explicit tool calls; models don't know their own conversation IDs. Hence adapters for capture, MCP for recall only. (The marker-echo workaround exists and is shelved — Appendix A.)
-- ChatGPT supports only **remote HTTPS** MCP servers ([OpenAI docs](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)); target Claude Desktop/Cursor for MCP recall, document bridging as experimental.
+- ChatGPT **desktop**, Codex CLI, and the Codex IDE extension support local stdio MCP
+  servers and share Codex-host MCP configuration. ChatGPT **web** does not read that
+  local configuration and requires a remote MCP-backed plugin or secure tunnel. Claude
+  Desktop and Claude Code also support local stdio MCP. Build local stdio first; keep
+  the ChatGPT-web bridge separate and experimental.
 - **Class B formats are less stable than Class A**, not more: no export contract at all. Mitigate with pinned per-version fixtures, parse-don't-validate with per-record error logging, and copy-before-read for live SQLite files (Cursor's DB is locked while Cursor runs).
 - Coding-agent conversations have **no URLs** — `worktrail open` shows a local transcript view for those; deep links exist only for web-chat sources.
 - "Scheduled collection" = a documented one-line **Windows Task Scheduler** entry invoking `worktrail collect`. No daemon, no service.
@@ -378,16 +382,54 @@ Class B ground rules (all WPs): pinned per-tool-version fixtures; parse-don't-va
 ### M4 — v1.3: MCP recall ⏰ **time-fenced: land within 2 weeks of WP-2.1 acceptance, may run parallel after search**
 Small (≈1 evening on FastMCP) but strategically load-bearing — it's the demo, the MCP learning goal, and LP-5. Do not let it slide behind enrichment.
 
-**WP-4.1 FastMCP server.**
-*Tasks:* `mcp_server.py`, stdio transport, `worktrail serve`. Tools (docstrings matter — the model reads them):
-  - `search_chats(query, provider?, after?, before?, limit=10)` → {title, provider, date, summary?, url?, id, score}
-  - `get_conversation(id, max_chars=8000)` → truncated transcript
-  - `list_recent_topics(days=7)` → digest from validated AI-task results (or titles until v1.2 exists)
-  **No `log_activity` in v1 MCP** (shelved — Appendix A.6).
-*AC:* Registered in Claude Desktop; end-to-end: "what was I working on in Cursor last month about X?" → correct answer with transcript access.
-*Sources:* [FastMCP docs](https://gofastmcp.com) · [MCP python-sdk](https://github.com/modelcontextprotocol/python-sdk).
+**WP-4.1 FastMCP recall program.** *(approved next; split for objective PM validation)*
 
-**WP-4.2 (experimental, timeboxed 1 evening) ChatGPT bridging docs.** `mcp-remote`/tunnel path per [OpenAI connector docs](https://developers.openai.com/api/docs/guides/tools-connectors-mcp); outcome is a docs page, success optional.
+**WP-4.1A FastMCP core server.**
+*Objective:* Deliver one local, read-only MCP server whose protocol and tool behavior
+can be accepted without configuring an external AI client.
+*Tasks:* Add `mcp_server.py`, lazy optional FastMCP loading, stdio transport, and the
+pre-rename `chronicle serve` command. Reuse the accepted SQLite search/detail services;
+open the selected database read-only and resolve it using the accepted CLI/env/config/default
+precedence. Tools (docstrings and server instructions matter because the model reads them):
+  - `search_chats(query, provider?, after?, before?, limit=10)` →
+    `{title, provider, last_activity_at, summary?, url?, id, score, snippet}`
+  - `get_conversation(id, max_chars=8000)` → ordered, explicitly truncated transcript
+    plus conversation metadata
+  - `list_recent_topics(days=7, limit=20)` → bounded recent digest using the latest
+    valid stored `conversation-summary` result when available, otherwise the title
+  **No model calls, writes, arbitrary SQL, capture, or `log_activity` in v1 MCP**
+  (`log_activity` remains shelved in Appendix A.6).
+*AC:* FastMCP reports exactly the three documented tools; an actual subprocess stdio
+client can initialize, list tools, and call each one against a synthetic database; invalid
+inputs and missing/unreadable databases fail as tool-visible errors without corrupting the
+protocol; tool calls leave the database byte/count/schema state unchanged; the optional
+dependency does not break the base CLI; Windows and Ubuntu CI pass.
+*Handoff:* `md/handoffs/WP-4.1A-fastmcp-core-server.md`.
+
+**WP-4.1B Local-client integration and end-to-end validation.** *(gated on PM acceptance
+of WP-4.1A)*
+*Objective:* Configure and document the accepted local stdio server across Codex and
+Claude client surfaces, then validate bounded real-history recall.
+*Tasks:* Add setup/troubleshooting instructions for Codex desktop/CLI/IDE, ChatGPT
+desktop, Claude Code, and Claude Desktop; register Chronicle with Codex and Claude Code;
+run an owner-approved real-database smoke; verify multiple local clients can read the same
+archive. Packaging as a Claude `.mcpb` extension is optional and must not be required for
+acceptance.
+*AC:* In at least Codex and one Claude local client, a natural-language recall question
+invokes `search_chats`, follows a selected result with `get_conversation`, and produces a
+grounded answer with conversation IDs. The server remains read-only and no private
+transcript content is committed.
+
+*Sources:* [FastMCP docs](https://gofastmcp.com) ·
+[MCP python-sdk](https://github.com/modelcontextprotocol/python-sdk) ·
+[OpenAI Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp) ·
+[Claude Code MCP configuration](https://code.claude.com/docs/en/mcp).
+
+**WP-4.2 (experimental, timeboxed 1 evening) ChatGPT-web bridging docs.** Secure MCP
+Tunnel/remote HTTP path per
+[OpenAI connector docs](https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta.eot);
+outcome is a docs page, success optional. Do not expose the private archive directly to
+the public internet.
 
 ### M5 — v1.2: configurable conversation intelligence + benchmark
 **WP-5.1 YAML AI-task runner + LiteLLM model configuration.**
@@ -555,7 +597,7 @@ The story arc: *v1 proves the boring archive; v2 makes it intelligent — and me
 
 In rough priority order: **Gemini Takeout/My Activity importer** (chat text lives under My Activity filtered to Gemini Apps, not necessarily the plain Gemini product checkbox) · **Codex cross-client workspace-association spike** (RS-3: determine whether VS Code/Codex Desktop visibility is keyed by path, repository identity, local metadata, or service association before changing project grouping) · **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **optional host-model work after WP-5.2A2/A3**, including Edge Aion and any future browser resident model, each requiring its own feasibility and adapter approval; Phi Silica remains WP-5.4/Windows App SDK scope · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
 
-**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo, accepted. Claude project metadata, WP-1.5/WP-1.6 usability polish, WP-2.3.2 search punctuation hardening, WP-5.1 configurable AI-task infrastructure, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 CI portability, and the public v0.1.0 source release are accepted. The resumed AI-development sequence through WP-5.2B2.2 is accepted: frozen snapshot → direct FABLE references → Llama floor integration → split local/hosted harness and fixed Pro judge → same-prefix pilot and complete Gemini/Qwen/Llama-1B arms → qualification and checkpoints for Phi/Llama-3B/Gemma-3 → independent complete 120-case arms for all five local models. LP-4.1 then consolidated exact per-case UTS/sensitivity, task/model interpretation, editorial review, final article copy, and aggregate figures; the owner reports the LinkedIn long-form article published on 2026-07-27. The next development priority requires owner selection. WP-5.2B3 prompt strategy testing remains a separate post-baseline backlog item and must not overwrite published baseline evidence. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. WP-5.2A2 Chrome Gemini Nano feasibility, WP-5.2A3 implementation, and WP-5.2A4 hosts remain optional. A separate untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, MCP, WorkTrail rename, and PyPI publication remain later work unless explicitly reprioritized.
+**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo, accepted. Claude project metadata, WP-1.5/WP-1.6 usability polish, WP-2.3.2 search punctuation hardening, WP-5.1 configurable AI-task infrastructure, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 CI portability, and the public v0.1.0 source release are accepted. The resumed AI-development sequence through WP-5.2B2.2 is accepted: frozen snapshot → direct FABLE references → Llama floor integration → split local/hosted harness and fixed Pro judge → same-prefix pilot and complete Gemini/Qwen/Llama-1B arms → qualification and checkpoints for Phi/Llama-3B/Gemma-3 → independent complete 120-case arms for all five local models. LP-4.1 then consolidated exact per-case UTS/sensitivity, task/model interpretation, editorial review, final article copy, and aggregate figures; the owner reports the LinkedIn long-form article published on 2026-07-27. The selected next priority is MCP recall: execute WP-4.1A core stdio server, validate it, then execute WP-4.1B local-client integration. WP-5.2B3 prompt strategy testing remains a separate post-baseline backlog item and must not overwrite published baseline evidence. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. WP-5.2A2 Chrome Gemini Nano feasibility, WP-5.2A3 implementation, and WP-5.2A4 hosts remain optional. A separate untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later work unless explicitly reprioritized.
 
 ---
 
@@ -636,7 +678,11 @@ The project began as an AI-generated proposal: a "Cross-Client Chat Meta-Logger 
 
 **Fatal architecture flaw.** MCP servers are passive — they receive only explicit tool calls, never a telemetry stream. Worse, models don't know their own conversation IDs/URLs, so the plan's killer feature (deep-link back to the thread) was unimplementable as designed. The promised finale demo could not be built.
 
-**Client-support reality.** ChatGPT supports only remote HTTPS MCP servers ([OpenAI docs](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)); the Gemini app only gained MCP-style connected apps in June 2026. Only the Claude ecosystem makes local stdio servers easy.
+**Client-support reality at the time of the original critique.** ChatGPT then supported
+only remote HTTPS MCP servers, while the Claude ecosystem made local stdio easy. Current
+product support has since changed: ChatGPT desktop now shares local stdio MCP configuration
+with Codex clients, while ChatGPT web remains remote-plugin/tunnel based. The original
+architecture conclusion still holds: MCP is for recall, not passive capture.
 
 **The "nothing similar exists" premise was false.** [OpenMemory MCP](https://mem0.ai/blog/introducing-openmemory-mcp) (cross-client local memory) and [OpenChat](https://github.com/p0u4a/openchat) (browser extension capturing chatgpt.com/claude.ai into a local MCP server) are close prior art; idea 2 was largely [LLMLingua](https://www.llmlingua.com/) (Microsoft, 2023); idea 3 was [RouteLLM](https://github.com/lm-sys/RouteLLM), a stale niche.
 
