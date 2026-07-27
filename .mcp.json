@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "chat-chronicle": {
+      "command": ".venv\\Scripts\\python.exe",
+      "args": ["-m", "chat_chronicle.cli", "serve"],
+      "env": {
+        "CHAT_CHRONICLE_DB": ".chronicle\\chronicle.db"
+      }
+    }
+  }
+}

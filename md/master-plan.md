@@ -382,7 +382,8 @@ Class B ground rules (all WPs): pinned per-tool-version fixtures; parse-don't-va
 ### M4 — v1.3: MCP recall ⏰ **time-fenced: land within 2 weeks of WP-2.1 acceptance, may run parallel after search**
 Small (≈1 evening on FastMCP) but strategically load-bearing — it's the demo, the MCP learning goal, and LP-5. Do not let it slide behind enrichment.
 
-**WP-4.1 FastMCP recall program.** *(approved next; split for objective PM validation)*
+**WP-4.1 FastMCP recall program.** *(accepted 2026-07-27 after WP-4.1A core
+server and WP-4.1B client E2E validation)*
 
 **WP-4.1A FastMCP core server.** *(accepted 2026-07-27; handoff:
 `md/handoffs/WP-4.1A-fastmcp-core-server.md`; completion:
@@ -409,9 +410,11 @@ protocol; tool calls leave the database byte/count/schema state unchanged; the o
 dependency does not break the base CLI; Windows and Ubuntu CI pass.
 *Handoff:* `md/handoffs/WP-4.1A-fastmcp-core-server.md`.
 
-**WP-4.1B Local-client integration and end-to-end validation.** *(ready for
-execution; WP-4.1A acceptance gate satisfied; handoff:
-`md/handoffs/WP-4.1B-local-client-integration-e2e.md`)*
+**WP-4.1B Local-client integration and end-to-end validation.** *(accepted
+2026-07-27; handoff:
+`md/handoffs/WP-4.1B-local-client-integration-e2e.md`; completion:
+`md/handoffs/reports/WP-4.1B-completion-report.md`; validation:
+`md/handoffs/reports/WP-4.1B-validation-review.md`)*
 *Objective:* Configure and document the accepted local stdio server across Codex and
 Claude client surfaces, then validate bounded real-history recall.
 *Tasks:* Add setup/troubleshooting instructions for Codex desktop/CLI/IDE, ChatGPT
@@ -603,9 +606,20 @@ The story arc: *v1 proves the boring archive; v2 makes it intelligent — and me
 ### Post-v1 backlog (unscheduled — timeboxed spikes only if pulled forward)
 **Prompt-strategy study:** after baseline comparisons, select the best one or two local models and test versioned schema-first and few-shot prompt variants against the unchanged Gemini-120 cloud control. Keep this as WP-5.2B3 development work, disclose reuse of the 120-case development set, and freeze the selected prompt before any later untouched evaluation.
 
-In rough priority order: **Gemini Takeout/My Activity importer** (chat text lives under My Activity filtered to Gemini Apps, not necessarily the plain Gemini product checkbox) · **Codex cross-client workspace-association spike** (RS-3: determine whether VS Code/Codex Desktop visibility is keyed by path, repository identity, local metadata, or service association before changing project grouping) · **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **optional host-model work after WP-5.2A2/A3**, including Edge Aion and any future browser resident model, each requiring its own feasibility and adapter approval; Phi Silica remains WP-5.4/Windows App SDK scope · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
+**Current local-store warning-taxonomy hardening:** verify current Claude Code
+`file-history-delta` rows and current Codex command/task/patch/thread/compaction,
+web-search, MCP-tool, and world-state records against real local formats. Move
+only confirmed metadata types into explicit silent-skip sets; preserve malformed
+records, unknown future types, and unsupported non-text content as visible
+warnings. Add a privacy-safe CLI summary of `ingest_runs.errors_json` by
+provider/category/detail label so operators do not need direct SQLite queries.
+The observed backlog trigger was a successful, idempotent collect with 47 Claude
+Code and 29,276 Codex warnings dominated by metadata; all 12 JSONL files under
+the checked Chronicle Claude Code project were represented in the database.
 
-**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo, accepted. Claude project metadata, WP-1.5/WP-1.6 usability polish, WP-2.3.2 search punctuation hardening, WP-5.1 configurable AI-task infrastructure, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 CI portability, and the public v0.1.0 source release are accepted. The resumed AI-development sequence through WP-5.2B2.2 is accepted: frozen snapshot → direct FABLE references → Llama floor integration → split local/hosted harness and fixed Pro judge → same-prefix pilot and complete Gemini/Qwen/Llama-1B arms → qualification and checkpoints for Phi/Llama-3B/Gemma-3 → independent complete 120-case arms for all five local models. LP-4.1 then consolidated exact per-case UTS/sensitivity, task/model interpretation, editorial review, final article copy, and aggregate figures; the owner reports the LinkedIn long-form article published on 2026-07-27. The selected next priority is MCP recall: execute WP-4.1A core stdio server, validate it, then execute WP-4.1B local-client integration. WP-5.2B3 prompt strategy testing remains a separate post-baseline backlog item and must not overwrite published baseline evidence. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. WP-5.2A2 Chrome Gemini Nano feasibility, WP-5.2A3 implementation, and WP-5.2A4 hosts remain optional. A separate untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later work unless explicitly reprioritized.
+In rough priority order: **Gemini Takeout/My Activity importer** (chat text lives under My Activity filtered to Gemini Apps, not necessarily the plain Gemini product checkbox) · **Claude Code/OpenAI Codex warning-taxonomy hardening and ingest-error summary** · **Codex cross-client workspace-association spike** (RS-3: determine whether VS Code/Codex Desktop visibility is keyed by path, repository identity, local metadata, or service association before changing project grouping) · **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **optional host-model work after WP-5.2A2/A3**, including Edge Aion and any future browser resident model, each requiring its own feasibility and adapter approval; Phi Silica remains WP-5.4/Windows App SDK scope · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
+
+**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo, accepted. Claude project metadata, WP-1.5/WP-1.6 usability polish, WP-2.3.2 search punctuation hardening, WP-5.1 configurable AI-task infrastructure, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 CI portability, and the public v0.1.0 source release are accepted. The resumed AI-development sequence through WP-5.2B2.2 is accepted: frozen snapshot → direct FABLE references → Llama floor integration → split local/hosted harness and fixed Pro judge → same-prefix pilot and complete Gemini/Qwen/Llama-1B arms → qualification and checkpoints for Phi/Llama-3B/Gemma-3 → independent complete 120-case arms for all five local models. LP-4.1 then consolidated exact per-case UTS/sensitivity, task/model interpretation, editorial review, final article copy, and aggregate figures; the owner reports the LinkedIn long-form article published on 2026-07-27. WP-4.1 MCP recall is now accepted: WP-4.1A delivered the bounded read-only stdio server and WP-4.1B validated it across local Codex and Claude surfaces with active/frozen database switching. The next development priority requires owner selection. WP-5.2B3 prompt strategy testing remains a separate post-baseline backlog item and must not overwrite published baseline evidence. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. WP-5.2A2 Chrome Gemini Nano feasibility, WP-5.2A3 implementation, and WP-5.2A4 hosts remain optional. A separate untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later work unless explicitly reprioritized.
 
 ---
 

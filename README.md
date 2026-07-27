@@ -1,6 +1,12 @@
 # Chat Chronicle
 
-*A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, with optional YAML-defined AI tasks and MCP recall planned as separate layers.*
+*A local-first, searchable archive of your AI conversations — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, with optional YAML-defined AI tasks and read-only MCP recall.*
+
+**Choose your path:** use the quick start below for CLI search, the
+[MCP Recall User Manual](docs/mcp-client-setup.md) for recall from Codex or
+Claude, and the specialist documentation for
+[AI tasks](docs/ai-tasks.md) and
+[development evaluation](docs/development-evaluation.md).
 
 ## Start searching in 5 minutes
 
@@ -69,6 +75,9 @@ poetry run chronicle search "docker network"
 poetry run chronicle search --phrase "YOU are the MANAGER"
 poetry run chronicle open <result-id>
 ```
+
+For AI-assisted recall from Codex or Claude after completing these steps, follow
+the [MCP Recall User Manual](docs/mcp-client-setup.md).
 
 ## Supported sources
 
@@ -199,6 +208,32 @@ For ChatGPT and Claude web conversations, `open` uses the stored provider URL wh
 available and attempts to launch the default browser. For Codex and Claude Code,
 `open` renders the locally archived transcript.
 
+## MCP recall
+
+MCP recall lets supported Codex and Claude clients search Chronicle, retrieve a
+bounded conversation extract, and list recent topics through three read-only
+tools: `search_chats`, `get_conversation`, and `list_recent_topics`. It does not
+capture the current chat, write to the archive, run AI tasks, or provide a
+hosted/web bridge.
+
+```powershell
+poetry install -E mcp
+```
+
+```text
+command: <repo>\.venv\Scripts\python.exe
+args: -m chat_chronicle.cli serve
+environment:
+  CHAT_CHRONICLE_DB: <absolute-database-path>
+```
+
+The direct Python launch is the tested Windows contract. Change only
+`CHAT_CHRONICLE_DB` to switch archives, then restart the client. Selected tool
+output is processed by the client's model provider, so review the disclosure
+scope before retrieving private text. See the
+[MCP Recall User Manual](docs/mcp-client-setup.md) for verified Codex, Claude
+Code, and Claude Desktop configuration, switching, removal, and troubleshooting.
+
 ## What this is not
 
 Chat Chronicle is not a hosted AI memory service, browser extension, or agent
@@ -207,7 +242,7 @@ histories.
 
 ## Project status
 
-> **Status: v0.1.0 is the published source baseline; development continues on `main`.** The local DB, official ChatGPT and Claude export importers, OpenAI Codex and Claude Code local extractors, config/init/collect, scan-local inventory, stats, search, phrase search, open, and recent-activity CLI paths are implemented and exercised against the owner's real archive. YAML-defined AI tasks now run through LiteLLM with strict schemas, caching, and explicit local/remote controls. A private development evaluation harness supports split candidate generation, local deterministic scoring, and optional cached Gemini judging. Claude project metadata is linked only when reliable conversation references exist. See [`md/master-plan.md`](md/master-plan.md) for the full plan and [`md/development-ledger.md`](md/development-ledger.md) for execution status.
+> **Status: v0.1.0 is the published source baseline; development continues on `main`.** Implemented capabilities include multi-provider collection, SQLite/FTS search and recent activity, optional YAML-defined AI tasks and evaluation tooling, and read-only MCP recall through tested Codex and Claude clients. See the [`master plan`](md/master-plan.md) and [`development ledger`](md/development-ledger.md) for detailed scope and status.
 
 ## Why
 
@@ -459,7 +494,7 @@ preparation, transfer, authorization, and report interpretation.
 
 Python 3.11+ · Poetry · Pydantic v2 · Typer + Rich · stdlib `sqlite3` + FTS5 · pytest · ruff · pre-commit · GitHub Actions (Windows + Ubuntu).
 
-Optional extras: `enrich` (YAML-defined AI tasks through LiteLLM, local service profile by default) and the planned `mcp` layer (FastMCP recall server). The core archive keeps zero mandatory AI dependencies.
+Optional extras: `enrich` (YAML-defined AI tasks through LiteLLM, local service profile by default) and `mcp` (the FastMCP read-only recall server). The core archive keeps zero mandatory AI dependencies.
 
 Not chosen: **DuckDB** (an analytics engine, wrong fit for text recall) · **Marvin** (native `json_schema` structured output teaches more) · **a browser extension** (fragile; exports and extractors cover the same ground) · **a background daemon** (a one-line Windows Task Scheduler entry suffices).
 
