@@ -1,6 +1,26 @@
 # LP-4.1 Validation Review
 
-## Status
+## Final publication status
+
+**Accepted as a completed publication package on 2026-07-27.**
+
+The owner reports that the LinkedIn long-form article was published. The final source package is
+recorded in `md/handoffs/reports/LP-4.1-publication-record.md`. The external LinkedIn URL was not
+provided and is not inferred.
+
+Final PM checks confirm:
+
+- the complete six-arm analysis brief contains exact reproduced UTS and sensitivity evidence;
+- the final article source is `LP-4.1-article-draft-v2.md`;
+- the final prepared feed introduction is `LP-4.1-linkedin-post.md`;
+- both SVG figures parse as valid XML;
+- no private absolute path, credential, token, raw conversation, private identifier, or account
+  identity appears in the publication files;
+- the article uses the required qualified judge-family language;
+- v1 and the editorial review packs are retained as an audit trail;
+- no application, harness, benchmark package, database, or private evaluation artifact changed.
+
+## Initial status (superseded)
 
 Accepted on 2026-07-23 as a provisional analysis and editorial-planning artifact.
 
@@ -40,3 +60,5 @@ The brief contains aggregate privacy-safe evidence only. It remains extensible f
 Llama 3.2 3B, and Gemma 3 results. Final metric values, UTS calculations, headlines, visuals, and
 publication timing remain open until the later evaluation gate.
 
+The paragraph above records the provisional 2026-07-23 state. The final six-arm analysis,
+publication drafts, figures, and publication record supersede those open placeholders.

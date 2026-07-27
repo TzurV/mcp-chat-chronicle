@@ -2,367 +2,406 @@
 
 ## Status
 
-Owner-approved interpretation direction recorded on 2026-07-23 after the required discussion
-cycle. This brief is analysis and editorial planning only. It authorizes no publication, no final
+Ready for PM validation.
+
+Revised on 2026-07-24 with the complete six-arm evidence after the owner approved the updated
+interpretation direction in the LP-4.1 continuation discussion. The provisional three-arm
+version was accepted by the PM on 2026-07-23; this revision replaces its provisional scorecard,
+estimated composite values, and incoming-model placeholders with exact complete-arm results.
+
+This brief is analysis and editorial planning only. It authorizes no publication, no final
 article copy, and no publication graphics. It remains unstaged and uncommitted until the
 development manager validates and the owner explicitly requests commit.
 
-Evidence basis: the accepted WP-5.2B1.4 completion report and validation review
-(complete Gemini-120, Qwen-120, and Llama-120 arms plus the Qwen-40 operational checkpoint),
-with WP-5.2B1.2/B1.3 as accepted pilot history. No raw conversations, candidate outputs, FABLE
-references, judge rationales, private paths, IDs, or account/project data were inspected.
+Evidence basis: the accepted WP-5.2B1.4 and WP-5.2B2.2 completion reports and validation
+reviews (complete Gemini-120, Qwen-120, Phi-120, Llama-3B-120, Gemma-120, and Llama-1B-120
+arms; the Qwen-40 and WP-5.2B2.1 checkpoints remain operational history). Exact composite
+values were reproduced from accepted private per-case aggregates under ignored
+`.chronicle/eval/dev-v1/` paths, read-only, with a privacy-safe calculation manifest retained at
+`.chronicle/eval/dev-v1/tmp/lp41-uts/uts-calculation-manifest.json`. No raw conversations,
+titles, source text, candidate text, FABLE prose, judge rationales, private IDs, credentials,
+or cloud account/project data were inspected or quoted.
 
 ## 1. Evidence boundary and terminology
 
 - This is a **bounded development comparison** on the owner's real-work frozen corpus
-  (30 conversations, 4 tasks, 120 cases per arm). It is not a leaderboard, not statistically
-  generalizable, and not a scientific evaluation.
-- **Gemini 3.5 Flash (Vertex) is the cloud control / strong hosted baseline / practical quality
-  ceiling.** It is never called ground truth: it produced 8 invalid outputs itself, and 2 of its
-  eligible outputs have terminal judge failures.
+  (30 conversations, 4 tasks, 120 common cases per arm; 720 candidate positions total, all
+  terminal). It is not a leaderboard, not statistically representative, and not an independent
+  or scientific evaluation.
+- The comparison is **five local models plus one cloud control**, not six equivalent
+  deployment candidates. **Gemini 3.5 Flash (Vertex) is the cloud control / strong hosted
+  baseline / practical quality ceiling.** It is never called ground truth: it produced 8
+  invalid outputs itself and 2 of its eligible outputs retain terminal judge failures.
 - **FABLE references are silver development references**, not human-adjudicated gold labels.
-  "Exact agreement" means agreement with FABLE, not correctness.
-- **The judge is Gemini 3.1 Pro Preview** (rubric v1, temperature 0, blinded candidate identity).
-  Same-family/provider bias is possible and preliminary observations reinforce previously
-  reported same-family judge bias (see section 3, observation 6). Three eligible results retain
-  terminal judge failures and are never converted to scores.
-- Four measurement layers are kept separate throughout: **product reliability** (schema-valid /
-  120), **deterministic agreement** (exact match vs FABLE, /30 per task), **semantic quality**
-  (judge means over successfully judged valid outputs only), and **operational performance**
-  (latency, wall span, tokens). Every percentage or mean carries its denominator.
-- Local arms ran on a privacy-safe machine class: 4-core/8-thread 11th-gen Intel mobile CPU,
-  ~32 GiB RAM, integrated Iris Xe graphics, LM Studio, context 8,192, parallelism 1. Hosted
-  latency is not directly comparable with single-worker local inference.
+  "Exact agreement" means agreement with FABLE, not accuracy.
+- **The judge is Gemini 3.1 Pro Preview** (rubric v1, temperature 0, blinded candidate
+  identity), same provider/model family as the Gemini candidate. Observed judge/reference
+  disagreement is **compatible with same-family preference but does not establish bias**
+  (see section 3, observation 7). Five eligible results across all arms retain terminal judge
+  failures and are never converted to scores.
+- Four measurement layers are kept separate throughout: **product reliability** (schema-valid
+  /120), **deterministic agreement** (exact match vs FABLE, /30 per task), **semantic quality**
+  (quality among successfully judged valid outputs only — never whole-model quality), and
+  **operational performance** (latency, wall span, tokens). Every percentage or mean carries
+  its denominator.
+- All local arms shared one contract: LM Studio (CLI commit `9902c3a`, llama.cpp Vulkan AVX2
+  engine 2.25.2 for the WP-5.2B2.2 arms), Q4_K_M artifacts, context 8,192, parallelism 1,
+  temperature 0, on a privacy-safe machine class of a 4-core/8-thread 11th-gen Intel mobile
+  CPU, ~32 GiB RAM, integrated Iris Xe graphics. Hosted latency is not directly comparable
+  with single-worker local inference.
 
-## 2. Current model scorecard
+## 2. Current model scorecard (complete six-arm evidence)
 
-Primary evidence: complete 30-conversation / 120-case arms.
+| Measure | Gemini 3.5 Flash (cloud control) | Qwen3.5-4B | Phi-4 Mini | Llama 3.2 3B | Gemma 3 4B | Llama 3.2 1B (floor) |
+|---|---:|---:|---:|---:|---:|---:|
+| Schema-valid /120 | 112 (93.3%) | 84 (70.0%) | 77 (64.2%) | 71 (59.2%) | 62 (51.7%) | 57 (47.5%) |
+| Dominant failure modes | invalid JSON 6, provider 1, schema 1 | context 29, timeout 5, schema 2 | context 21, schema 12, timeout 10 | context 21, evidence 15, timeout 10, schema 3 | context 30, schema 24, evidence 2, other 2 | context 21, evidence 16, schema 15, HTTP 10, JSON 1 |
+| Task validity: summary/mode/activity/title (n=30 each) | 23/30/29/30 | 17/19/30/18 | 14/18/29/16 | 12/19/23/17 | 12/19/25/6 | 16/20/14/7 |
+| Exact agreement: mode / activity / title fit (n=30 each) | 63.3 / 70.0 / 83.3% | 33.3 / 60.0 / 56.7% | 10.0 / 60.0 / 16.7% | 10.0 / 40.0 / 43.3% | 16.7 / 46.7 / 10.0% | 3.3 / 20.0 / 6.7% |
+| Quality among judged valid outputs (macro, 0-1) | 0.966 | 0.887 | 0.780 | 0.755 | 0.797 | 0.509 |
+| **Usable Task Score (exact, 0-100)** | **88.4** | **61.9** | **50.0** | **41.9** | **40.5** | **22.4** |
+| Judge completed / eligible | 110/112 | 84/84 | 77/77 | 69/71 | 62/62 | 56/57 |
+| Candidate latency p50 / p95 | 2.156s / 12.562s | 62.094s / 168.375s | 54.608s / 180.031s | 51.124s / 180.061s | 61.834s / 156.592s | 17.312s / 53.609s |
+| Observed 120-case wall span | 10m 40s | 4h 43m 31s (see decomposition below) | 2h 18m 51s | 2h 21m 16s | 2h 08m 13s | 42m 13s |
 
-| Measure | Gemini 3.5 Flash (cloud control) | Qwen3.5-4B Q4_K_M (local control) | Llama 3.2 1B Q4_K_M (local floor) |
-|---|---:|---:|---:|
-| Schema-valid | 112/120 (93.3%) | 84/120 (70.0%) | 57/120 (47.5%) |
-| Dominant failure modes | invalid JSON 6, provider 1, schema 1 | context length 29, timeout 5, schema 2 | context 21, evidence 16, schema 15, HTTP 10, JSON 1 |
-| Exact agreement: work mode / last activity / title fit (n=30 each) | 63.3% / 70.0% / 83.3% | 33.3% / 60.0% / 56.7% | 3.3% / 20.0% / 6.7% |
-| Task validity: summary / mode / activity / title (n=30 each) | 23 / 30 / 29 / 30 | 17 / 19 / 30 / 18 | 16 / 20 / 14 / 7 |
-| Judge quality of valid outputs (macro, normalized 0-1) | ~0.97 | ~0.89 | ~0.51 |
-| **Usable Task Score (estimate, 0-100)** | **~88** | **~62** | **~22** |
-| Candidate latency p50 / p95 | 2.156s / 12.562s (n=120) | 62.094s / 168.375s (n=120) | 17.312s / 53.609s (n=120) |
-| Observed wall span (120 cases) | 10m 40s | 4h 43m 31s | 42m 13s |
+**Qwen wall-span decomposition (from accepted per-case attempt evidence, n=120):** 29 context
+failures fail fast (mean 1.8s, 53s total); 84 successes mean 85.8s (~2h 00m); 2 schema
+failures 172s; 5 timeouts sum 2h 39m, including a single 8,857s (~2h 28m) case consistent
+with the recorded in-window overnight wrapper interruption. Excluding the five timeout cases,
+Qwen's summed latency (~2h 04m) is comparable to the other 4B-class arms. The raw 4h 43m
+figure must never be published without this decomposition. Per-case speed clusters by class,
+not by model: all 3-4B arms sit at p50 51-62s.
 
-UTS values are estimates computed from the tracked task-level judge-dimension means (section 6);
-the exact per-case computation requires the private aggregates and should be reproduced before
-any publication use. Qwen-40 remains an operational checkpoint, not a fourth complete arm.
+Gemma is treated as a weak research comparator under these contracts (WP-5.2B2.2 language),
+not a product-quality endorsement; the owner will review this framing in the article draft.
 
 ## 3. Main observations
 
-Each with metric, denominator, caveat, and confidence.
+Each with metric, denominator, caveat, confidence, and public/appendix placement.
 
-1. **Structured-output reliability is the first-order product metric, and it is where local
-   models lose.** 93.3% vs 70.0% vs 47.5% schema-valid over the same 120 cases. Caveat: one
-   quantization, one runtime, one prompt strategy, one laptop, context 8,192. Confidence: high.
+1. **Structured-output reliability is the first-order product metric, and no local model
+   reaches three-in-four.** Cloud control 93.3% vs local 70.0 / 64.2 / 59.2 / 51.7 / 47.5%
+   (n=120 each). Caveat: one Q4_K_M quantization, one runtime, fixed 8,192-token contract,
+   one prompt strategy, one laptop class. Confidence: high. **Public.**
 
-2. **When the mid-size local model succeeds, output quality is roughly at cloud-control level —
-   but it succeeds only 70% of the time.** Qwen judged summary and title dimensions were 4.00
-   across the board (n=17, n=18); Gemini's were 3.95-4.00 (n=22, n=30). Survivorship warning:
-   these means describe surviving cases only and must never be presented as whole-product
-   quality; 36/120 Qwen positions produced nothing consumable. Confidence: high on the pattern,
-   subject to the same-family judge caveat.
+2. **Quality-among-valid and whole-package reliability rank differently — survivorship is the
+   trap.** Gemma's judged valid outputs score better than Phi's (0.797 vs 0.780 macro
+   normalized) despite 12.5 points lower reliability; Qwen's valid summaries and titles judged
+   at or near ceiling. A quality average over survivors must never be presented as whole-model
+   quality; UTS's zero-for-invalid rule is the correction. Caveat: per-task judged n ranges
+   6-30; same-provider preview judge. Confidence: high. **Public** (the article's
+   methodological core).
 
-3. **Qwen's failures are dominated by context capacity, not model capability.** 29 of 36 Qwen
-   failures were context-length terminations at the configured 8,192-token window. The three
-   tasks fed by the full conversation-overview selector (max 50,000 input chars, roughly 12-14K
-   tokens) each lost 11-13 cases; the one task with a smaller selector (last-activity, 24,000
-   chars / 12 recent messages) went 30/30 valid. The 50K-char budget arithmetically cannot fit
-   an 8K window for long conversations. Caveat: the selector contrast is confounded (different
-   task, not only different input size), and the accepted arm must not be reinterpreted post
-   hoc — the controlled test is the approved follow-up context-expansion arm (section 14).
-   Llama is different: beyond 21 context failures, 31 evidence/schema failures are genuine
-   capability failures. Confidence: medium-high, framed as strongly supported hypothesis.
+3. **Qwen3.5-4B is the best local model on every one of the four tasks.** Task-level UTS:
+   summary 56.7 vs next-best-local 39.1; work mode 41.7 vs 37.2; last activity 89.1 vs 77.8;
+   title 60.0 vs 54.2 (all n=30). It also leads or ties every deterministic agreement metric.
+   Parameter count does not predict this ordering: Gemma 3 4B trails Llama 3.2 3B on
+   reliability (51.7% vs 59.2%, n=120). Caveat: bounded development comparison, one prompt
+   strategy; some margins modest. Confidence: high within this contract. **Public.**
 
-4. **Work-mode classification is the semantically hardest task for every model, including the
-   cloud control.** Exact agreement 63.3% / 33.3% / 3.3% (n=30 each); it is also every model's
-   weakest judge area (label support 3.60 / 2.58 / 1.58 over 30/19/19 judged cases). Mandatory
-   caveat: reference support is skewed (executor 14, one-off 12, manager 3, mixed 1) and
-   `mixed` was never correctly predicted by any model. Confidence: high that it is hardest;
-   the imbalance caveat always travels with the claim.
+4. **The fixed 8,192-token contract sets a common failure floor; model-specific failure modes
+   differentiate above it.** Context-length failures span 21-30 per local arm (n=120), but
+   composition differs sharply: Qwen's failures are 81% context (29/36); Gemma adds 24 schema
+   failures concentrated in title assessment (24 of 30 title cases rejected); Phi and Llama 3B
+   each add 10 timeouts; Llama 3B adds 15 evidence failures. Two remedies exist and both stay
+   hypotheses until measured: growing the window (follow-up arm, section 14) and right-sizing
+   inputs (already supported: the small-selector task went 30/30, 29/30, 25/30, 23/30 valid
+   for Qwen/Phi/Gemma/Llama-3B). Caveat: never claim context expansion will fix a model.
+   Confidence: high on the decomposition. **Public.**
 
-5. **Task difficulty is model-dependent; there is no universal easiest-to-hardest ranking.**
-   Summary was the cloud control's weakest structural task (23/30 valid; 7 of its 8 failures),
-   Qwen's weak tasks were the big-context ones (17-19/30), and Llama's was title assessment
-   (7/30). The 1B model was ~3.6x faster than Qwen per case but too unreliable for these
-   contracts; larger local parameter count bought quality-when-valid, not speed. Confidence:
-   high as observation; routing decisions wait for the full candidate set.
+5. **Local wall-clock is dominated by tails and contract interactions, not average speed —
+   and speed claims must be workload-shaped.** All 3-4B arms cluster at p50 51-62s (n=120
+   each); the Qwen span decomposition (section 2) shows the headline gap was a timeout-tail
+   artifact. Product framing on the owner's real 711-conversation archive: full backfill
+   ≈ 2,850 cases x ~86s ≈ 2.8 days of continuous laptop compute (impractical); incremental
+   daily enrichment ≈ minutes per day (acceptable); interactive use (2s budget) is out of
+   reach by ~30x. Caveat: single-worker execution, one laptop class; spans include in-window
+   interruption by definition. Confidence: high (reproduced per-case). **Public in decomposed,
+   workload-shaped form; raw span alone is prohibited.**
 
-6. **Judge-vs-reference disagreement is consistent with same-family judge self-preference.**
-   On title fit the Pro judge scored Gemini's title-fits correctness 4.00 (n=30) while FABLE
-   exact agreement was 83.3% (5 disagreements, all FABLE=true / Gemini=false); the judge sided
-   with the same-family candidate in every disagreement. The current evidence cannot separate
-   judge bias from silver-label error; preliminary observations reinforce previously reported
-   same-family (Gemini-judging-Gemini) bias. Owner adjudication of disagreement cases is
-   recorded as backlog (section 14). Confidence: the discrepancy itself is certain; its cause
-   is deliberately left open in public language.
+6. **The fast floor model has no credible role for these contracts.** Llama 1B is ~3x faster
+   than the 4B class (p50 17.3s, n=120) at UTS 22.4 with 0.509 valid-output quality — fast
+   wrong answers are still wrong. Confidence: high. **Public one-liner; detail in appendix.**
+
+7. **Judge/reference disagreement observation (parked).** On title fit the Pro judge scored
+   the Gemini candidate's title-fits correctness 4.00 (n=30) while FABLE exact agreement was
+   83.3% (all 5 disagreements FABLE=true / candidate=false). This is compatible with
+   same-family preference but does not establish bias; it is equally compatible with silver
+   reference error. The owner may do further work here (sourcing and/or local adjudication of
+   the disagreement cases) before publication; until then the article uses only the qualified
+   wording. Confidence: the discrepancy is exact; its cause is undetermined. **Limitations
+   section, not a headline.**
 
 ## 4. Task-difficulty analysis
 
-Three separate axes; a single combined "difficulty" number is intentionally not produced.
+Three separate axes; no single combined difficulty number.
 
-- **Structural difficulty** (can the model return consumable schema-valid output);
-- **Semantic difficulty** (agreement with reference and judge scores);
-- **Operational difficulty** (context pressure, output budget, latency).
+- **Structural** (schema-valid output rate and failure boundary);
+- **Semantic** (FABLE agreement and fixed-Pro dimensions over judged valid outputs);
+- **Operational** (context pressure, timeout, output budget, latency).
 
-Task-by-model interpretation (denominator 30 cases per cell; agreement is exact-vs-FABLE;
-judge means are over successfully judged valid outputs only):
+Six-model interpretation (denominator 30 cases per cell):
 
-| Task | Gemini (cloud control) | Qwen3.5-4B | Llama 3.2 1B | Reading |
-|---|---|---|---|---|
-| Summary | 23/30 valid; judge ~3.98 (n=22) | 17/30 valid; judge 4.00 (n=17) | 16/30 valid; judge ~3.09 (n=16) | Structurally hardest overall: material-selection and context pressure hit every model; the cloud control's only real failure mode (invalid JSON) concentrates here. |
-| Work mode | 30/30 valid; 63.3% agree; label support 3.60 (n=30) | 19/30 valid; 33.3% agree; 2.58 (n=19) | 20/30 valid; 3.3% agree; 1.58 (n=19) | Semantically hardest for everyone; manager/executor/mixed/one-off boundaries are fuzzy and reference support is skewed. |
-| Last activity | 29/30 valid; 70.0% agree; ~3.94 (n=28) | 30/30 valid; 60.0% agree; ~3.67 (n=30), next-action support 2.90 | 14/30 valid; 20.0% agree; ~2.11 (n=14) | Comparatively suitable for Qwen: the smaller recent-meaningful selector fits the 8K window; its residual weakness is next-action support. |
-| Title | 30/30 valid; 83.3% agree; ~3.97 (n=30) | 18/30 valid; 56.7% agree; 4.00 (n=18) | 7/30 valid; 6.7% agree; ~2.97 (n=7) | Easy for the cloud control; for locals it inherits full-overview context pressure; structurally and semantically hardest for the 1B floor. |
+| Task | Cloud control | Qwen | Phi | Llama 3B | Gemma | Llama 1B | Reading |
+|---|---|---|---|---|---|---|---|
+| Summary (task UTS) | 23/30; 72.9 | 17/30; 56.7 | 14/30; 39.1 | 12/30; 37.1 | 12/30; 38.7 | 16/30; 37.1 | Structurally hardest overall; full-overview selector (~12-14K tokens) cannot fit the 8K local window on long conversations; also the cloud control's only weak spot (7 of its 8 failures). |
+| Work mode (task UTS) | 30/30; 63.3% agree; 90.0 | 19/30; 33.3%; 41.7 | 18/30; 10.0%; 37.2 | 19/30; 10.0%; 28.9 | 19/30; 16.7%; 30.6 | 20/30; 3.3%; 20.0 | Semantically hardest for all six arms. Distinct per-model failure shapes: Llama 3B never predicted `executor` (0 predictions, support 14); Phi funnels into `mixed`; Gemma over-predicts `manager`. Reference support is skewed (executor 14, one-off 12, manager 3, mixed 1); `mixed` was never correctly predicted by any model. |
+| Last activity (task UTS) | 29/30; 70.0%; 91.5 | 30/30; 60.0%; 89.1 | 29/30; 60.0%; 77.8 | 23/30; 40.0%; 47.4 | 25/30; 46.7%; 76.3 | 14/30; 20.0%; 17.2 | The local sweet spot, generalized across models: the recent-meaningful selector (~6-7K tokens) fits the window. Local semantic weakness concentrates in next-action support (2.4-2.9 means). Llama 1B's collapse here is capability, not context. |
+| Title (task UTS) | 30/30; 83.3%; 99.1 | 18/30; 56.7%; 60.0 | 16/30; 16.7%; 45.8 | 17/30; 43.3%; 54.2 | 6/30; 10.0%; 16.4 | 7/30; 6.7%; 15.3 | The great separator, with opposite failure classes on the same task: Gemma's failure is structural (24 schema rejections, 6/30 valid); Phi's is semantic (10 true→false inversions among valid outputs). Easy only for the cloud control. |
+
+Provisional hypotheses from the three-arm brief, tested against six arms: work-mode-hardest
+**confirmed**; last-activity suitability for Qwen **confirmed and generalized** (Phi ties its
+60% agreement); title separating Qwen/Llama-3B from Phi/Gemma/1B **broadly confirmed** (Phi
+lands between the groups); summary as context/material-selection constrained **confirmed**;
+model-dependent difficulty **confirmed**; context-explains-some-but-not-all **confirmed**
+(finding 4).
 
 ## 5. Task-routing options
 
-Assessed for a practical product configuration. The task catalog already assigns
-`model_profile` per task, so static routing is a configuration change, not new architecture.
+Revised by the complete evidence. The task catalog already assigns `model_profile` per task,
+so any static routing is configuration, not architecture.
 
-| Option | Expected benefit | Operational complexity | Privacy / cost trade-off | Failure detection needed | Evidence sufficient now? |
-|---|---|---|---|---|---|
-| One model for all tasks | Simplest ops; one artifact loaded | Lowest | Fully local possible; quality cost on weak tasks | None beyond existing schema validation | Yes for ranking the three tested arms; no for final choice (2 candidates outstanding at qualification, 3 total incoming) |
-| Best local model per task (static routing) | Captures model-dependent task fit (e.g. Qwen 30/30 + 60% agreement on last-activity) | Low-moderate: YAML per-task profiles exist; multi-model load/swap on a 32 GiB iGPU laptop favors sequential batch passes | Fully local; more disk/RAM churn | None beyond existing validation | No — wait for the five-candidate matrix |
-| Local-first, cloud fallback on invalid output | Recovers most of the reliability gap at low cloud volume (Qwen would have escalated ~30% of cases) | Moderate: routing logic simple because schema validation is already the gate | "Local by default" gains an asterisk; per-case cloud cost on escalations | Already built (schema/evidence/cross-field validation) | Architecture defensible now; escalation-rate numbers per model need full matrix |
-| Reliability threshold for task admission (e.g. a model must reach X% valid on a task before enrichment uses it) | Prevents shipping unusable enrichment; principled gate | Low: an offline decision, not runtime machinery | None | None | Yes as policy concept; thresholds set after full matrix |
+| Option | Verdict | Supporting metrics (denominators) | Complexity / privacy / detection | Status |
+|---|---|---|---|---|
+| One local model for all tasks (Qwen) | **Supported now** as the best single-local configuration | Best local task UTS on 4/4 tasks; best or tied local agreement on 3/3 categorical tasks (n=30 each); 70.0% reliability (n=120) | Config-only; fully local; existing schema validation suffices | Implementable when the owner wants enrichment enabled |
+| Best local model per task (local-to-local routing) | **Not supported** — no task where another local model beats Qwen; Phi only ties last-activity agreement (60%, n=30) with lower task UTS (77.8 vs 89.1) | Task UTS table, section 4 | Multi-model swap cost on 32 GiB iGPU laptop | Dropped from recommendations; retained as "checked and rejected" |
+| Local-first, cloud fallback on invalid output | **Strongest product configuration** on current evidence | Qwen escalation rates per task: summary 13/30, mode 11/30, activity 0/30, title 12/30 (36/120 = 30% overall) | Detection already built (schema/evidence/cross-field validation); "local by default" gains a disclosed cloud asterisk and per-case cost | Article discussion; implementation is a product decision, not committed here |
+| Task admission threshold | Supported as offline policy | E.g. a >=80% task-validity gate admits only Qwen last-activity (30/30) today | None; policy only | Article discussion |
+| Faster-but-weaker model role | **No credible role** for the 1B floor under these contracts | UTS 22.4; 0.509 valid-output quality (n=120/57) despite p50 17.3s | — | Public one-liner |
 
-Recommendation for the article: present routing as design discussion with the task-by-model
-matrix as evidence, state that the configuration was built for it, and defer concrete
-assignments until WP-5.2A5.1/B2 results are added. Confidence-based routing is future work
-only; no calibration evidence exists.
+Confidence: high within this bounded contract. Routing conclusions do not extend to other
+corpora, prompts, quantizations, or hardware.
 
-## 6. Composite-score formulas and sensitivity
+## 6. Composite score: exact UTS and sensitivity
 
-**Usable Task Score (UTS), 0-100 — evaluated and adopted as a secondary communication metric.**
+**Usable Task Score (UTS), 0-100 — exact, reproduced per-case from private aggregates.**
 
-Definition: per case, score 0 when the candidate output is invalid, absent, or has no completed
-judge result; otherwise the mean of the applicable rubric dimensions normalized from the 1-4
-judge scale to 0-1 via `(score - 1) / 3`; average cases within each task (denominator always
-30); macro-average the four tasks; multiply by 100. Latency is never combined into UTS; speed
-stays a separate axis.
+Definition (formula v1): per case, score 0 when the candidate output is invalid or absent or
+the judge result is not completed; otherwise the mean of the applicable rubric dimensions
+normalized from the 1-4 judge scale via `(score - 1) / 3`; average the 30 cases within each
+task; macro-average the four tasks; multiply by 100. Latency is never combined into UTS.
+Normalization rationale: a judged "1" means the output is wrong; `(s-1)/3` gives it zero
+credit, where `s/4` would give 0.25 credit for a wrong answer.
 
-Normalization rationale (owner-approved): a judged "1" on this rubric means the output is
-wrong; `(s-1)/3` gives it 0 credit, whereas `s/4` would give 0.25 credit for a wrong answer.
+Exact values (float64 throughout; reported to 1 decimal):
 
-Estimated task scores from the tracked task-level dimension means (0-1 before x100):
+| Task UTS (x100) | Gemini | Qwen | Phi | Llama 3B | Gemma | Llama 1B |
+|---|---:|---:|---:|---:|---:|---:|
+| Summary | 72.9 | 56.7 | 39.1 | 37.1 | 38.7 | 37.1 |
+| Work mode | 90.0 | 41.7 | 37.2 | 28.9 | 30.6 | 20.0 |
+| Last activity | 91.5 | 89.1 | 77.8 | 47.4 | 76.3 | 17.2 |
+| Title | 99.1 | 60.0 | 45.8 | 54.2 | 16.4 | 15.3 |
+| **UTS (macro)** | **88.4** | **61.9** | **50.0** | **41.9** | **40.5** | **22.4** |
+| Zero-scored cases /120 | 10 | 36 | 43 | 51 | 58 | 64 |
 
-| Task score | Gemini | Qwen | Llama |
-|---|---:|---:|---:|
-| Summary | 0.729 (22 judged/30) | 0.567 (17/30) | 0.371 (16/30) |
-| Work mode | 0.900 (30/30) | 0.417 (19/30) | 0.200 (19/30) |
-| Last activity | 0.915 (28/30) | 0.891 (30/30) | 0.172 (14/30) |
-| Title | 0.991 (30/30) | 0.600 (18/30) | 0.153 (7/30) |
-| **UTS (macro x100)** | **~88** | **~62** | **~22** |
+Judge-failure policy: terminal judge failures score 0 (Gemini 2, Llama 3B 2, Llama 1B 1) and
+remain visible. Equal-task and equal-case weighting were **verified identical** (difference
+< 1e-12), as required, because every task has exactly 30 cases.
 
-These use task-level means as a proxy for per-case averaging; reproduce exactly from private
-aggregates before publication.
+Sensitivity (all six formulas produce the identical order
+Gemini > Qwen > Phi > Llama 3B > Gemma > Llama 1B):
 
-Alternatives compared:
+| Formula | Values in rank order |
+|---|---|
+| UTS, `(s-1)/3` (primary) | 88.4 / 61.9 / 50.0 / 41.9 / 40.5 / 22.4 |
+| `s/4` normalization variant | 89.2 / 63.9 / 53.5 / 45.8 / 43.3 / 28.5 |
+| Judge failures excluded from denominator | 89.8 / 61.9 / 50.0 / 42.8 / 40.5 / 22.6 |
+| Reliability x valid-output quality | 90.2 / 62.1 / 50.1 / 44.6 / 41.2 / 24.2 |
+| Geometric sqrt(R x Q) | 95.0 / 78.8 / 70.8 / 66.8 / 64.2 / 49.2 |
+| Harmonic 2RQ/(R+Q) | 95.0 / 78.3 / 70.4 / 66.3 / 62.7 / 49.2 |
 
-- **Reliability-adjusted judge mean** (valid rate x normalized valid-output judge macro-mean):
-  Gemini ~0.90, Qwen ~0.62, Llama ~0.24.
-- **Geometric combination** sqrt(reliability x quality): ~0.95 / ~0.79 / ~0.49.
-- **No composite** (two-axis reliability-vs-quality chart): retained as the *primary* visual
-  regardless of UTS adoption.
+Near-tie note: the Llama 3B / Gemma gap is 1.4 UTS points (2.5 under `s/4`). The direction is
+stable across all variants but the article must not headline a fourth-versus-fifth claim.
 
-Sensitivity results:
+Decision (owner-approved): UTS is retained as the **secondary** metric — it reproduces
+exactly, the ranking is stable, its limitations fit three lines (policy choice; zero-for-
+invalid; same-family judge input), and it adds clarity beyond the primary two-axis chart.
+The two-axis reliability-versus-valid-output-quality view remains primary.
 
-- **Ranking never changes** across UTS, the reliability-adjusted mean, geometric/harmonic
-  combinations, or the `s/4` normalization variant (which shifts all values up: ~89/~64/~28).
-  The gaps are too large to flip.
-- **Equal-task vs equal-case weighting are identical by construction** here: all four tasks
-  have exactly 30 cases, so the macro and micro averages coincide.
-- **Judge-failure treatment:** the three terminal judge failures (2 Gemini, 1 Llama) score 0.
-  Excluding them instead would move Gemini by roughly +1.4 UTS points and Llama by well under
-  a point; scoring them 0 is conservative against the cloud control, which is the right
-  direction given the same-family judge concern.
+Calculation manifest (aliases, formula version, denominators, policies, results, variants):
+`.chronicle/eval/dev-v1/tmp/lp41-uts/uts-calculation-manifest.json` (ignored path; source
+packages referenced by accepted alias only; nothing was modified).
 
-Decision: **two-axis chart primary, UTS secondary**, always presented with its three-line
-definition and the statement that it is a policy choice, not a scientific truth. Its
-defensibility rests on the demonstrated formula-insensitivity of the ranking.
+## 7. Public metric subset (finalized proposal)
 
-## 7. Recommended public metric subset
-
-Owner-approved minimal set for the article:
-
-1. Schema-valid rate per model (n=120 each), with the failure-category decomposition;
-2. Task x model validity matrix (12 cells, n=30 each);
+1. Schema-valid rate per model (n=120) with failure-category decomposition;
+2. Task x model validity matrix (24 cells, n=30 each);
 3. Exact agreement vs FABLE for the three categorical tasks (n=30 each), labeled as
-   agreement with silver references, not correctness;
-4. One judged-quality figure for valid outputs (macro normalized judge mean), always paired
-   with the valid-rate so survivorship is visible;
-5. UTS as the single secondary composite;
-6. Operational table kept separate: candidate latency p50 (p95 in appendix), observed wall
-   span, and the privacy-safe hardware/runtime description.
+   agreement with silver references;
+4. Quality among judged valid outputs (macro normalized) always paired with valid rate;
+5. UTS with its three-line definition and formula;
+6. Operational table kept separate: p50 latency, **decomposed** wall spans (never the raw
+   Qwen span alone), and the privacy-safe hardware/runtime description.
 
-Private appendix (not published, retained): full confusion matrices, per-label
+"Raw results" in the article means these complete aggregate tables plus the exact scoring
+formula — never per-case or per-conversation data, which stay private.
+
+Private appendix (retained, not published): confusion matrices, per-label
 precision/recall/support, per-dimension judge means, token accounting, per-task latency,
-Qwen-40 checkpoint detail.
+checkpoint data, calculation manifest.
 
-Explicitly acceptable to publish (owner-confirmed): the 4h 43m Qwen-120 wall span on the
-laptop — treated as a credibility asset, clearly bound to the exact hardware class and
-single-worker configuration.
+## 8. Article narrative (owner-approved direction)
 
-## 8. Article narrative options
+**Structure: measured results → survivorship-honest analysis → practical lessons → concrete
+next steps.** Narrative A ("the reliability gap") is the spine; the failure-mode taxonomy from
+the alternative narrative is absorbed into the lessons; the task x model matrix is the
+technical centerpiece. The article is framed as practical lessons from an engineering
+comparison on the owner's own frozen real-work corpus.
 
-Owner decision: **hybrid — narrative A as the spine with narrative B's task-difficulty matrix
-as the centerpiece.**
+Practical-lessons candidates (each backed by a section-3 observation):
 
-- **Narrative A (spine) — "The reliability gap: demo quality vs product quality."** Hook: the
-  best local outputs were indistinguishable from cloud — the problem is the other 30%. Arc:
-  four real product tasks with strict output contracts → cloud control sets the bar → every
-  case counts, not just the best answers → survivorship correction → scorecard/UTS → why the
-  gap is partly an input-budget engineering problem → what's next (more candidates, context
-  study, prompt study).
-- **Narrative B (centerpiece, absorbed) — "No single winner: which tasks can a small local
-  model be trusted with?"** The task x model matrix, three difficulty axes, Qwen's 30/30
-  last-activity result as the routing proof-of-concept, local-first-with-fallback as the
-  practical architecture. Full routing conclusions deferred to the complete candidate set.
+1. Strict output schemas turn "model quality" into measurable product reliability (obs 1);
+2. Never average only the survivors — measure the whole package (obs 2);
+3. Right-size what you send before you grow what the model accepts (obs 4);
+4. Match model class to workload shape: laptop 4B inference is a batch tool — backfill
+   ~2.8 days, daily increments minutes, interactive out of reach ~30x (obs 5);
+5. Wall-clock is about tails and timeout policy, not averages (obs 5);
+6. One local model can lead on every task and still deliver only 70% of the contract — plan
+   the fallback path (obs 3 + routing);
+7. Parameter count predicts neither speed nor reliability ordering (obs 3, 6).
 
-Headline/title options (owner to select at publication time):
+Next-steps section (describes actually planned work): stronger machine + 16K-context arm for
+the best local model(s) (section 14), prompt-strategy study (section 13), later untouched
+evaluation set (WP-5.2C).
 
-1. "I benchmarked local SLMs on 120 real work tasks. The best outputs matched cloud quality —
-   70% of the time."
+Headline options (owner selects at publication time):
+
+1. "I benchmarked local SLMs on 120 real work tasks. The best matched cloud quality — 70% of
+   the time."
 2. "The reliability gap: what happens when local LLMs meet strict output contracts on real
    work."
-3. (Existing master-plan candidate) "I benchmarked 5 local SLMs on my own laptop for real
-   work. Results surprised me."
+3. (Master-plan candidate) "I benchmarked 5 local SLMs on my own laptop for real work.
+   Results surprised me."
 
-**Short post version** (LinkedIn-native, ~300 words): hook → one scorecard visual → three
-findings (reliability gap, survivorship, task-dependence) → honest-methodology line → question
-CTA → repo link in first comment.
-
-**Longer technical article outline** (dev.to/blog): 1) the product and its four AI tasks;
-2) methodology — frozen real-work corpus, silver references, fixed blinded judge, immutable
-packages, what this is not; 3) the reliability gap (chart 1); 4) survivorship — why averaging
-only successes lies; 5) the task x model matrix (centerpiece); 6) the context-budget finding;
-7) speed and operations (chart 2, wall spans, hardware); 8) UTS — one number, three lines,
-policy not truth; 9) routing as architecture discussion; 10) limitations incl. judge-bias
-observation; 11) what's next: remaining candidates, context expansion, prompt study; 12) CTA.
+Formats: short LinkedIn post (~300 words: hook → scorecard visual → three findings →
+methodology line → question CTA → repo link in first comment) plus the longer technical
+article (results → analysis → lessons → next steps). Sequencing decision remains with the
+owner.
 
 ## 9. Visual concepts
 
-Three candidates, all from privacy-safe aggregate data only; no final graphics before owner
-approval:
-
 1. **Reliability x quality two-axis chart (primary).** X = schema-valid rate (n=120); Y =
-   normalized judge quality of valid outputs; point size or annotation = number of valid
-   outputs. Shows the survivorship story in one frame: Qwen sits high on quality, left on
-   reliability.
-2. **Latency x UTS operational chart.** X = per-case p50 latency, log scale (2.2s → 62s);
-   Y = UTS; each point annotated with observed 120-case wall span (10m40s / 42m13s / 4h43m31s).
-   Log scale is mandatory given the ~30x spread.
-3. **Task x model matrix (centerpiece).** 4 tasks x N models; each cell shows valid count /30
-   and exact agreement where applicable; color by validity band. Designed to absorb the three
-   incoming candidates as new columns without redesign.
+   quality among judged valid outputs (macro, 0-1); six points. Shows the survivorship story
+   (Gemma sits high-quality/low-reliability; the cloud control sits alone top-right).
+2. **Latency x UTS operational chart (secondary).** X = per-case p50 (log scale, 2.2s-62s);
+   Y = UTS; annotated with decomposed wall spans. Log scale mandatory (~30x spread).
+3. **Task x model matrix (centerpiece).** 4 tasks x 6 models; cells show valid/30 (+ exact
+   agreement where applicable), color by validity band. Full six-column form now final.
+
+No final graphics before explicit owner request.
 
 ## 10. Limitations and prohibited claims
 
 Must-state limitations:
 
-- Bounded development comparison on one owner's 30-conversation frozen corpus; not
-  generalizable, not a leaderboard.
-- FABLE references are silver; exact agreement measures reference agreement, not correctness.
-- The judge is a same-provider preview model; three judge results remain terminal failures;
-  the title-fit discrepancy is consistent with previously reported same-family judge bias and
-  has not yet been human-adjudicated.
-- One quantization (Q4_K_M), one runtime (LM Studio), one context policy (8,192), one prompt
-  strategy, one laptop class; hosted latency is not comparable with single-worker local
-  inference; token counts are not cross-provider comparable.
-- Development-set reuse: all 120 cases are development data; nothing here is an untouched
-  evaluation set.
+- Bounded development comparison on one owner's selected, repeatedly used 30-conversation
+  frozen corpus; silver references; not independent, representative, or scientific.
+- Same-provider preview judge; five terminal judge failures scored zero; judge run windows
+  differ between the historical and new arms under the same rubric (preview drift possible).
+- One quantization, one runtime, one context policy (8,192), one prompt strategy, one laptop
+  class; results measure the fixed task contract, not advertised maximum context.
+- Hosted and local latency are not environment-comparable; token counts are not
+  cross-tokenizer comparable.
+- All 120 cases are development data; no untouched evaluation set exists yet.
 
-Claims the evidence does not support (prohibited):
+Prohibited claims (evidence does not support):
 
-- Any "ground truth" or "objective accuracy" framing for Gemini or FABLE;
-- Statistical significance, generalization to other users/corpora/hardware, or model-family
-  superiority claims;
-- Presenting valid-output judge means as whole-product quality (survivorship);
-- Presenting UTS as anything other than a defined policy metric;
-- Concluding that context expansion *will* fix Qwen's reliability (approved follow-up measures
-  this; today it is arithmetic-supported hypothesis);
-- Attributing the title-fit discrepancy definitively to judge bias (or definitively to label
-  error) before adjudication;
-- Final routing recommendations before the complete candidate matrix;
+- Any ground-truth framing for the cloud control or FABLE; any accuracy language for exact
+  agreement;
+- Statistical significance, generalization beyond this corpus/hardware/contract, or
+  model-family superiority claims;
+- Presenting valid-output quality as whole-model quality;
+- Presenting UTS as more than a defined policy metric;
+- Publishing the raw Qwen wall span without its timeout-tail decomposition;
+- Blanket "too slow" claims — speed statements must name the workload (backfill vs
+  incremental vs interactive);
+- Claiming context expansion will fix any model (unmeasured; separate arm);
+- A fourth-versus-fifth headline over the Llama 3B / Gemma near-tie;
+- Asserting same-family judge bias as established (say: compatible with preference, does not
+  establish it; further owner work parked);
+- Local-to-local routing recommendations (checked and rejected on this evidence);
 - Any per-conversation content, title, ID, or private path.
 
-## 11. Placeholders for incoming models
+## 11. Candidate set status
 
-WP-5.2A5.1 qualifies (in sequence): **Phi-4 Mini Instruct**, **Llama 3.2 3B Instruct**,
-**Gemma 4 E2B Instruct** (or approved Gemma 3 4B IT fallback). Baseline policy for all
-incoming arms is unchanged: context 8,192, parallelism 1, accepted prompts/schemas/settings,
-fixed Pro rubric-v1 judge (owner-confirmed 2026-07-23; the larger-context study is a separate
-follow-up arm, section 14).
+The comparison set is complete: five local complete arms plus the cloud control, all on the
+common 120-case scope. The previously planned incoming-model placeholders are removed. Gemma
+ran as the approved Gemma 3 4B IT compatibility fallback (Gemma 4 E2B was neither loaded nor
+probed). No further baseline candidates are planned before the article; any new model would be
+a separately approved arm added under the unchanged contracts.
 
-Every scorecard, matrix, chart, and the UTS table in this brief is designed to add columns
-without structural change. Article placeholder slots: scorecard rows, matrix columns, two
-chart points each, plus one narrative beat reserved in the spine ("did a 3B-class model close
-the reliability gap?"). The article is not drafted, and LP-4 is not published, before every
-retained local candidate completes the 120-case run (WP-5.2B2 gate).
+## 12. Owner decisions
 
-## 12. Owner decisions still required
+Resolved 2026-07-23 (three-arm cycle): four-layer separation; UTS secondary with `(s-1)/3`
+and judge-failures-score-zero; two-axis chart primary; public metric subset shape; baseline
+context stays 8,192; context study and remote execution as follow-ups; adjudication and
+rubric v2 to backlog.
 
-Resolved 2026-07-23: interpretation direction (headline findings 1-6); UTS adopted as
-secondary with `(s-1)/3` normalization and judge-failures-score-0; hybrid narrative; public
-metric subset (incl. publishing the Qwen wall span); baseline context stays 8,192 for all five
-candidates; context study moves to follow-up (optionally remote); judge adjudication to
-backlog; framework-now-placeholders-later posture.
+Resolved 2026-07-24 (six-arm cycle):
 
-Still open (decision needed at or after WP-5.2B2 results):
+1. Interpretation direction approved, including the two revisions: routing story is "one
+   local winner plus cloud fallback" (local-to-local routing dropped), and the softened
+   context finding (common floor, not sole cause);
+2. Qwen wall span published only in decomposed form (supersedes the earlier raw-figure
+   decision);
+3. UTS confirmed with exact values and the near-tie handling;
+4. Narrative: practical-lessons structure (results → analysis → lessons → next steps) with
+   the failure taxonomy folded into lessons;
+5. Gemma framed as weak research comparator, to be reviewed in article context;
+6. Judge-bias work parked; qualified wording only.
 
-1. Final headline/title selection (three options in section 8);
-2. Publication timing after the WP-5.2B2 gate clears;
-3. Final freeze of the public metric subset against the five-model results;
-4. Whether the judge-adjudication backlog item runs before the article (strengthens the bias
-   discussion) or after;
-5. Short post only vs short post + long-form technical article, and their sequencing;
-6. Final visual selection and styling (concepts in section 9);
-7. Whether Qwen-40 checkpoint data appears anywhere public (default: no).
+Still open (decision at or after article drafting):
 
-## 13. Prompt-tuning follow-up proposal (backlog; not part of the baseline)
+1. Final headline selection (three options, section 8);
+2. Short post vs short post + long-form sequencing;
+3. Publication timing (after PM validation of this brief and explicit owner request to draft);
+4. Final visual selection and styling;
+5. Gemma framing check in the drafted article;
+6. Parked judge-bias work (sourcing and/or local adjudication) and whether it lands before or
+   after publication;
+7. Whether checkpoint data (Qwen-40, WP-5.2B2.1) appears anywhere public (default: no).
 
-Proposed design, to run only after all baseline candidate arms complete and with separate
-owner approval (maps to WP-5.2B3):
+## 13. Prompt-tuning follow-up proposal (backlog; separate future study)
 
-1. Select the best one or two **local** models by task and overall usable reliability from the
-   completed five-candidate matrix;
-2. Retain Gemini-120 unchanged as the cloud control target;
-3. Compare a small number of versioned prompt strategies: the accepted zero-shot baseline, a
-   concise schema-first variant, and bounded task-specific few-shot variants;
-4. No chain-of-thought is requested or published;
-5. Within each prompt study, hold context, model artifact, generation settings, inputs,
-   references, and fixed-Pro scoring constant; version every prompt/model identity;
-6. Run on the current development set and label all gains as prompt-development results
-   (overfitting risk disclosed);
-7. Freeze the selected prompt before any later untouched evaluation set;
-8. Report separately whether tuning closes reliability gaps, semantic gaps, or task-specific
-   gaps — not one blended delta.
+Maps to WP-5.2B3; runs only after separate owner approval:
 
-This analysis thread proposes the design only and does not execute it.
+1. Candidates: Qwen3.5-4B (clear first pick on complete evidence); optionally Phi-4 Mini as
+   second (second-best local UTS and strong last-activity validity);
+2. Gemini-120 retained unchanged as the cloud control target;
+3. Versioned prompt strategies: accepted zero-shot baseline, concise schema-first variant,
+   bounded task-specific few-shot variants;
+4. No chain-of-thought requested or published;
+5. Context, artifact, generation settings, inputs, references, and fixed-Pro scoring held
+   constant within the study; every prompt/model identity versioned;
+6. Development-set reuse disclosed; gains labeled prompt-development results;
+7. Selected prompt frozen before any later untouched evaluation set;
+8. Reliability, semantic, and task-specific gap closure reported separately.
 
-## 14. Additional follow-ups recorded from the analysis discussion (owner-approved direction)
+## 14. Additional follow-ups (owner-approved direction; separate future studies)
 
-1. **Context-expansion study (new arm, not a reinterpretation).** Keep 8,192 for all five
-   baseline arms for comparability. Afterwards, run the best one or two local models as new,
-   separately authorized arms with an up-front larger context policy (16K first; verify each
-   pinned artifact's advertised maximum — family-advertised values: Llama 3.2 128K, Qwen3-class
-   4B 32K native, Phi-4 Mini 128K, Gemma 3 4B 128K). Directly tests observation 3. Planning
-   caveat: the recovered cases are the long ones, so laptop wall time will rise materially.
-2. **Remote stronger-machine execution (WP-5.2C shape).** Use the existing split-generation /
-   portable-package / local-scoring path. Natural first remote workload: the context-expansion
-   arm. Remote performance claims must remain strictly separated from laptop claims. Subset
-   selection based on the current findings is the intended scope.
-3. **Owner adjudication of judge-vs-FABLE disagreement cases (backlog).** Locally and
-   privately adjudicate at minimum the five title-fit disagreements (optionally work-mode
-   disagreements) to convert silver to gold exactly where the same-family-bias question sits.
-   Until executed, public language stays: "consistent with previously reported same-family
-   judge bias; not yet human-adjudicated."
-4. **Judge-instruction tightening (rubric v2) — backlog only.** Any rubric change takes a new
-   version and requires re-judging every candidate for comparability; do not change rubric v1
-   during the baseline program.
+1. **Context-expansion arm(s).** New, separately authorized arms for the best local model(s)
+   with an up-front larger context policy (16K first; verify each pinned artifact's advertised
+   maximum before planning). Directly tests observation 4's context hypothesis. Never a
+   reinterpretation of accepted arms. Laptop wall time will rise materially because the
+   recovered cases are the long ones — hence:
+2. **Stronger-machine execution (WP-5.2C shape).** Split generation on the remote machine,
+   portable packages, local scoring. Natural first remote workload: the context-expansion
+   arm. Remote performance claims stay strictly separated from laptop claims.
+3. **Owner adjudication of judge-vs-FABLE disagreement cases (parked with observation 7).**
+   Local, private, converts silver to gold exactly where the same-family-preference question
+   sits; strengthens but is not required for the article.
+4. **Rubric v2 / judge-instruction tightening (backlog).** Any rubric change takes a new
+   version and requires re-judging every candidate; rubric v1 stays frozen for the baseline.
+5. **Input-cap tuning for local models (new, from the token-length analysis; cheap experiment,
+   kept out of the article body per owner).** The `max_input_chars` selector caps in the task
+   catalog are per-task: overview (whole conversation, used by summary/work-mode/title) caps at
+   50,000 chars ≈ ~12,500 proxy tokens, which is *larger* than the tested 8,192-token local
+   window — so that cap does not guarantee fit and rescued only 1 of 30 conversations from
+   overflow (8→7 over the window after the cap). The recent selector (last-activity) caps at
+   24,000 chars ≈ ~6,000 tokens, *below* the window, so 0 of 30 overflow — which is the real
+   reason last-activity was the local sweet spot (input size, not task ease). Proposed
+   experiment: lower the overview cap toward the local window for local runs and measure the
+   reliability/quality trade-off, as a cheaper complement to buying a larger context window.
+   Evidence source: privacy-safe per-conversation size distribution reproduced under
+   `.chronicle/eval/dev-v1/tmp/lp41-uts/` (counts and sizes only). Proxy tokens use ~4
+   chars/token; true tokenizer counts can be computed later for the final graphic.

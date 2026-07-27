@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 520" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-label="Scatter plot of six models by schema-valid rate versus quality of valid outputs. The cloud control sits top-right at 93.3 percent valid and 0.97 quality. Local models spread across 47 to 70 percent valid. Gemma sits above Phi on quality but far to its left on reliability.">
+  <defs>
+    <style>
+      .surface { fill: #fcfcfb; }
+      .grid    { stroke: #e1e0d9; stroke-width: 1; }
+      .axis    { stroke: #c3c2b7; stroke-width: 1; }
+      .tick    { fill: #898781; font-size: 13px; }
+      .axlab   { fill: #52514e; font-size: 14px; font-weight: 600; }
+      .title   { fill: #0b0b0b; font-size: 19px; font-weight: 700; }
+      .sub     { fill: #52514e; font-size: 13px; }
+      .plabel  { fill: #0b0b0b; font-size: 13.5px; font-weight: 600; }
+      .pval    { fill: #52514e; font-size: 12px; }
+      .ring    { stroke: #fcfcfb; stroke-width: 2.5; }
+      .cloud   { fill: #2a78d6; }
+      .local   { fill: #eb6834; }
+      .keytxt  { fill: #52514e; font-size: 13px; }
+    </style>
+  </defs>
+
+  <rect class="surface" x="0" y="0" width="760" height="520"/>
+
+  <!-- title -->
+  <text class="title" x="40" y="38">Reliability is the axis that decides the product</text>
+  <text class="sub" x="40" y="60">Six models by valid-output rate (n=120) vs. the quality of their valid outputs. One point per model.</text>
+
+  <!-- plot area: x 100..720 (valid rate 40..100%), y 100..430 (quality 0.45..1.00) -->
+  <!-- gridlines + x ticks -->
+  <g>
+    <!-- x gridlines at 40,50,60,70,80,90,100 -->
+    <line class="grid" x1="100" y1="100" x2="100" y2="430"/>
+    <line class="grid" x1="203.3" y1="100" x2="203.3" y2="430"/>
+    <line class="grid" x1="306.7" y1="100" x2="306.7" y2="430"/>
+    <line class="grid" x1="410" y1="100" x2="410" y2="430"/>
+    <line class="grid" x1="513.3" y1="100" x2="513.3" y2="430"/>
+    <line class="grid" x1="616.7" y1="100" x2="616.7" y2="430"/>
+    <line class="grid" x1="720" y1="100" x2="720" y2="430"/>
+    <text class="tick" x="100" y="450" text-anchor="middle">40%</text>
+    <text class="tick" x="203.3" y="450" text-anchor="middle">50%</text>
+    <text class="tick" x="306.7" y="450" text-anchor="middle">60%</text>
+    <text class="tick" x="410" y="450" text-anchor="middle">70%</text>
+    <text class="tick" x="513.3" y="450" text-anchor="middle">80%</text>
+    <text class="tick" x="616.7" y="450" text-anchor="middle">90%</text>
+    <text class="tick" x="720" y="450" text-anchor="middle">100%</text>
+  </g>
+
+  <!-- y ticks at 0.5,0.6,0.7,0.8,0.9,1.0 ; y = 430 - (q-0.45)/0.55*330 -->
+  <g>
+    <line class="grid" x1="100" y1="400" x2="720" y2="400"/>
+    <line class="grid" x1="100" y1="340" x2="720" y2="340"/>
+    <line class="grid" x1="100" y1="280" x2="720" y2="280"/>
+    <line class="grid" x1="100" y1="220" x2="720" y2="220"/>
+    <line class="grid" x1="100" y1="160" x2="720" y2="160"/>
+    <line class="grid" x1="100" y1="100" x2="720" y2="100"/>
+    <text class="tick" x="90" y="404" text-anchor="end">0.50</text>
+    <text class="tick" x="90" y="344" text-anchor="end">0.60</text>
+    <text class="tick" x="90" y="284" text-anchor="end">0.70</text>
+    <text class="tick" x="90" y="224" text-anchor="end">0.80</text>
+    <text class="tick" x="90" y="164" text-anchor="end">0.90</text>
+    <text class="tick" x="90" y="104" text-anchor="end">1.00</text>
+  </g>
+
+  <!-- axes -->
+  <line class="axis" x1="100" y1="430" x2="720" y2="430"/>
+  <line class="axis" x1="100" y1="100" x2="100" y2="430"/>
+  <text class="axlab" x="410" y="484" text-anchor="middle">Schema-valid rate  →  can the product use it at all</text>
+  <text class="axlab" x="-265" y="30" transform="rotate(-90)" text-anchor="middle">Quality of valid outputs</text>
+
+  <!-- POINTS.  x = 100 + (rate-40)/60*620 ; y = 430 - (q-0.45)/0.55*330 -->
+  <!-- Gemini 93.3, 0.966 -> x=650.4 y=123.6 (cloud) -->
+  <!-- Qwen   70.0, 0.887 -> x=410.0 y=170.9 (local) -->
+  <!-- Phi    64.2, 0.780 -> x=350.1 y=235.1 (local) -->
+  <!-- Llama3B 59.2, 0.755 -> x=298.4 y=250.1 (local) -->
+  <!-- Gemma  51.7, 0.797 -> x=220.9 y=224.9 (local) -->
+  <!-- Llama1B 47.5, 0.509 -> x=177.5 y=397.4 (local) -->
+
+  <!-- contrast pair connector: Gemma <-> Phi (the survivorship reversal) -->
+  <line x1="220.9" y1="224.9" x2="350.1" y2="235.1" stroke="#c3c2b7" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+  <circle class="ring" cx="650.4" cy="123.6" r="9"/>
+  <circle class="cloud" cx="650.4" cy="123.6" r="9"/>
+  <circle class="ring" cx="410.0" cy="170.9" r="9"/>
+  <circle class="local" cx="410.0" cy="170.9" r="9"/>
+  <circle class="ring" cx="350.1" cy="235.1" r="9"/>
+  <circle class="local" cx="350.1" cy="235.1" r="9"/>
+  <circle class="ring" cx="298.4" cy="250.1" r="9"/>
+  <circle class="local" cx="298.4" cy="250.1" r="9"/>
+  <circle class="ring" cx="220.9" cy="224.9" r="9"/>
+  <circle class="local" cx="220.9" cy="224.9" r="9"/>
+  <circle class="ring" cx="177.5" cy="397.4" r="9"/>
+  <circle class="local" cx="177.5" cy="397.4" r="9"/>
+
+  <!-- direct labels (every point; only 6) -->
+  <text class="plabel" x="650.4" y="112" text-anchor="end">Gemini 3.5 Flash</text>
+  <text class="pval"   x="650.4" y="140" text-anchor="end">cloud control · 93%</text>
+
+  <text class="plabel" x="424" y="167">Qwen3.5-4B</text>
+  <text class="pval"   x="424" y="183">70% valid</text>
+
+  <text class="plabel" x="366" y="231">Phi-4 Mini</text>
+  <text class="pval"   x="366" y="247">64% valid</text>
+
+  <text class="plabel" x="298.4" y="284" text-anchor="middle">Llama 3.2 3B</text>
+  <text class="pval"   x="298.4" y="300" text-anchor="middle">59% valid</text>
+
+  <text class="plabel" x="204" y="221" text-anchor="end">Gemma 3 4B</text>
+  <text class="pval"   x="204" y="237" text-anchor="end">52% valid</text>
+
+  <text class="plabel" x="191" y="401">Llama 3.2 1B</text>
+  <text class="pval"   x="191" y="417">48% valid</text>
+
+  <!-- reversal callout: sits just above the dashed connector, clear of both point labels -->
+  <text class="pval" x="285" y="197" text-anchor="middle" font-style="italic">quality alone ranks these two backwards</text>
+
+  <!-- legend -->
+  <g transform="translate(560,500)">
+    <circle class="cloud" cx="0" cy="-4" r="6"/>
+    <text class="keytxt" x="12" y="0">cloud control</text>
+    <circle class="local" cx="120" cy="-4" r="6"/>
+    <text class="keytxt" x="132" y="0">local model</text>
+  </g>
+</svg>

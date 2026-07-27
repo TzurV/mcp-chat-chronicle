@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 480" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" role="img" aria-label="Histogram of 30 conversations by input size in tokens, against an 8,192-token context window drawn as a vertical line. Twenty-two conversations fit; eight are larger than the window and cannot fit a local model.">
+  <defs>
+    <style>
+      .surface { fill: #fcfcfb; }
+      .grid    { stroke: #e1e0d9; stroke-width: 1; }
+      .axis    { stroke: #c3c2b7; stroke-width: 1; }
+      .tick    { fill: #898781; font-size: 13px; }
+      .axlab   { fill: #52514e; font-size: 14px; font-weight: 600; }
+      .title   { fill: #0b0b0b; font-size: 19px; font-weight: 700; }
+      .sub     { fill: #52514e; font-size: 13px; }
+      .fit     { fill: #2a78d6; }
+      .over    { fill: #d03b3b; }
+      .barval  { fill: #52514e; font-size: 13px; font-weight: 600; }
+      .wall    { stroke: #0b0b0b; stroke-width: 2; }
+      .wtxt    { fill: #0b0b0b; font-size: 13px; font-weight: 700; }
+      .keytxt  { fill: #52514e; font-size: 13px; }
+    </style>
+  </defs>
+
+  <rect class="surface" x="0" y="0" width="760" height="480"/>
+
+  <text class="title" x="40" y="38">A quarter of my conversations don't fit an 8,192-token window</text>
+  <text class="sub" x="40" y="60">30 real conversations by whole-conversation input size (approximate tokens). Bars past the line can't fit a local model.</text>
+
+  <!-- plot: baseline y=390, bars grow up. x categories evenly spaced 7 buckets across 90..720 -->
+  <!-- count scale: 0..9 -> 0px..270px ; y = 390 - count/9*270 -->
+  <!-- y gridlines at 0,3,6,9 -->
+  <line class="grid" x1="90" y1="390" x2="720" y2="390"/>
+  <line class="grid" x1="90" y1="300" x2="720" y2="300"/>
+  <line class="grid" x1="90" y1="210" x2="720" y2="210"/>
+  <line class="grid" x1="90" y1="120" x2="720" y2="120"/>
+  <text class="tick" x="80" y="394" text-anchor="end">0</text>
+  <text class="tick" x="80" y="304" text-anchor="end">3</text>
+  <text class="tick" x="80" y="214" text-anchor="end">6</text>
+  <text class="tick" x="80" y="124" text-anchor="end">9</text>
+  <text class="axlab" x="20" y="255" transform="rotate(-90 20 255)" text-anchor="middle">Conversations</text>
+
+  <!-- 7 buckets, band width 90px, bar width 60px (cap 24? using 46 for histogram density), centered.
+       centers at 120,210,300,390,480,570,660 -->
+  <!-- counts: 9,6,5,2 | 3,2,3  ; first 4 fit (blue), last 3 over (red) -->
+  <!-- helper: barTop = 390 - count/9*270 -->
+
+  <!-- under 2k : 9 -> top 120 -->
+  <rect class="fit" x="97" y="120" width="46" height="266" rx="4"/>
+  <text class="barval" x="120" y="112" text-anchor="middle">9</text>
+  <!-- 2-4k : 6 -> top 210 -->
+  <rect class="fit" x="187" y="210" width="46" height="176" rx="4"/>
+  <text class="barval" x="210" y="202" text-anchor="middle">6</text>
+  <!-- 4-6k : 5 -> top 240 -->
+  <rect class="fit" x="277" y="240" width="46" height="146" rx="4"/>
+  <text class="barval" x="300" y="232" text-anchor="middle">5</text>
+  <!-- 6-8.2k : 2 -> top 330 -->
+  <rect class="fit" x="367" y="330" width="46" height="56" rx="4"/>
+  <text class="barval" x="390" y="322" text-anchor="middle">2</text>
+
+  <!-- WALL between bucket 4 (6-8.2k) and bucket 5 (8.2-12k): midpoint x=435 -->
+  <line class="wall" x1="435" y1="95" x2="435" y2="390"/>
+  <text class="wtxt" x="440" y="92">8,192-token local window</text>
+
+  <!-- 8.2-12k : 3 -> top 300 -->
+  <rect class="over" x="457" y="300" width="46" height="86" rx="4"/>
+  <text class="barval" x="480" y="292" text-anchor="middle">3</text>
+  <!-- 12-20k : 2 -> top 330 -->
+  <rect class="over" x="547" y="330" width="46" height="56" rx="4"/>
+  <text class="barval" x="570" y="322" text-anchor="middle">2</text>
+  <!-- over 20k : 3 -> top 300 -->
+  <rect class="over" x="637" y="300" width="46" height="86" rx="4"/>
+  <text class="barval" x="660" y="292" text-anchor="middle">3</text>
+
+  <!-- baseline -->
+  <line class="axis" x1="90" y1="390" x2="720" y2="390"/>
+
+  <!-- x category labels -->
+  <g class="tick" text-anchor="middle">
+    <text x="120" y="410">&lt;2k</text>
+    <text x="210" y="410">2–4k</text>
+    <text x="300" y="410">4–6k</text>
+    <text x="390" y="410">6–8k</text>
+    <text x="480" y="410">8–12k</text>
+    <text x="570" y="410">12–20k</text>
+    <text x="660" y="410">&gt;20k</text>
+  </g>
+  <text class="axlab" x="405" y="438" text-anchor="middle">Whole-conversation input size (approx. tokens)</text>
+
+  <!-- legend with labels (red is a state, so it is labelled, never colour-alone) -->
+  <g transform="translate(240,466)">
+    <rect class="fit" x="0" y="-10" width="14" height="12" rx="2"/>
+    <text class="keytxt" x="20" y="0">fits the window (22)</text>
+    <rect class="over" x="185" y="-10" width="14" height="12" rx="2"/>
+    <text class="keytxt" x="205" y="0">too large to fit (8)</text>
+  </g>
+</svg>
