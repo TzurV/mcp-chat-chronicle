@@ -409,19 +409,24 @@ protocol; tool calls leave the database byte/count/schema state unchanged; the o
 dependency does not break the base CLI; Windows and Ubuntu CI pass.
 *Handoff:* `md/handoffs/WP-4.1A-fastmcp-core-server.md`.
 
-**WP-4.1B Local-client integration and end-to-end validation.** *(next; WP-4.1A
-acceptance gate satisfied)*
+**WP-4.1B Local-client integration and end-to-end validation.** *(ready for
+execution; WP-4.1A acceptance gate satisfied; handoff:
+`md/handoffs/WP-4.1B-local-client-integration-e2e.md`)*
 *Objective:* Configure and document the accepted local stdio server across Codex and
 Claude client surfaces, then validate bounded real-history recall.
 *Tasks:* Add setup/troubleshooting instructions for Codex desktop/CLI/IDE, ChatGPT
 desktop, Claude Code, and Claude Desktop; register Chronicle with Codex and Claude Code;
-run an owner-approved real-database smoke; verify multiple local clients can read the same
-archive. Packaging as a Claude `.mcpb` extension is optional and must not be required for
-acceptance.
+run an owner-approved smoke against the frozen WP-5.1.2A real-history snapshot; set
+database selection in each client configuration through `CHAT_CHRONICLE_DB`; document
+one-value switching between the frozen development snapshot and active archive; verify
+multiple local clients can read the same fixed archive. Packaging as a Claude `.mcpb`
+extension is optional and must not be required for acceptance.
 *AC:* In at least Codex and one Claude local client, a natural-language recall question
 invokes `search_chats`, follows a selected result with `get_conversation`, and produces a
-grounded answer with conversation IDs. The server remains read-only and no private
-transcript content is committed.
+grounded answer with conversation IDs. The server remains read-only; the frozen snapshot
+hash/count/schema/mtime state remains unchanged; switching is locally verified without an
+active-archive cloud disclosure; README and detailed client instructions reflect only
+owner-verified steps; no private transcript content is committed.
 
 *Sources:* [FastMCP docs](https://gofastmcp.com) ·
 [MCP python-sdk](https://github.com/modelcontextprotocol/python-sdk) ·
