@@ -261,7 +261,7 @@ histories.
 
 ## Project status
 
-> **Status: the v0.2.0 source release candidate is prepared on `main`; v0.1.0 remains the latest published release until the new tag and GitHub release exist.** The candidate adds read-only MCP recall through tested Codex and Claude clients alongside multi-provider collection, SQLite/FTS search, optional YAML-defined AI tasks, and evaluation tooling. Read the [proposed v0.2.0 release notes](md/releases/v0.2.0.md), [`master plan`](md/master-plan.md), and [`development ledger`](md/development-ledger.md).
+> **Status: v0.2.0 is committed on `main` and the remote `v0.2.0` tag is available; the public GitHub release page is still pending verification.** This version adds read-only MCP recall through tested Codex and Claude clients alongside multi-provider collection, SQLite/FTS search, optional YAML-defined AI tasks, and evaluation tooling. Read the [v0.2.0 release notes](md/releases/v0.2.0.md), [`master plan`](md/master-plan.md), and [`development ledger`](md/development-ledger.md).
 
 ## Why
 

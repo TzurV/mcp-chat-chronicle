@@ -17,7 +17,7 @@ It is still a work in progress. I keep developing it in practical increments
 and publishing a new source release when the next piece becomes genuinely
 useful.
 
-The next release candidate, **v0.2.0**, adds read-only recall through MCP.
+The latest release, **v0.2.0**, adds read-only recall through MCP.
 In plain English: while I am working in a supported Codex or Claude client, the
 assistant can search my Chronicle archive, list recent topics, and retrieve a
 bounded extract from a conversation I choose.
@@ -53,24 +53,15 @@ Codex or Claude.
 
 Repository: https://github.com/TzurV/mcp-chat-chronicle
 
-v0.2.0 release commit:
-https://github.com/TzurV/mcp-chat-chronicle/commit/46ec79ff29055f455518a40c03b5edcd9c366f1e
-
-## Required publication-time edits
-
-After the GitHub release exists and before the owner publishes this post:
-
-1. Replace “The next release candidate, **v0.2.0**” with published-release
-   wording such as “The latest release, **v0.2.0**”.
-2. Replace both release-commit URLs with the verified public GitHub release
-   URL.
+v0.2.0 release:
+https://github.com/TzurV/mcp-chat-chronicle/releases/tag/v0.2.0
 
 ## Optional first comment
 
 Source and setup:
 
 - Repository: https://github.com/TzurV/mcp-chat-chronicle
-- v0.2.0 release commit:
-  https://github.com/TzurV/mcp-chat-chronicle/commit/46ec79ff29055f455518a40c03b5edcd9c366f1e
+- v0.2.0 release:
+  https://github.com/TzurV/mcp-chat-chronicle/releases/tag/v0.2.0
 - MCP setup guide:
   https://github.com/TzurV/mcp-chat-chronicle/blob/main/docs/mcp-client-setup.md
