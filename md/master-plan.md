@@ -587,10 +587,32 @@ made publicly available on GitHub. The source release includes the release-quali
 README, AI-task guide, prepared LinkedIn article, and owner-reviewed sanitized
 manager-chat artifact. `md/release-1-planning-note.md` records the decisions and
 privacy process. This source release deliberately retains the Chat Chronicle name;
-WorkTrail rename, PyPI/pipx publication, MCP, and benchmark work remain deferred.
+WorkTrail rename and PyPI/pipx publication remain deferred. MCP recall and the
+development benchmark work were completed after this first-release checkpoint.
 
 **WP-6.1 — v0.1.0 source release.** Release-quality five-minute README, supported-source/export instructions, honest limitations, separate advanced AI-task guide, LinkedIn article, sanitized manager-chat artifact, full validation, `v0.1.0` tag, and GitHub publication under the current Chat Chronicle name. WorkTrail rename, PyPI/pipx publication, demo GIF, and MCP setup remain later release work.
 *AC:* A Windows user can clone the repository, run `poetry install`, initialize, collect supported sources, and perform the first search using the README alone. Core archive commands have zero AI dependency; private exports and raw histories remain untracked; full tests, Ruff, pre-commit, package build, and privacy scans pass before tagging.
+
+**REL-0.2.0 — MCP recall source release and LinkedIn progress post.**
+*(release candidate accepted 2026-07-28; publication owner-gated; handoff:
+`md/handoffs/REL-0.2.0-mcp-recall-release-linkedin-progress.md`; completion:
+`md/handoffs/reports/REL-0.2.0-completion-report.md`; validation:
+`md/handoffs/reports/REL-0.2.0-validation-review.md`)*
+*Objective:* Publish the next backward-compatible source release with accepted
+read-only MCP recall as the headline, while accurately summarizing all accepted
+public changes since v0.1.0.
+*Tasks:* Bump package/CLI metadata to 0.2.0; prepare GitHub release notes; add
+clearly fictional recall examples; explain that local archive data selected by a
+cloud-backed client is processed by that provider and can enable stronger
+evidence-grounded answers; describe the optional local-model AI direction;
+prepare a concise LinkedIn progress post; validate the package and privacy
+boundary. The executor prepares only. Manager/owner approval gates control the
+commit, push, tag, GitHub release, and LinkedIn publication.
+*AC:* Release notes and LinkedIn copy are technically accurate and privacy-safe;
+MCP capability, supported clients, exactly three read-only tools, limitations,
+remote-processing tradeoff, and local-AI direction are represented honestly;
+version/build/tests/pre-commit/privacy checks pass; publication occurs only
+after explicit owner approval.
 
 ### v2 roadmap — AI deepening (committed direction, starts only after v0.1 ships)
 The story arc: *v1 proves the boring archive; v2 makes it intelligent — and measures every step.* Sequenced:

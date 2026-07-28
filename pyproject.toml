@@ -1,6 +1,6 @@
 [project]
 name = "chat-chronicle"
-version = "0.1.0"
+version = "0.2.0"
 description = "A local-first, searchable archive of your AI conversations."
 readme = "README.md"
 license = "MIT"

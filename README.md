@@ -216,6 +216,19 @@ tools: `search_chats`, `get_conversation`, and `list_recent_topics`. It does not
 capture the current chat, write to the archive, run AI tasks, or provide a
 hosted/web bridge.
 
+Illustrative prompts (the topics and IDs are fictional):
+
+```text
+Using my Chronicle archive, what did I work on during the fictional Project
+Lighthouse migration? Include dates and supporting Chronicle conversation IDs.
+
+Search Chronicle for the conversation where I fixed a fictional Windows
+terminal-wrapping test. Return likely matches before retrieving transcripts.
+
+Retrieve fictional conversation 123 with at most 2,000 characters and summarize
+the decision, blocker, and next action. Cite the Chronicle ID.
+```
+
 ```powershell
 poetry install -E mcp
 ```
@@ -228,9 +241,15 @@ environment:
 ```
 
 The direct Python launch is the tested Windows contract. Change only
-`CHAT_CHRONICLE_DB` to switch archives, then restart the client. Selected tool
-output is processed by the client's model provider, so review the disclosure
-scope before retrieving private text. See the
+`CHAT_CHRONICLE_DB` to switch archives, then restart the client. The archive and
+MCP server stay local, but selected search results or bounded conversation text
+become part of the AI client's model request. In a cloud-backed client that
+output is processed by its model provider under your account and provider
+settings. Search metadata first, retrieve only selected IDs, set `max_chars`,
+and avoid secrets or third-party confidential data. Allowing more relevant
+bounded evidence can improve grounding, but it is a deliberate
+context-versus-privacy tradeoff rather than a background upload of the archive.
+See the
 [MCP Recall User Manual](docs/mcp-client-setup.md) for verified Codex, Claude
 Code, and Claude Desktop configuration, switching, removal, and troubleshooting.
 
@@ -242,7 +261,7 @@ histories.
 
 ## Project status
 
-> **Status: v0.1.0 is the published source baseline; development continues on `main`.** Implemented capabilities include multi-provider collection, SQLite/FTS search and recent activity, optional YAML-defined AI tasks and evaluation tooling, and read-only MCP recall through tested Codex and Claude clients. See the [`master plan`](md/master-plan.md) and [`development ledger`](md/development-ledger.md) for detailed scope and status.
+> **Status: the v0.2.0 source release candidate is prepared on `main`; v0.1.0 remains the latest published release until the new tag and GitHub release exist.** The candidate adds read-only MCP recall through tested Codex and Claude clients alongside multi-provider collection, SQLite/FTS search, optional YAML-defined AI tasks, and evaluation tooling. Read the [proposed v0.2.0 release notes](md/releases/v0.2.0.md), [`master plan`](md/master-plan.md), and [`development ledger`](md/development-ledger.md).
 
 ## Why
 
@@ -513,6 +532,9 @@ explicit; remote model use requires `--allow-remote` and deliberate authorizatio
 - ChatGPT and Claude web history is only as fresh as your last export request. Coding-agent history refreshes automatically because those tools keep durable local transcripts.
 - Coding-agent conversations have no URLs — `chronicle open` renders a local transcript for those.
 - Local-store formats are undocumented and can change with any tool release; a format change degrades to "source skipped with a warning," never a crash.
+- MCP does not ingest or refresh history; run `chronicle collect` separately. It cannot capture the current chat or infer its Chronicle ID.
+- Local stdio MCP is not available in every web, mobile, classic desktop, or remote client. Current setup assumes a source checkout and Poetry virtual environment.
+- PyPI/pipx packaging, remote MCP hosting, the WorkTrail rename, embeddings/hybrid search, and automatic AI enrichment are not part of this release candidate.
 
 ## License
 
