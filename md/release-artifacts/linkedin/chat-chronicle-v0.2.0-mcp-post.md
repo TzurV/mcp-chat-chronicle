@@ -51,9 +51,10 @@ have also lost track of where useful work happened, I would be interested in
 hearing how you handle it—and in feedback from anyone testing Chronicle with
 Codex or Claude.
 
-Repository: https://github.com/tzurv/mcp-chat-chronicle
+Repository: https://github.com/TzurV/mcp-chat-chronicle
 
-v0.2.0 release: [OWNER: replace with the verified GitHub release URL after publication]
+v0.2.0 release commit:
+https://github.com/TzurV/mcp-chat-chronicle/commit/46ec79ff29055f455518a40c03b5edcd9c366f1e
 
 ## Required publication-time edits
 
@@ -61,14 +62,15 @@ After the GitHub release exists and before the owner publishes this post:
 
 1. Replace “The next release candidate, **v0.2.0**” with published-release
    wording such as “The latest release, **v0.2.0**”.
-2. Replace both release URL placeholders with the verified public GitHub
-   release URL.
+2. Replace both release-commit URLs with the verified public GitHub release
+   URL.
 
 ## Optional first comment
 
 Source and setup:
 
-- Repository: https://github.com/tzurv/mcp-chat-chronicle
-- v0.2.0 release: [OWNER: replace after publication]
+- Repository: https://github.com/TzurV/mcp-chat-chronicle
+- v0.2.0 release commit:
+  https://github.com/TzurV/mcp-chat-chronicle/commit/46ec79ff29055f455518a40c03b5edcd9c366f1e
 - MCP setup guide:
-  https://github.com/tzurv/mcp-chat-chronicle/blob/main/docs/mcp-client-setup.md
+  https://github.com/TzurV/mcp-chat-chronicle/blob/main/docs/mcp-client-setup.md
