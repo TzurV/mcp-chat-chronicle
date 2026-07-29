@@ -2,7 +2,7 @@
 
 **Repo:** first public source release under `mcp-chat-chronicle`; later rename/PyPI candidate `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** Chat Chronicle v0.2.0 source content is committed and the remote annotated `v0.2.0` tag is available; the public GitHub release page remains an open publication gate · real-history core prototype accepted; ingest/collect/stats/search/phrase/recent/open work across the owner's real ChatGPT, Claude, OpenAI Codex, and Claude Code histories · WP-5.1 configurable AI-task foundation, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 Windows CI portability, the frozen 30-conversation x four-task FABLE development corpus, and WP-5.2A1 Llama 3.2 1B evaluation-floor integration are accepted · WP-5.2B1 through WP-5.2B2.2 are accepted · six aligned complete development arms cover the Gemini 3.5 Flash cloud control and five local models: Qwen3.5-4B, Llama 3.2 1B, Phi-4 Mini, Llama 3.2 3B, and Gemma 3 4B · complete-arm schema-valid results are Gemini 112/120, Qwen 84/120, Phi 77/120, Llama 3B 71/120, Gemma 3 62/120, and Llama 1B 57/120; every candidate position and eligible fixed-Pro judge position has a terminal outcome · LP-4.1 exact UTS/sensitivity analysis, article drafts, editorial review, and publication figures are accepted, and the owner reports the long-form LinkedIn article published on 2026-07-27 · WP-4.1 read-only MCP recall and local-client E2E are accepted; the owner reports the v0.2.0 MCP progress post published on 2026-07-28 · WP-5.2C1 Qwen remote speed/context study is approved as the next development package, using an owner-approved Google Cloud VM and authorized frozen-DB transfer · WP-5.2B3 prompt strategy testing remains separate post-baseline backlog · Chrome Gemini Nano, Edge Aion, and Phi Silica have preliminary research/planning only; their feasibility spikes and adapters have not started · the later untouched evaluation set remains TBD · **Plan v3.7 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, and controlled remote hardware/context study)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-07-28
+**Status:** Chat Chronicle v0.2.0 source content is committed and the remote annotated `v0.2.0` tag is available; the public GitHub release page remains an open publication gate · real-history core prototype accepted; ingest/collect/stats/search/phrase/recent/open work across the owner's real ChatGPT, Claude, OpenAI Codex, and Claude Code histories · WP-5.1 configurable AI-task foundation, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 Windows CI portability, the frozen 30-conversation x four-task FABLE development corpus, and WP-5.2A1 Llama 3.2 1B evaluation-floor integration are accepted · WP-5.2B1 through WP-5.2B2.2 are accepted · six aligned complete development arms cover the Gemini 3.5 Flash cloud control and five local models: Qwen3.5-4B, Llama 3.2 1B, Phi-4 Mini, Llama 3.2 3B, and Gemma 3 4B · complete-arm schema-valid results are Gemini 112/120, Qwen 84/120, Phi 77/120, Llama 3B 71/120, Gemma 3 62/120, and Llama 1B 57/120; every candidate position and eligible fixed-Pro judge position has a terminal outcome · LP-4.1 exact UTS/sensitivity analysis, article drafts, editorial review, and publication figures are accepted, and the owner reports the long-form LinkedIn article published on 2026-07-27 · WP-4.1 read-only MCP recall and local-client E2E are accepted; the owner reports the v0.2.0 MCP progress post published on 2026-07-28 · WP-5.2C1 Qwen remote speed/context study is ongoing in parallel and externally blocked by Google Cloud resource availability · WP-5.2B3A full local 8K/16K context comparison for Qwen and Phi is approved as the active local package; it precedes the frozen 10-development/20-holdout global prompt study · Chrome Gemini Nano, Edge Aion, and Phi Silica have preliminary research/planning only; their feasibility spikes and adapters have not started · the later untouched evaluation set remains TBD · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, controlled context/prompt studies, and remote hardware comparison)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-07-29
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Release update (2026-07-28):** v0.2.0 release content is committed on
@@ -559,10 +559,81 @@ Use `gemini-3.1-pro-preview` as the fixed primary development judge, called thro
 *AC:* Each arm contains 120 terminal candidate positions with zero unaccounted; every package verifies and scores; every eligible judge position is terminal; cache-only replays make zero calls; the fixed candidate/task/judge contracts remain unchanged; all failures are retained; historical, database, and checkpoint evidence remains immutable; no private artifact is tracked; and LP-4.1 receives a common complete-scope dataset for all five local models.
 *Accepted result:* Phi produced 77/120 schema-valid outputs, Llama 3B produced 71/120, and Gemma 3 produced 62/120. Fixed-Pro judging completed 208/210 eligible outputs with two retained Llama provider-invalid-JSON failures. All three zero-call cache replays passed, and checkpoint, historical, database, and private-artifact boundaries remained intact. Together with accepted Qwen and Llama 1B arms, LP-4.1 now has five local-model complete arms plus the Gemini cloud control.
 
-**WP-5.2B3 Prompt-strategy development study.** *(proposed backlog; begins only after baseline model comparison and separate owner approval)*
-*Objective:* Test whether versioned prompt strategies let the best one or two local models approach the unchanged Gemini-120 cloud control on the four product tasks.
-*Tasks:* Select local candidates only after baseline results are complete. Compare the accepted zero-shot prompt with a concise schema-first variant and bounded task-specific few-shot variants while keeping model artifact, runtime, context, generation settings, inputs, references, and fixed-Pro scoring constant. Measure reliability, deterministic agreement, task-specific judge quality, and latency separately. Use the current 120 cases for development and label all gains as prompt-development results; freeze the selected prompt before any later untouched evaluation set.
-*AC:* No baseline result is overwritten; every prompt/model identity is versioned; invalid outputs remain visible; ranking sensitivity and per-task effects are reported; no chain-of-thought is requested; no tuned development result is presented as unbiased final evaluation.
+**WP-5.2B3 Controlled context and global prompt-strategy study.** *(approved
+program; delivered through B3A/B3B/B3C)*
+*Objective:* First isolate the effect of a larger local context, then test
+whether one versioned four-task prompt package can improve Qwen3.5-4B and
+Phi-4 Mini while remaining portable to the unchanged Gemini 3.5 Flash cloud
+candidate.
+*Program rules:* Preserve all accepted 8K baselines. Context is fixed before
+prompt development. "Global prompt optimization" means one versioned four-prompt
+package applied unchanged across Qwen, Phi, and Gemini; it does not mean one
+identical prompt for four different tasks and does not allow model-specific
+prompt branches. The current 30 conversations remain development data. After
+context selection, freeze a deterministic 10-conversation prompt-development
+split and a 20-conversation one-shot prompt holdout. The holdout evaluates prompt
+changes conditional on the selected context; it does not independently validate
+the context choice.
+
+**WP-5.2B3A Full local context comparison.** *(approved 2026-07-29; handoff:
+`md/handoffs/WP-5.2B3A-full-context-comparison.md`)*
+*Objective:* Compare the accepted full 120-case 8K Qwen/Phi evidence with new
+full 120-case 16K arms on the same local Windows machine before changing any
+prompt.
+*Tasks:* Reproduce each accepted model artifact/runtime/generation identity,
+change only context from 8,192 to 16,384, run 120 terminal cases per model,
+verify/package/score locally, judge eligible outputs through the fixed Pro
+profile after consolidated authorization, reconcile every 8K-to-16K case
+transition, and recommend one common context for B3B. Do not rerun Gemini; retain
+its accepted 120-case result as an unchanged cloud reference. Prepare a
+privacy-safe completion report and a separate article evidence brief with
+chart-ready aggregates, observations, claims, caveats, and outline directions.
+*AC:* Both 16K arms have 120 terminal positions and verified packages; runtime
+identity proves context is the only effective change; reliability, semantic,
+latency, token, memory, transition, and failure metrics reconcile; historical
+evidence remains immutable; one context recommendation is produced; article
+evidence is sufficient for a later independently approved writing package.
+
+**WP-5.2B3B Global prompt development.** *(planned; starts only after B3A context
+acceptance)*
+*Objective:* Select one globally applied four-task prompt package using only ten
+frozen development conversations.
+*Tasks:* Freeze a provider/length/date-balanced 10-development/20-holdout split
+without using model outcomes or labels. Compare P0 accepted baseline, P1 concise
+contract/schema-first, and P2 contract-first plus bounded synthetic few-shot
+examples. Allow at most one documented failure-driven global revision. Optimize
+using pooled Qwen/Phi development reliability first and whole-case UTS second;
+use Gemini Flash as a portability guardrail, not the optimization target. Keep
+context, artifacts, generation settings, schemas, references, and fixed judge
+unchanged. Record prompt hashes/diffs, trial count, rejected variants, tokens,
+latency, cost, per-task failures, deterministic and judge metrics, and proof the
+holdout remained unopened.
+*AC:* One four-prompt package is frozen before holdout access; no model-specific
+or cherry-picked per-task strategy is assembled after seeing results; every
+attempt and selection rule is reproducible; the methodology report contains
+enough aggregate evidence to explain optimization and overfitting risk in a
+future article.
+
+**WP-5.2B3C One-shot prompt holdout evaluation.** *(planned; starts only after
+B3B prompt freeze)*
+*Objective:* Measure whether development gains survive on the 20-conversation
+internal prompt holdout.
+*Tasks:* Run the frozen package exactly once over 80 cases per candidate for
+Qwen, Phi, and Gemini Flash. Compare tuned versus accepted baseline on the exact
+holdout cases; report reliability, failure reduction, task matrices,
+deterministic agreement, fixed-judge quality, UTS, latency, tokens, prompt
+overhead, development-to-holdout generalization gap, and local-to-cloud gap
+closure. Do not revise prompts after any holdout result becomes visible.
+Produce a publication evidence brief containing methodology, context result
+links, prompt versions, complete aggregate tables, chart-ready data, supported
+observations, limitations, prohibited claims, headline directions, and an
+article outline.
+*AC:* All 240 holdout candidate positions are terminal and immutable; selected
+prompts/context are frozen before access; no holdout-driven revision occurs;
+baseline/tuned/cloud comparisons reconcile with explicit denominators; article
+evidence distinguishes context, prompt, model, reliability, semantic quality,
+and runtime effects; results are labeled internal development holdout rather
+than independent final evaluation.
 
 **WP-5.2C Remote execution and later independent evaluation.** *(remote
 execution activated through WP-5.2C1; independent evaluation set remains
@@ -577,8 +648,9 @@ development runs only. Create a separate, newly selected and untouched
 evaluation set after prompts/models are frozen; its size, teacher process, and
 release/reporting policy remain TBD.
 
-**WP-5.2C1 Qwen3.5-4B Google Cloud speed and context study.** *(approved next
-package 2026-07-28; handoff:
+**WP-5.2C1 Qwen3.5-4B Google Cloud speed and context study.** *(ongoing in
+parallel; externally blocked by Google Cloud resource availability as of
+2026-07-29; handoff:
 `md/handoffs/WP-5.2C1-qwen-remote-speed-context-study.md`)*
 *Objective:* Repeat the accepted Qwen3.5-4B Q4_K_M 120-case arm on a newer
 owner-controlled Google Cloud VM, measure speed against the laptop baseline,
@@ -686,7 +758,7 @@ the checked Chronicle Claude Code project were represented in the database.
 
 In rough priority order: **Gemini Takeout/My Activity importer** (chat text lives under My Activity filtered to Gemini Apps, not necessarily the plain Gemini product checkbox) · **Claude Code/OpenAI Codex warning-taxonomy hardening and ingest-error summary** · **Codex cross-client workspace-association spike** (RS-3: determine whether VS Code/Codex Desktop visibility is keyed by path, repository identity, local metadata, or service association before changing project grouping) · **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **optional host-model work after WP-5.2A2/A3**, including Edge Aion and any future browser resident model, each requiring its own feasibility and adapter approval; Phi Silica remains WP-5.4/Windows App SDK scope · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
 
-**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo, accepted. Claude project metadata, WP-1.5/WP-1.6 usability polish, WP-2.3.2 search punctuation hardening, WP-5.1 configurable AI-task infrastructure, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 CI portability, and the public v0.1.0 source release are accepted. The resumed AI-development sequence through WP-5.2B2.2 is accepted: frozen snapshot → direct FABLE references → Llama floor integration → split local/hosted harness and fixed Pro judge → same-prefix pilot and complete Gemini/Qwen/Llama-1B arms → qualification and checkpoints for Phi/Llama-3B/Gemma-3 → independent complete 120-case arms for all five local models. LP-4.1 then consolidated exact per-case UTS/sensitivity, task/model interpretation, editorial review, final article copy, and aggregate figures; the owner reports the LinkedIn long-form article published on 2026-07-27. WP-4.1 MCP recall is accepted, and REL-0.2.0 has a public source commit/tag plus an owner-reported published LinkedIn progress post; public GitHub release-page verification remains an administrative closure action. The owner selected WP-5.2C1 as the next development package: controlled Qwen3.5-4B remote speed and 8K/16K context measurement on an owner-approved Google Cloud VM, followed by local verification/evaluation. WP-5.2B3 prompt strategy testing remains separate and must not overwrite published baseline evidence. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. Chrome Gemini Nano, Edge Aion, and Phi Silica have survey/planning evidence but no executed feasibility spike or adapter. A separate untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later work unless explicitly reprioritized.
+**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo, accepted. Claude project metadata, WP-1.5/WP-1.6 usability polish, WP-2.3.2 search punctuation hardening, WP-5.1 configurable AI-task infrastructure, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 CI portability, and the public v0.1.0 source release are accepted. The resumed AI-development sequence through WP-5.2B2.2 is accepted: frozen snapshot → direct FABLE references → Llama floor integration → split local/hosted harness and fixed Pro judge → same-prefix pilot and complete Gemini/Qwen/Llama-1B arms → qualification and checkpoints for Phi/Llama-3B/Gemma-3 → independent complete 120-case arms for all five local models. LP-4.1 then consolidated exact per-case UTS/sensitivity, task/model interpretation, editorial review, final article copy, and aggregate figures; the owner reports the LinkedIn long-form article published on 2026-07-27. WP-4.1 MCP recall is accepted, and REL-0.2.0 has a public source commit/tag plus an owner-reported published LinkedIn progress post; public GitHub release-page verification remains an administrative closure action. WP-5.2C1 remote Qwen execution is ongoing in parallel but blocked by Google Cloud resource availability. The active local sequence is now B3A full 8K/16K context comparison → manager context freeze → B3B global prompt development on ten conversations → immutable prompt freeze → B3C one-shot evaluation on twenty conversations → separately approved article drafting. Accepted baseline packages must not be overwritten. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. Chrome Gemini Nano, Edge Aion, and Phi Silica have survey/planning evidence but no executed feasibility spike or adapter. A separate untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later work unless explicitly reprioritized.
 
 ---
 

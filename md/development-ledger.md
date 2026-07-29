@@ -6,11 +6,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 
 | Field | Status |
 | --- | --- |
-| Date | 2026-07-28 |
-| Phase | WP-5.2C1 remote Qwen speed and context study; REL-0.2.0 release-page closure remains open |
+| Date | 2026-07-29 |
+| Phase | WP-5.2B3A local full-context comparison active; WP-5.2C1 remote study continues in parallel |
 | Last accepted delivery | WP-4.1B local-client integration and end-to-end validation |
 | Current milestone state | M0/M1/M2 core and real-history prototype accepted; the configurable AI-task/evaluation stack and six aligned complete development arms are accepted; WP-4.1 read-only MCP recall is accepted; v0.2.0 is committed and remotely tagged; the primary v0.2.0 LinkedIn progress post is owner-reported published; the public GitHub release page remains pending verification |
-| Next action | Execute `md/handoffs/WP-5.2C1-qwen-remote-speed-context-study.md`, beginning with the Google Cloud VM selection/cost checkpoint |
+| Next action | Commit and execute `md/handoffs/WP-5.2B3A-full-context-comparison.md`; preserve WP-5.2C1 while Google Cloud resources remain unavailable |
 | Current branch | `main` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -62,11 +62,14 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.2B2 | Complete comparative development evaluation | Accepted | See WP-5.2B1.4 and WP-5.2B2.2 | See accepted child reports | See accepted child reviews | Six aligned complete 120-case arms are available. Reliability, deterministic agreement, fixed-Pro semantic evidence, latency, usage, runtime, failures, and privacy-safe provenance are retained for LP-4.1 analysis. |
 | WP-5.2B2.1 | Three-qualified-candidate 40-case checkpoint | Accepted | `md/handoffs/WP-5.2B2.1-three-qualified-candidate-40-case-checkpoint.md` | `md/handoffs/reports/WP-5.2B2.1-completion-report.md` | `md/handoffs/reports/WP-5.2B2.1-validation-review.md` | All 120 candidate positions are terminal. Schema-valid results: Phi 26/40, Llama 3B 26/40, Gemma 3 23/40. Fixed-Pro accounting recovered to 74 completed/one terminal failure/45 skipped, with three zero-call cache replays. Phi and Llama 3B are admitted to complete arms; Gemma 3 is admitted as an explicitly weak research comparator for the five-local-model article dataset. |
 | WP-5.2B2.2 | Three retained candidate complete arms | Accepted | `md/handoffs/WP-5.2B2.2-three-retained-candidate-complete-arms.md` | `md/handoffs/reports/WP-5.2B2.2-completion-report.md` | `md/handoffs/reports/WP-5.2B2.2-validation-review.md` | All 360 candidate positions are terminal. Schema-valid results: Phi 77/120, Llama 3B 71/120, Gemma 3 62/120. Fixed-Pro accounting is 208 completed/two retained failures/150 skipped invalid. Three cache-only replays made zero calls; checkpoint, historical, and database evidence remained immutable. |
-| WP-5.2B3 | Best-local-model prompt-strategy study | Proposed backlog | Pending | Pending | Pending | After baseline runs, select one or two best local models and compare versioned zero-shot/schema-first/few-shot prompts against the unchanged Gemini-120 cloud control. Development-set gains are not final unbiased evaluation. |
+| WP-5.2B3 | Controlled context and global prompt-strategy program | Approved | See WP-5.2B3A/B/C | Pending | Pending | First choose context from a full Qwen/Phi 8K/16K comparison, then optimize one four-task prompt package on ten development conversations and evaluate it once on a twenty-conversation internal prompt holdout. |
+| WP-5.2B3A | Full local 8K/16K context comparison | Approved; ready for execution | `md/handoffs/WP-5.2B3A-full-context-comparison.md` | Required at `md/handoffs/reports/WP-5.2B3A-completion-report.md`; article brief required at `md/handoffs/reports/WP-5.2B3A-context-comparison-article-brief.md` | Pending | Reuse accepted 120-case 8K Qwen/Phi packages, run only new 120-case 16K arms on the same local machine with context as the sole effective change, reconcile case transitions and quality/cost, recommend one common context, and prepare article-ready aggregate evidence. |
+| WP-5.2B3B | Global prompt development | Planned; gated by B3A acceptance | Pending | Methodology/article evidence required | Pending | Freeze a balanced 10/20 split; compare global P0/P1/P2 four-prompt packages on ten development conversations across Qwen/Phi with Gemini portability evidence; freeze one package without model-specific or post-hoc per-task cherry-picking. |
+| WP-5.2B3C | One-shot prompt holdout evaluation | Planned; gated by B3B prompt freeze | Pending | Completion and publication evidence brief required | Pending | Run the frozen prompt package once over 80 holdout cases each for Qwen, Phi, and Gemini; report baseline/tuned/cloud results, generalization gap, failure taxonomy, cost, chart-ready data, and article claims/caveats without holdout-driven prompt changes. |
 | LP-4.1 | Local-model results analysis and article planning | Published; owner-reported 2026-07-27 | `md/handoffs/LP-4.1-local-model-results-analysis-and-article-planning.md`; continuation: `md/handoffs/LP-4.1-complete-results-continuation.md` | Analysis: `md/handoffs/reports/LP-4.1-local-model-results-analysis-brief.md`; article: `md/handoffs/reports/LP-4.1-article-draft-v2.md`; record: `md/handoffs/reports/LP-4.1-publication-record.md` | `md/handoffs/reports/LP-4.1-validation-review.md` | Exact six-arm UTS/sensitivity, article drafts, editorial briefs, final LinkedIn introduction, and two aggregate SVG figures are retained. The owner reports the long-form LinkedIn article published; external URL not supplied. |
 | REL-0.2.0 | MCP recall source release and LinkedIn progress post | Source commit/tag published; LinkedIn posted; GitHub release page pending | `md/handoffs/REL-0.2.0-mcp-recall-release-linkedin-progress.md` | `md/handoffs/reports/REL-0.2.0-completion-report.md`; publication: `md/handoffs/reports/REL-0.2.0-publication-record.md` | `md/handoffs/reports/REL-0.2.0-validation-review.md` | Release commit `46ec79f`; final tagged commit `e67579b`; remote annotated tag `v0.2.0` peels to `e67579b`. The owner reports the primary LinkedIn progress post published on 2026-07-28; external LinkedIn URL not supplied. GitHub's public release-by-tag API returned 404, so release-page publication remains the only release-closure gate. Additional LinkedIn-post activity is explicitly outside current scope. |
-| WP-5.2C | Remote runs and independent evaluation set | Remote execution activated; independent set deferred | See WP-5.2C1 | Pending | Pending | The owner selected a controlled remote Qwen hardware/context study. The later untouched evaluation-set size/process remains a separate decision. |
-| WP-5.2C1 | Qwen3.5-4B Google Cloud speed and context study | Approved; ready for execution | `md/handoffs/WP-5.2C1-qwen-remote-speed-context-study.md` | Required at `md/handoffs/reports/WP-5.2C1-completion-report.md` | Pending | Select an owner-approved GCP VM, defaulting to `g2-standard-8`/NVIDIA L4; repeat the immutable 120-case 8K arm, run a controlled 16K arm, conditionally run 32K, return hashed packages, and evaluate locally. Owner authorizes frozen-DB transfer for this bounded task. |
+| WP-5.2C | Remote runs and independent evaluation set | Remote execution active in parallel; independent set deferred | See WP-5.2C1 | Pending | Pending | The controlled remote Qwen hardware/context study remains active while the later untouched evaluation-set size/process remains a separate decision. |
+| WP-5.2C1 | Qwen3.5-4B Google Cloud speed and context study | Ongoing; externally blocked | `md/handoffs/WP-5.2C1-qwen-remote-speed-context-study.md` | Required at `md/handoffs/reports/WP-5.2C1-completion-report.md` | Pending | Google Cloud resource availability currently blocks VM execution. Continue independently when resources become available; preserve all artifacts while B3A runs locally. |
 | WP-5.1.3 | Local LM Studio AI-task smoke and compatibility fix | Accepted | `md/handoffs/WP-5.1.3-local-lm-studio-ai-task-smoke-fix.md` | `md/handoffs/reports/WP-5.1.3-completion-report.md` | `md/handoffs/reports/WP-5.1.3-validation-review.md` | Accepted after direct LM Studio/LiteLLM isolation and real local smoke. Dedicated `lm_studio/` routing, provider-compatible structural schemas, exact evidence binding, safe diagnostics, context estimates, and realistic tracked timeout policy are in place. |
 | WP-5.1.4 | Windows CI Rich-output wrapping patch | Accepted | `md/handoffs/WP-5.1.4-windows-ci-rich-output-wrapping.md` | `md/handoffs/reports/WP-5.1.4-completion-report.md` | `md/handoffs/reports/WP-5.1.4-validation-review.md` | Accepted after deterministic long-path and 20-column Rich regressions plus owner-confirmed hosted GitHub pass for `f0ecaf6`. Test-only patch preserves exit code, task/alias identity, full normalized diagnostic, and no-traceback behavior. |
 
@@ -174,20 +177,18 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Execute WP-5.2C1 through one owner-controlled Google Cloud VM
-   selection/cost checkpoint.
-2. Repeat Qwen3.5-4B over the immutable 120 cases at 8,192 context, then run
-   the same cases at 16,384 with all other variables fixed.
-3. Run the 32,768 arm only when its memory, longest-input, relevance, and
-   approved-cost gates pass.
-4. Return hashed packages and perform verification/deterministic evaluation
-   locally. Fixed-Pro judging requires one consolidated local disclosure
-   confirmation for the new arm(s).
-5. Close REL-0.2.0 separately by publishing and verifying the GitHub release
+1. Execute WP-5.2B3A locally while WP-5.2C1 waits for Google Cloud resources.
+2. Reuse immutable Qwen/Phi 8K packages and run full 120-case 16K arms with
+   context as the only effective change.
+3. Verify, deterministically score, and judge the new arms after one
+   consolidated disclosure confirmation.
+4. Reconcile all case transitions and accept one common context before B3B.
+5. Produce the B3A completion report and article evidence brief.
+6. Keep B3B/B3C gated until context and then prompts are separately frozen.
+7. Resume WP-5.2C1 independently when its VM becomes available.
+8. Close REL-0.2.0 separately by publishing and verifying the GitHub release
    page for the existing `v0.2.0` tag; no rebuild or retag is required.
-6. Keep the separate additional LinkedIn-post activity deferred.
-7. Keep WP-5.2B3 as optional post-baseline prompt development, preserving all
-   accepted baseline packages.
-8. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
-9. Continue treating the 120 FABLE-reference cases as private silver
+9. Keep the separate additional LinkedIn-post activity deferred.
+10. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
+11. Continue treating the 120 FABLE-reference cases as private silver
    development data, not an untouched final evaluation set.
