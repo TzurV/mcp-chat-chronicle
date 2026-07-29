@@ -45,9 +45,13 @@ The tracked source post is:
 md/release-artifacts/linkedin/chat-chronicle-v0.2.0-mcp-post.md
 ```
 
-The owner explicitly requested that a separate additional LinkedIn-post
-activity be ignored for now. It is not part of REL-0.2.0 closure or current
-planning.
+The separate MCP-on-Windows article and supporting feed post were subsequently
+owner-reported published on 2026-07-29. That activity is recorded independently
+as LP-5 and does not change REL-0.2.0 release acceptance:
+
+```text
+md/handoffs/reports/LP-5-mcp-windows-publication-record.md
+```
 
 ## Remaining Closure Action
 
