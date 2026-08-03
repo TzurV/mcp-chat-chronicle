@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
@@ -105,6 +106,21 @@ class Judge(StrictModel):
     max_tokens: int = Field(default=500, gt=0)
 
 
+class SelectionManifestConfig(StrictModel):
+    path: str = Field(min_length=1)
+    role: Literal["development", "holdout"]
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_selection_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_conversations: int = Field(gt=0)
+    expected_cases: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def accounting(self) -> SelectionManifestConfig:
+        if self.expected_cases != self.expected_conversations * len(TASK_ORDER):
+            raise ValueError("selection configuration cases must equal conversations x four tasks")
+        return self
+
+
 class EvaluationConfig(StrictModel):
     version: Literal[1] = 1
     corpus_id: str
@@ -114,6 +130,7 @@ class EvaluationConfig(StrictModel):
     task_catalog: str = "ai-tasks.default.yaml"
     model_catalog: str = "ai-models.default.yaml"
     paths: Paths
+    selection_manifest: SelectionManifestConfig | None = None
     candidate: Candidate
     judge: Judge
 
@@ -214,6 +231,61 @@ class ReferenceEnvelope(StrictModel):
     validated_at_utc: str
 
 
+class SelectionManifestConversation(StrictModel):
+    authority_index: StrictInt = Field(gt=0)
+    conversation_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    provider: str = Field(min_length=1)
+    length_stratum: str = Field(min_length=1)
+    date_bin: str = Field(min_length=1)
+
+
+class SelectionManifest(StrictModel):
+    format_version: Literal[1] = 1
+    algorithm_version: str = Field(min_length=1)
+    role: Literal["development", "holdout"]
+    source_selection_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
+    ordered_conversations: list[SelectionManifestConversation] = Field(min_length=1)
+    conversation_count: StrictInt = Field(gt=0)
+    expected_case_count: StrictInt = Field(gt=0)
+    provider_counts: dict[str, StrictInt]
+    length_stratum_counts: dict[str, StrictInt]
+    date_bin_counts: dict[str, StrictInt]
+    created_at_utc: str = Field(min_length=1)
+    manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("created_at_utc")
+    @classmethod
+    def utc_timestamp(cls, value: str) -> str:
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("selection manifest creation timestamp is invalid") from exc
+        if (
+            parsed.tzinfo is None
+            or parsed.utcoffset() is None
+            or parsed.utcoffset().total_seconds() != 0
+        ):
+            raise ValueError("selection manifest creation timestamp must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def accounting(self) -> SelectionManifest:
+        if self.conversation_count != len(self.ordered_conversations):
+            raise ValueError("selection manifest conversation count mismatch")
+        if self.expected_case_count != self.conversation_count * len(TASK_ORDER):
+            raise ValueError("selection manifest case count mismatch")
+        for name, counts in (
+            ("provider", self.provider_counts),
+            ("length stratum", self.length_stratum_counts),
+            ("date bin", self.date_bin_counts),
+        ):
+            if not counts or any(not key or value <= 0 for key, value in counts.items()):
+                raise ValueError(f"selection manifest {name} counts are invalid")
+            if sum(counts.values()) != self.conversation_count:
+                raise ValueError(f"selection manifest {name} counts do not reconcile")
+        return self
+
+
 class JudgeResult(StrictModel):
     case_alias: str
     case_fingerprint: str
@@ -233,19 +305,42 @@ class JudgeResult(StrictModel):
 
 
 class ConversationScope(StrictModel):
-    selection: Literal["frozen-prefix-v1"] = "frozen-prefix-v1"
+    selection: Literal["frozen-prefix-v1", "ordered-manifest-v1"] = "frozen-prefix-v1"
     requested_conversation_limit: int | None = Field(default=None, gt=0)
     effective_conversation_count: int = Field(gt=0)
     case_count: int = Field(gt=0)
-    frozen_prefix_identity: str
+    frozen_prefix_identity: str | None = None
+    selection_manifest_format_version: int | None = None
+    selection_manifest_algorithm_version: str | None = None
+    selection_manifest_role: Literal["development", "holdout"] | None = None
+    source_selection_identity: str | None = None
+    selection_manifest_identity: str | None = None
 
     @model_validator(mode="after")
     def accounting(self) -> ConversationScope:
         if self.case_count != self.effective_conversation_count * len(TASK_ORDER):
             raise ValueError("scope case count must equal conversations x four tasks")
-        if (
+        manifest_fields = (
+            self.selection_manifest_format_version,
+            self.selection_manifest_algorithm_version,
+            self.selection_manifest_role,
+            self.source_selection_identity,
+            self.selection_manifest_identity,
+        )
+        if self.selection == "frozen-prefix-v1":
+            if self.frozen_prefix_identity is None or any(
+                value is not None for value in manifest_fields
+            ):
+                raise ValueError("frozen-prefix scope identity is invalid")
+            if (
+                self.requested_conversation_limit is not None
+                and self.requested_conversation_limit != self.effective_conversation_count
+            ):
+                raise ValueError("requested and effective conversation scope differ")
+        elif (
             self.requested_conversation_limit is not None
-            and self.requested_conversation_limit != self.effective_conversation_count
+            or self.frozen_prefix_identity is not None
+            or any(value is None for value in manifest_fields)
         ):
-            raise ValueError("requested and effective conversation scope differ")
+            raise ValueError("ordered-manifest scope identity is invalid")
         return self

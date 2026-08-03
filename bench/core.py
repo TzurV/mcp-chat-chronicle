@@ -51,7 +51,7 @@ from .io import (
     verify_checksums,
     write_checksums,
 )
-from .loaders import load_inputs, load_references
+from .loaders import load_inputs, load_references, load_selected_inputs
 from .models import (
     Attempt,
     BundleCase,
@@ -59,6 +59,7 @@ from .models import (
     EvaluationConfig,
     InputEnvelope,
     ReferenceEnvelope,
+    SelectionManifest,
 )
 from .paths import resolve_member
 
@@ -81,27 +82,122 @@ def _selector(source: InputEnvelope, task: str):
     return source.recent if task == "last-activity" else source.overview
 
 
+def _conversation_identity(source: InputEnvelope) -> str:
+    return digest(
+        {
+            "authority_index": source.selection_index,
+            "case_group_id": source.case_group_id,
+            "source_content_hash": source.source_content_hash,
+        }
+    )
+
+
+def _source_selection_identity(config: EvaluationConfig, inputs: list[InputEnvelope]) -> str:
+    return digest(
+        {
+            "format": "accepted-input-selection-v1",
+            "corpus": config.corpus_id,
+            "ordered_conversation_identities": [
+                _conversation_identity(source) for source in inputs
+            ],
+        }
+    )
+
+
+def _manifest_payload(manifest: SelectionManifest) -> dict[str, Any]:
+    return manifest.model_dump(mode="json", exclude={"manifest_sha256"})
+
+
+def _load_ordered_selection(
+    config: EvaluationConfig,
+    config_path: Path,
+) -> tuple[list[InputEnvelope], SelectionManifest]:
+    declaration = config.selection_manifest
+    if declaration is None:
+        raise ValueError("selection manifest configuration is missing")
+    path = _relative(config_path, declaration.path)
+    manifest = SelectionManifest.model_validate_json(path.read_text(encoding="utf-8"))
+    calculated_hash = digest(_manifest_payload(manifest))
+    if manifest.manifest_sha256 != calculated_hash or declaration.sha256 != calculated_hash:
+        raise ValueError("selection manifest content/hash mismatch")
+    if manifest.role != declaration.role:
+        raise ValueError("selection manifest role does not match evaluation configuration")
+    if manifest.source_selection_identity != declaration.source_selection_identity:
+        raise ValueError("selection manifest source-selection identity mismatch")
+    if (
+        manifest.conversation_count != declaration.expected_conversations
+        or manifest.expected_case_count != declaration.expected_cases
+    ):
+        raise ValueError("selection manifest count differs from evaluation configuration")
+    if manifest.conversation_count > config.expected_conversations:
+        raise ValueError("selection manifest exceeds configured frozen count")
+
+    indexes = [entry.authority_index for entry in manifest.ordered_conversations]
+    identities = [entry.conversation_identity for entry in manifest.ordered_conversations]
+    if len(indexes) != len(set(indexes)) or len(identities) != len(set(identities)):
+        raise ValueError("selection manifest contains duplicate conversations")
+    selected_inputs = load_selected_inputs(
+        resolve_member(config, config_path, config.paths.source, output=False),
+        config.expected_conversations,
+        indexes,
+    )
+    selected: list[InputEnvelope] = []
+    for entry, source in zip(manifest.ordered_conversations, selected_inputs, strict=True):
+        if _conversation_identity(source) != entry.conversation_identity:
+            raise ValueError("selection manifest contains an unknown or out-of-authority entry")
+        if source.provider != entry.provider:
+            raise ValueError("selection manifest provider metadata mismatch")
+        selected.append(source)
+    dimensions = (
+        (
+            "provider",
+            manifest.provider_counts,
+            [entry.provider for entry in manifest.ordered_conversations],
+        ),
+        (
+            "length stratum",
+            manifest.length_stratum_counts,
+            [entry.length_stratum for entry in manifest.ordered_conversations],
+        ),
+        (
+            "date bin",
+            manifest.date_bin_counts,
+            [entry.date_bin for entry in manifest.ordered_conversations],
+        ),
+    )
+    for name, declared, values in dimensions:
+        if dict(sorted(Counter(values).items())) != dict(sorted(declared.items())):
+            raise ValueError(f"selection manifest {name} aggregate mismatch")
+    return selected, manifest
+
+
 def build_authority(
     config: EvaluationConfig,
     config_path: Path,
     conversation_limit: int | None = None,
 ) -> list[BundleCase]:
-    inputs = load_inputs(
-        resolve_member(config, config_path, config.paths.source, output=False),
-        config.expected_conversations,
-    )
-    if any(item.corpus_version != config.corpus_id for item in inputs):
+    if config.selection_manifest is not None:
+        if conversation_limit is not None:
+            raise ValueError("selection manifest and conversation limit are mutually exclusive")
+        selected_inputs, _ = _load_ordered_selection(config, config_path)
+    else:
+        inputs = load_inputs(
+            resolve_member(config, config_path, config.paths.source, output=False),
+            config.expected_conversations,
+        )
+        effective_limit = _effective_conversation_limit(config, conversation_limit)
+        selected_inputs = inputs[:effective_limit]
+    if any(item.corpus_version != config.corpus_id for item in selected_inputs):
         raise ValueError("accepted corpus identity mismatch")
-    effective_limit = _effective_conversation_limit(config, conversation_limit)
     task_path = _relative(config_path, config.task_catalog)
     tasks = load_task_catalog(task_path)
     task_hash = digest_bytes(task_path.read_bytes())
-    if any(item.task_catalog_hash_reference != task_hash for item in inputs):
+    if any(item.task_catalog_hash_reference != task_hash for item in selected_inputs):
         raise ValueError("accepted input task catalog hash mismatch")
     models = load_model_catalog(_relative(config_path, config.model_catalog))
     profile = models.profiles[config.candidate.profile]
     cases: list[BundleCase] = []
-    for index, source in enumerate(inputs[:effective_limit], 1):
+    for source in selected_inputs:
         for task_name in config.tasks:
             task = tasks.tasks[task_name]
             selected = _selector(source, task_name)
@@ -141,7 +237,7 @@ def build_authority(
                 "generation": digest(generation),
                 "request_construction": "1",
             }
-            alias = f"c{index:03d}--{task_name}"
+            alias = f"c{source.selection_index:03d}--{task_name}"
             cases.append(
                 BundleCase(
                     alias=alias,
@@ -167,7 +263,7 @@ def build_authority(
                     contract_hashes=identities,
                 )
             )
-    if len(cases) != effective_limit * len(config.tasks):
+    if len(cases) != len(selected_inputs) * len(config.tasks):
         raise ValueError("authoritative case accounting mismatch")
     return cases
 
@@ -184,7 +280,23 @@ def _scope(
     config: EvaluationConfig,
     cases: list[BundleCase],
     requested_limit: int | None,
+    config_path: Path,
 ) -> ConversationScope:
+    if config.selection_manifest is not None:
+        if requested_limit is not None:
+            raise ValueError("selection manifest and conversation limit are mutually exclusive")
+        _, manifest = _load_ordered_selection(config, config_path)
+        return ConversationScope(
+            selection="ordered-manifest-v1",
+            requested_conversation_limit=None,
+            effective_conversation_count=manifest.conversation_count,
+            case_count=len(cases),
+            selection_manifest_format_version=manifest.format_version,
+            selection_manifest_algorithm_version=manifest.algorithm_version,
+            selection_manifest_role=manifest.role,
+            source_selection_identity=manifest.source_selection_identity,
+            selection_manifest_identity=manifest.manifest_sha256,
+        )
     effective = _effective_conversation_limit(config, requested_limit)
     return ConversationScope(
         requested_conversation_limit=requested_limit,
@@ -209,30 +321,74 @@ def _validate_scope_manifest(
     scope = ConversationScope.model_validate(raw_scope)
     if scope.effective_conversation_count > config.expected_conversations:
         raise ValueError("bundle conversation scope exceeds configured frozen count")
-    if (
-        scope.requested_conversation_limit is None
-        and scope.effective_conversation_count != config.expected_conversations
-    ):
-        raise ValueError("unlimited scope must use the complete frozen conversation count")
-    expected_order = [
-        (f"c{index:03d}--{task}", task)
-        for index in range(1, scope.effective_conversation_count + 1)
-        for task in config.tasks
-    ]
+    if scope.selection == "frozen-prefix-v1":
+        if (
+            scope.requested_conversation_limit is None
+            and scope.effective_conversation_count != config.expected_conversations
+        ):
+            raise ValueError("unlimited scope must use the complete frozen conversation count")
+        expected_order = [
+            (f"c{index:03d}--{task}", task)
+            for index in range(1, scope.effective_conversation_count + 1)
+            for task in config.tasks
+        ]
+    else:
+        declaration = config.selection_manifest
+        if declaration is None:
+            raise ValueError("ordered bundle scope requires selection manifest configuration")
+        if (
+            scope.selection_manifest_role != declaration.role
+            or scope.selection_manifest_identity != declaration.sha256
+            or scope.source_selection_identity != declaration.source_selection_identity
+            or scope.effective_conversation_count != declaration.expected_conversations
+            or scope.case_count != declaration.expected_cases
+        ):
+            raise ValueError("bundle selection manifest identity differs from configuration")
+        aliases = [str(item.get("alias", "")) for item in entries]
+        conversation_aliases = aliases[:: len(config.tasks)]
+        if len(conversation_aliases) != len(set(conversation_aliases)):
+            raise ValueError("bundle cases contain duplicate selected conversations")
+        expected_order = [
+            (alias.split("--", 1)[0] + f"--{task}", task)
+            for alias in conversation_aliases
+            for task in config.tasks
+        ]
     actual_order = [(item.get("alias"), item.get("task")) for item in entries]
     if actual_order != expected_order or len(entries) != scope.case_count:
-        raise ValueError("bundle cases are not the declared frozen prefix")
-    expected_identity = digest(
-        {
-            "selection": scope.selection,
-            "corpus": config.corpus_id,
-            "effective_conversation_count": scope.effective_conversation_count,
-            "case_fingerprints": [item.get("fingerprint") for item in entries],
-        }
-    )
-    if scope.frozen_prefix_identity != expected_identity:
-        raise ValueError("bundle frozen-prefix identity mismatch")
+        detail = (
+            "declared frozen prefix"
+            if scope.selection == "frozen-prefix-v1"
+            else "declared ordered conversation scope"
+        )
+        raise ValueError(f"bundle cases are not the {detail}")
+    if scope.selection == "frozen-prefix-v1":
+        expected_identity = digest(
+            {
+                "selection": scope.selection,
+                "corpus": config.corpus_id,
+                "effective_conversation_count": scope.effective_conversation_count,
+                "case_fingerprints": [item.get("fingerprint") for item in entries],
+            }
+        )
+        if scope.frozen_prefix_identity != expected_identity:
+            raise ValueError("bundle frozen-prefix identity mismatch")
     return scope
+
+
+def _scope_dump(scope: ConversationScope) -> dict[str, Any]:
+    value = scope.model_dump(mode="json")
+    if scope.selection == "frozen-prefix-v1":
+        for name in (
+            "selection_manifest_format_version",
+            "selection_manifest_algorithm_version",
+            "selection_manifest_role",
+            "source_selection_identity",
+            "selection_manifest_identity",
+        ):
+            value.pop(name)
+    else:
+        value.pop("frozen_prefix_identity")
+    return value
 
 
 def prepare(
@@ -241,7 +397,7 @@ def prepare(
     conversation_limit: int | None = None,
 ) -> dict[str, Any]:
     cases = build_authority(config, config_path, conversation_limit)
-    scope = _scope(config, cases, conversation_limit)
+    scope = _scope(config, cases, conversation_limit, config_path)
     profile = load_model_catalog(_relative(config_path, config.model_catalog)).profiles[
         config.candidate.profile
     ]
@@ -297,13 +453,13 @@ def _bundle_manifest(
         "version": 1,
         "corpus_id": config.corpus_id,
         "expected_cases": scope.case_count,
-        "scope": scope.model_dump(mode="json"),
+        "scope": _scope_dump(scope),
         "cases": entries,
         "application_version": application_version,
         "required_candidate": _candidate_identity(config),
         "required_profile": _profile_identity(profile),
         "content_id": digest(
-            {"scope": scope.model_dump(mode="json"), "cases": entries}
+            {"scope": _scope_dump(scope), "cases": entries}
         ),
     }
 
@@ -383,7 +539,7 @@ async def generate(
         ):
             raise ValueError("bundle case accounting mismatch")
         if manifest.get("content_id") != digest(
-            {"scope": scope.model_dump(mode="json"), "cases": manifest["cases"]}
+            {"scope": _scope_dump(scope), "cases": manifest["cases"]}
         ):
             raise ValueError("bundle scope/case content identity mismatch")
         models = load_model_catalog(_relative(config_path, config.model_catalog))
@@ -402,7 +558,7 @@ async def generate(
             "source_bundle_content_id": digest(
                 json.loads((bundle / "checksums.json").read_text(encoding="utf-8"))
             ),
-            "scope": scope.model_dump(mode="json"),
+            "scope": _scope_dump(scope),
         }
         work_manifest = work / "work-manifest.json"
         if work_manifest.exists():
@@ -714,10 +870,12 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
         content_id = verify_checksums(root)
         manifest = json.loads((root / "candidate-manifest.json").read_text(encoding="utf-8"))
         scope = _validate_scope_manifest(config, manifest["cases"], manifest.get("scope"))
-        authority = build_authority(config, config_path, scope.effective_conversation_count)
-        authoritative_scope = _scope(config, authority, scope.requested_conversation_limit)
+        authority = build_authority(config, config_path, scope.requested_conversation_limit)
+        authoritative_scope = _scope(
+            config, authority, scope.requested_conversation_limit, config_path
+        )
         if scope != authoritative_scope:
-            raise ValueError("candidate scope differs from local frozen-prefix authority")
+            raise ValueError("candidate scope differs from local conversation authority")
         expected = {item.alias: item for item in authority}
         _verify_file_allowlist(root, set(expected))
         aliases = [item["alias"] for item in manifest["cases"]]
@@ -847,7 +1005,7 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
             "success": success,
             "failed": len(baseline) - success,
             "total_attempts": len(all_attempts),
-            "scope": scope.model_dump(mode="json"),
+            "scope": _scope_dump(scope),
         }
 
 
@@ -935,9 +1093,10 @@ def validate_reference_authority(
     inputs: list[InputEnvelope],
     references: dict[str, ReferenceEnvelope],
 ) -> None:
+    inputs_by_index = {source.selection_index: source for source in inputs}
     for case in authority:
         reference = references[case.alias]
-        source = inputs[int(case.alias[1:4]) - 1]
+        source = inputs_by_index[int(case.alias[1:4])]
         spec = _schema_spec(case.schema_name)
         if (
             reference.task_version != case.task_version
@@ -1010,14 +1169,18 @@ def score(package_path: Path, config: EvaluationConfig, config_path: Path) -> di
     with tempfile.TemporaryDirectory() as temporary:
         root = _open_package(package_path, Path(temporary), candidate=True)
         verification = verify(root, config, config_path)
-        limit = verification["scope"]["effective_conversation_count"]
-        authority = build_authority(config, config_path, limit)
-        inputs = load_inputs(
+        requested_limit = verification["scope"]["requested_conversation_limit"]
+        authority = build_authority(config, config_path, requested_limit)
+        selected_indexes = list(dict.fromkeys(int(case.alias[1:4]) for case in authority))
+        inputs = load_selected_inputs(
             resolve_member(config, config_path, config.paths.source, output=False),
             config.expected_conversations,
+            selected_indexes,
         )
         references = load_references(
-            resolve_member(config, config_path, config.paths.references, output=False), inputs
+            resolve_member(config, config_path, config.paths.references, output=False),
+            inputs,
+            expected_authority_count=config.expected_conversations,
         )
         validate_reference_authority(authority, inputs, references)
         baselines = {

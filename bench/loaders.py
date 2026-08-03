@@ -13,16 +13,44 @@ _CASE_NAME = re.compile(r"c([0-9]{3})\.json")
 
 
 def load_inputs(root: Path, expected: int) -> list[InputEnvelope]:
+    files = _input_files(root, expected)
+    values = [InputEnvelope.model_validate_json(path.read_text(encoding="utf-8")) for path in files]
+    _validate_inputs(values, list(range(1, expected + 1)))
+    return values
+
+
+def load_selected_inputs(
+    root: Path, expected: int, ordered_indexes: list[int]
+) -> list[InputEnvelope]:
+    files = _input_files(root, expected)
+    if (
+        not ordered_indexes
+        or len(ordered_indexes) != len(set(ordered_indexes))
+        or any(index < 1 or index > expected for index in ordered_indexes)
+    ):
+        raise ValueError("selected input authority indexes are invalid")
+    values = [
+        InputEnvelope.model_validate_json(files[index - 1].read_text(encoding="utf-8"))
+        for index in ordered_indexes
+    ]
+    _validate_inputs(values, ordered_indexes)
+    return values
+
+
+def _input_files(root: Path, expected: int) -> list[Path]:
     if not root.is_dir():
         raise ValueError("accepted input directory is missing")
     files = sorted(root.glob("*.json"))
     expected_names = [f"c{index:03d}.json" for index in range(1, expected + 1)]
     if [item.name for item in files] != expected_names:
         raise ValueError("accepted inputs are missing, extra, or misordered")
-    values = [InputEnvelope.model_validate_json(path.read_text(encoding="utf-8")) for path in files]
-    if [item.selection_index for item in values] != list(range(1, expected + 1)):
+    return files
+
+
+def _validate_inputs(values: list[InputEnvelope], ordered_indexes: list[int]) -> None:
+    if [item.selection_index for item in values] != ordered_indexes:
         raise ValueError("accepted input selection order mismatch")
-    if len({item.case_group_id for item in values}) != expected:
+    if len({item.case_group_id for item in values}) != len(values):
         raise ValueError("duplicate accepted input case group")
     for attribute in (
         "format_version",
@@ -60,11 +88,16 @@ def load_inputs(root: Path, expected: int) -> list[InputEnvelope]:
         for selector in (value.overview, value.recent):
             if len(selector.selected_message_ids) != len(set(selector.selected_message_ids)):
                 raise ValueError("accepted selector contains duplicate evidence IDs")
-    return values
 
 
-def load_references(root: Path, inputs: list[InputEnvelope]) -> dict[str, ReferenceEnvelope]:
-    expected_names = [f"c{index:03d}.json" for index in range(1, len(inputs) + 1)]
+def load_references(
+    root: Path,
+    inputs: list[InputEnvelope],
+    *,
+    expected_authority_count: int | None = None,
+) -> dict[str, ReferenceEnvelope]:
+    expected = expected_authority_count or len(inputs)
+    expected_names = [f"c{index:03d}.json" for index in range(1, expected + 1)]
     result: dict[str, ReferenceEnvelope] = {}
     task_dirs = (
         sorted(item.name for item in root.iterdir() if item.is_dir()) if root.is_dir() else []
@@ -75,9 +108,9 @@ def load_references(root: Path, inputs: list[InputEnvelope]) -> dict[str, Refere
         files = sorted((root / task).glob("*.json"))
         if [item.name for item in files] != expected_names:
             raise ValueError("references are missing, extra, or misordered")
-        for index, path in enumerate(files):
+        for source in inputs:
+            path = root / task / f"c{source.selection_index:03d}.json"
             value = ReferenceEnvelope.model_validate_json(path.read_text(encoding="utf-8"))
-            source = inputs[index]
             selector = source.recent if task == "last-activity" else source.overview
             if (
                 value.task_name != task
@@ -89,5 +122,5 @@ def load_references(root: Path, inputs: list[InputEnvelope]) -> dict[str, Refere
                 or value.status != "success"
             ):
                 raise ValueError("reference authority identity mismatch")
-            result[f"c{index + 1:03d}--{task}"] = value
+            result[f"c{source.selection_index:03d}--{task}"] = value
     return result

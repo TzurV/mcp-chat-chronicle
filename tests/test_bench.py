@@ -6,13 +6,17 @@ import json
 import os
 import shutil
 import zipfile
+from collections import Counter
 from pathlib import Path
 
 import pytest
 import yaml
 from bench import __main__ as bench_cli
 from bench.core import (
+    _conversation_identity,
+    _manifest_payload,
     _scan_leakage,
+    _source_selection_identity,
     _validate_implementation,
     build_authority,
     generate,
@@ -21,9 +25,22 @@ from bench.core import (
     verify,
 )
 from bench.implementation import ImplementationIdentity
-from bench.io import atomic_json, deterministic_zip, safe_extract, verify_checksums, write_checksums
+from bench.io import (
+    atomic_json,
+    deterministic_zip,
+    digest,
+    safe_extract,
+    verify_checksums,
+    write_checksums,
+)
 from bench.judge import RUBRICS, provider_judge_schema, score_with_judge
-from bench.models import JUDGE_RATIONALE_MAX_LENGTH, EvaluationConfig, JudgeResult
+from bench.loaders import load_inputs
+from bench.models import (
+    JUDGE_RATIONALE_MAX_LENGTH,
+    EvaluationConfig,
+    JudgeResult,
+    SelectionManifest,
+)
 from bench.paths import resolve_member
 from pydantic import ValidationError
 from typer.testing import CliRunner
@@ -314,6 +331,76 @@ profiles:
         "scoring": "runs/run-one",
     }
     return EvaluationConfig.model_validate(data), tmp_path / "evaluation.yaml"
+
+
+def with_selection_manifest(
+    config: EvaluationConfig,
+    config_path: Path,
+    indexes: list[int],
+    *,
+    role: str = "development",
+    configured_role: str | None = None,
+    name: str = "selection.json",
+) -> tuple[EvaluationConfig, Path, dict[str, object]]:
+    inputs = load_inputs(
+        Path(config.paths.root) / config.paths.source, config.expected_conversations
+    )
+    by_index = {item.selection_index: item for item in inputs}
+    entries = [
+        {
+            "authority_index": index,
+            "conversation_identity": _conversation_identity(by_index[index]),
+            "provider": by_index[index].provider,
+            "length_stratum": "short" if ordinal % 2 else "long",
+            "date_bin": f"bin-{ordinal % 2}",
+        }
+        for ordinal, index in enumerate(indexes, 1)
+    ]
+    value: dict[str, object] = {
+        "format_version": 1,
+        "algorithm_version": "synthetic-selection-v1",
+        "role": role,
+        "source_selection_identity": _source_selection_identity(config, inputs),
+        "ordered_conversations": entries,
+        "conversation_count": len(entries),
+        "expected_case_count": len(entries) * 4,
+        "provider_counts": dict(Counter(item["provider"] for item in entries)),
+        "length_stratum_counts": dict(
+            Counter(item["length_stratum"] for item in entries)
+        ),
+        "date_bin_counts": dict(Counter(item["date_bin"] for item in entries)),
+        "created_at_utc": "2026-08-03T00:00:00Z",
+        "manifest_sha256": "0" * 64,
+    }
+    provisional = SelectionManifest.model_validate(value)
+    value["manifest_sha256"] = digest(_manifest_payload(provisional))
+    path = config_path.parent / name
+    write_json(path, value)
+    data = config.model_dump(mode="json")
+    data["candidate"]["artifact_path"] = config.candidate.artifact_path
+    data["selection_manifest"] = {
+        "path": name,
+        "role": configured_role or role,
+        "sha256": value["manifest_sha256"],
+        "source_selection_identity": value["source_selection_identity"],
+        "expected_conversations": len(entries),
+        "expected_cases": len(entries) * 4,
+    }
+    return EvaluationConfig.model_validate(data), path, value
+
+
+def rewrite_selection_manifest(
+    config: EvaluationConfig,
+    path: Path,
+    value: dict[str, object],
+) -> EvaluationConfig:
+    provisional = SelectionManifest.model_validate({**value, "manifest_sha256": "0" * 64})
+    value["manifest_sha256"] = digest(_manifest_payload(provisional))
+    write_json(path, value)
+    data = config.model_dump(mode="json")
+    data["candidate"]["artifact_path"] = config.candidate.artifact_path
+    data["selection_manifest"]["sha256"] = value["manifest_sha256"]
+    return EvaluationConfig.model_validate(data)
 
 
 def synthetic_outputs(index: int) -> dict[str, dict[str, object]]:
@@ -971,6 +1058,170 @@ def test_intermediate_full_and_unlimited_frozen_prefix_scopes(tmp_path: Path) ->
         explicit_scope["frozen_prefix_identity"]
         == unlimited_scope["frozen_prefix_identity"]
     )
+
+
+def test_non_prefix_ordered_selection_cross_stage_and_judge_scope(tmp_path: Path) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=4)
+    selected, _, manifest_value = with_selection_manifest(base, config_path, [3, 1])
+    config = with_run_paths(selected, "ordered")
+    for unselected_index in (2, 4):
+        (tmp_path / "private" / "inputs" / f"c{unselected_index:03d}.json").write_text(
+            "unselected input must remain unopened", encoding="utf-8"
+        )
+        for task in config.tasks:
+            (
+                tmp_path
+                / "private"
+                / "references"
+                / task
+                / f"c{unselected_index:03d}.json"
+            ).write_text("unselected reference must remain unopened", encoding="utf-8")
+
+    authority = build_authority(config, config_path)
+    assert [case.alias.split("--", 1)[0] for case in authority] == ["c003"] * 4 + [
+        "c001"
+    ] * 4
+    prepared = prepare(config, config_path)
+    assert (prepared["conversations"], prepared["cases"], prepared["scope"]) == (
+        2,
+        8,
+        "ordered-manifest-v1",
+    )
+    with zipfile.ZipFile(prepared["archive"]) as archive:
+        bundle_manifest = json.loads(archive.read("bundle-manifest.json"))
+    scope = bundle_manifest["scope"]
+    assert scope["selection_manifest_role"] == "development"
+    assert scope["selection_manifest_identity"] == manifest_value["manifest_sha256"]
+    assert "selection.json" not in json.dumps(scope)
+    assert str(config_path.parent) not in json.dumps(scope)
+
+    generated = asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            config,
+            config_path,
+            client=SyntheticClient(),
+            implementation_probe=clean_test_identity,
+        )
+    )
+    package = Path(generated["archive"])
+    checked = verify(package, config, config_path)
+    assert checked["expected"] == 8
+    assert checked["scope"] == scope
+    metrics = score(package, config, config_path)
+    assert metrics["runtime_reliability"]["expected"] == 8
+    judge = SyntheticJudge()
+    judged = asyncio.run(score_with_judge(package, config, config_path, client=judge))
+    assert (judged["eligible"], judged["completed"], judge.calls) == (8, 8, 8)
+
+
+@pytest.mark.parametrize("role", ["development", "holdout"])
+def test_selection_manifest_supports_declared_roles(tmp_path: Path, role: str) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=3)
+    config, _, _ = with_selection_manifest(base, config_path, [2], role=role)
+    assert len(build_authority(config, config_path)) == 4
+
+
+def test_development_config_rejects_holdout_manifest(tmp_path: Path) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=3)
+    config, _, _ = with_selection_manifest(
+        base,
+        config_path,
+        [2],
+        role="holdout",
+        configured_role="development",
+    )
+    with pytest.raises(ValueError, match="role"):
+        build_authority(config, config_path)
+
+
+def test_selection_manifest_rejects_count_missing_and_duplicate_entries(tmp_path: Path) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=3)
+    config, path, value = with_selection_manifest(base, config_path, [3, 1])
+
+    bad_count = json.loads(json.dumps(value))
+    bad_count["expected_case_count"] = 4
+    with pytest.raises(ValidationError, match="case count"):
+        SelectionManifest.model_validate(bad_count)
+
+    missing = json.loads(json.dumps(value))
+    missing["ordered_conversations"].pop()
+    missing["conversation_count"] = 1
+    missing["expected_case_count"] = 4
+    missing["provider_counts"] = {"synthetic": 1}
+    missing["length_stratum_counts"] = {"short": 1}
+    missing["date_bin_counts"] = {"bin-1": 1}
+    config = rewrite_selection_manifest(config, path, missing)
+    with pytest.raises(ValueError, match="count differs"):
+        build_authority(config, config_path)
+
+    duplicate = json.loads(json.dumps(value))
+    duplicate["ordered_conversations"][1] = duplicate["ordered_conversations"][0]
+    config = rewrite_selection_manifest(config, path, duplicate)
+    with pytest.raises(ValueError, match="duplicate"):
+        build_authority(config, config_path)
+
+
+def test_selection_manifest_rejects_unknown_and_source_identity_mismatch(
+    tmp_path: Path,
+) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=3)
+    config, path, value = with_selection_manifest(base, config_path, [3, 1])
+
+    unknown = json.loads(json.dumps(value))
+    unknown["ordered_conversations"][0]["conversation_identity"] = "f" * 64
+    config = rewrite_selection_manifest(config, path, unknown)
+    with pytest.raises(ValueError, match="unknown|out-of-authority"):
+        build_authority(config, config_path)
+
+    source_mismatch = json.loads(json.dumps(value))
+    source_mismatch["source_selection_identity"] = "e" * 64
+    config = rewrite_selection_manifest(config, path, source_mismatch)
+    with pytest.raises(ValueError, match="source-selection"):
+        build_authority(config, config_path)
+
+
+def test_selection_manifest_rejects_hash_and_order_tampering(tmp_path: Path) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=3)
+    config, path, value = with_selection_manifest(base, config_path, [3, 1])
+    tampered = json.loads(json.dumps(value))
+    tampered["ordered_conversations"].reverse()
+    write_json(path, tampered)
+    with pytest.raises(ValueError, match="content/hash"):
+        build_authority(config, config_path)
+
+
+def test_selection_manifest_and_conversation_limit_are_mutually_exclusive(
+    tmp_path: Path,
+) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=3)
+    config, _, _ = with_selection_manifest(base, config_path, [3, 1])
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        prepare(config, config_path, conversation_limit=1)
+
+
+def test_ordered_package_scope_tampering_is_rejected(tmp_path: Path) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=3)
+    selected, _, _ = with_selection_manifest(base, config_path, [3, 1])
+    config = with_run_paths(selected, "ordered-tamper")
+    prepared = prepare(config, config_path)
+    asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            config,
+            config_path,
+            client=SyntheticClient(),
+            implementation_probe=clean_test_identity,
+        )
+    )
+    package_dir = tmp_path / "private" / "work" / "package-ordered-tamper"
+    manifest_path = package_dir / "candidate-manifest.json"
+    candidate_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    candidate_manifest["scope"]["selection_manifest_role"] = "holdout"
+    write_json(manifest_path, candidate_manifest)
+    write_checksums(package_dir)
+    with pytest.raises(ValueError, match="selection manifest identity|scope differs"):
+        verify(package_dir, config, config_path)
 
 
 @pytest.mark.parametrize("limit", [0, -1, 4])

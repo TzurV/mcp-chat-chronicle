@@ -25,7 +25,7 @@ from .core import (
     write_aggregate_reports,
 )
 from .io import atomic_json, digest
-from .loaders import load_inputs, load_references
+from .loaders import load_references, load_selected_inputs
 from .models import JUDGE_RATIONALE_MAX_LENGTH, EvaluationConfig, JudgeResult
 from .paths import resolve_member
 
@@ -204,14 +204,18 @@ async def score_with_judge(
     with tempfile.TemporaryDirectory() as temporary:
         package = _open_package(package_path, Path(temporary), candidate=True)
         verification = verify(package, config, config_path)
-        limit = verification["scope"]["effective_conversation_count"]
-        authority = build_authority(config, config_path, limit)
-        inputs = load_inputs(
+        requested_limit = verification["scope"]["requested_conversation_limit"]
+        authority = build_authority(config, config_path, requested_limit)
+        selected_indexes = list(dict.fromkeys(int(case.alias[1:4]) for case in authority))
+        inputs = load_selected_inputs(
             resolve_member(config, config_path, config.paths.source, output=False),
             config.expected_conversations,
+            selected_indexes,
         )
         references = load_references(
-            resolve_member(config, config_path, config.paths.references, output=False), inputs
+            resolve_member(config, config_path, config.paths.references, output=False),
+            inputs,
+            expected_authority_count=config.expected_conversations,
         )
         validate_reference_authority(authority, inputs, references)
         baselines = {

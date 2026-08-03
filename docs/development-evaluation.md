@@ -36,6 +36,86 @@ frozen prefix. Verification and scoring independently reconstruct that same pref
 complete local corpus and complete FABLE reference directories. Never copy, rewrite, or make
 subset directories for either authority source.
 
+## Ordered non-prefix selection manifests
+
+Use a private ordered selection manifest when an approved development or holdout scope is not a
+prefix of the complete accepted conversation order. Keep the manifest beside the ignored private
+evaluation configuration or in another ignored private location. Do not put private conversation
+identities or manifest hashes in tracked documentation.
+
+Add a pinned declaration to the evaluation configuration:
+
+```yaml
+selection_manifest:
+  path: selections/development.json
+  role: development
+  sha256: REPLACE_WITH_CANONICAL_MANIFEST_SHA256
+  source_selection_identity: REPLACE_WITH_ACCEPTED_SOURCE_SELECTION_SHA256
+  expected_conversations: 10
+  expected_cases: 40
+```
+
+`path` may be absolute or relative to the evaluation configuration, but only the manifest's
+content identities are carried into bundles and packages. Machine-private paths are never part of
+portable scope identity. The configured `role` must exactly match the manifest role, so a
+development configuration cannot load a holdout manifest. Supported roles are `development` and
+`holdout`. The configuration independently pins the complete accepted source-selection identity.
+The configured expected conversation and case counts must also match the manifest; this prevents
+an internally consistent but accidentally shortened manifest from changing scope.
+
+The strict version-1 manifest has this shape. All values below are synthetic placeholders:
+
+```json
+{
+  "format_version": 1,
+  "algorithm_version": "example-selection-v1",
+  "role": "development",
+  "source_selection_identity": "<64 lowercase hex characters>",
+  "ordered_conversations": [
+    {
+      "authority_index": 7,
+      "conversation_identity": "<64 lowercase hex characters>",
+      "provider": "example-provider",
+      "length_stratum": "short",
+      "date_bin": "example-date-bin"
+    }
+  ],
+  "conversation_count": 1,
+  "expected_case_count": 4,
+  "provider_counts": {"example-provider": 1},
+  "length_stratum_counts": {"short": 1},
+  "date_bin_counts": {"example-date-bin": 1},
+  "created_at_utc": "2026-01-01T00:00:00Z",
+  "manifest_sha256": "<64 lowercase hex characters>"
+}
+```
+
+`conversation_identity` binds the accepted authority position, case-group identity, and source
+content identity without using a filesystem path. `source_selection_identity` binds the complete
+accepted ordered input authority. `manifest_sha256` is the SHA-256 of Chronicle's canonical JSON
+serialization of all manifest fields except `manifest_sha256`; the same value must be pinned in
+the evaluation configuration. Aggregate provider, length-stratum, and date-bin counts must
+reconcile exactly with the ordered entries.
+
+Prepare without a prefix option:
+
+```powershell
+poetry run python -m bench prepare --config <private-evaluation-config>
+```
+
+Do not pass `--conversation-limit` when `selection_manifest` is configured. The two scope modes
+are mutually exclusive. Generation, verification, deterministic scoring, and fixed-judge scoring
+all re-read the same configuration, independently resolve the selected conversations against the
+complete accepted directory authority, preserve manifest order, and require the same pinned role
+and content identity. Ordered-manifest runs deserialize only the selected input envelopes and
+their matching reference files; unselected raw inputs and references remain unopened. A
+duplicate, unknown, missing, reordered, out-of-authority, count-mismatched, or hash-mismatched
+manifest is rejected before candidate use.
+
+Omitting `selection_manifest` preserves the existing behavior: no limit selects the complete
+accepted corpus, while `--conversation-limit N` selects the first `N` conversations. Historical
+prefix packages retain their original scope representation and remain verifiable.
+
 The command prints the scoped case count, content identity, archive transfer hash, and privacy warning.
 Stop here until the owner confirms the target machine, transfer method, control, temporary
 storage, deletion timing, and pinned candidate readiness. Transfer is manual.

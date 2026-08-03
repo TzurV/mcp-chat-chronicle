@@ -9,6 +9,15 @@ tasks:
   - title-assessment
 task_catalog: ../../../../ai-tasks.default.yaml
 model_catalog: ai-models.yaml
+# Optional private non-prefix scope. The manifest path may be relative to this file.
+# Do not combine this declaration with prepare --conversation-limit.
+# selection_manifest:
+#   path: selections/development.json
+#   role: development
+#   sha256: REPLACE_WITH_CANONICAL_MANIFEST_SHA256
+#   source_selection_identity: REPLACE_WITH_ACCEPTED_SOURCE_SELECTION_SHA256
+#   expected_conversations: 10
+#   expected_cases: 40
 paths:
   root: ..
   source: inputs
