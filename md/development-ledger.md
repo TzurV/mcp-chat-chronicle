@@ -6,12 +6,12 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 
 | Field | Status |
 | --- | --- |
-| Date | 2026-07-30 |
-| Phase | WP-5.2B3B global prompt development next; WP-5.2C1 remote study continues in parallel |
+| Date | 2026-08-03 |
+| Phase | WP-5.2B3B global prompt development approved on a dedicated branch; WP-5.2C1 remote study continues in parallel |
 | Last accepted delivery | WP-5.2B3A full local 8K/16K context comparison |
 | Current milestone state | M0/M1/M2 core and real-history prototype accepted; the configurable AI-task/evaluation stack and six aligned complete development arms are accepted; WP-4.1 read-only MCP recall is accepted; v0.2.0 is committed and remotely tagged; the primary v0.2.0 LinkedIn progress post and LP-5 MCP-on-Windows article/feed post are owner-reported published; the public GitHub release page remains pending verification |
-| Next action | Commit the accepted B3A evidence, then write the WP-5.2B3B handoff with common 8K and a frozen 10-development/20-holdout split |
-| Current branch | `main` |
+| Next action | Execute WP-5.2B3B Gate 1 non-prefix selection support, obtain manager validation/commit, then run the frozen 10-development-conversation prompt study |
+| Current branch | `codex/wp-5.2b3b-prompt-development` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
 ## Work Package Ledger
@@ -64,7 +64,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.2B2.2 | Three retained candidate complete arms | Accepted | `md/handoffs/WP-5.2B2.2-three-retained-candidate-complete-arms.md` | `md/handoffs/reports/WP-5.2B2.2-completion-report.md` | `md/handoffs/reports/WP-5.2B2.2-validation-review.md` | All 360 candidate positions are terminal. Schema-valid results: Phi 77/120, Llama 3B 71/120, Gemma 3 62/120. Fixed-Pro accounting is 208 completed/two retained failures/150 skipped invalid. Three cache-only replays made zero calls; checkpoint, historical, and database evidence remained immutable. |
 | WP-5.2B3 | Controlled context and global prompt-strategy program | In progress; B3A accepted | See WP-5.2B3A/B/C | B3A accepted; B3B/B3C pending | See child reviews | Context is frozen at common 8K. Next optimize one four-task prompt package on ten development conversations and evaluate it once on a twenty-conversation internal prompt holdout. |
 | WP-5.2B3A | Full local 8K/16K context comparison | Accepted | `md/handoffs/WP-5.2B3A-full-context-comparison.md` | `md/handoffs/reports/WP-5.2B3A-completion-report.md`; article brief: `md/handoffs/reports/WP-5.2B3A-context-comparison-article-brief.md` | `md/handoffs/reports/WP-5.2B3A-validation-review.md` | Qwen remained 84/120 valid; Phi fell from 77/120 to 69/120; no prior context failure recovered; combined validity fell from 161/240 to 153/240. Fixed-Pro/cache evidence passed. Common 8K is frozen for B3B. |
-| WP-5.2B3B | Global prompt development | Planned; unblocked by B3A acceptance | Handoff next | Methodology/article evidence required | Pending | At common 8K, freeze a balanced 10/20 split; compare global P0/P1/P2 four-prompt packages on ten development conversations across Qwen/Phi with Gemini portability evidence; freeze one package without model-specific or post-hoc per-task cherry-picking. |
+| WP-5.2B3B | Global prompt development | Approved; handed off on dedicated branch | `md/handoffs/WP-5.2B3B-global-prompt-development.md` | Required: completion report plus prompt-development evidence brief | Pending | Gate 1 adds strict non-prefix selection-manifest support because the accepted frozen order is provider-grouped. Then, at common 8K, freeze a metadata-balanced 10/20 split; compare global P0/P1/P2 four-prompt packages across Qwen/Phi with Gemini portability evidence; allow at most one predeclared P3 revision; freeze one package without model-specific or post-hoc per-task cherry-picking. |
 | WP-5.2B3C | One-shot prompt holdout evaluation | Planned; gated by B3B prompt freeze | Pending | Completion and publication evidence brief required | Pending | Run the frozen prompt package once over 80 holdout cases each for Qwen, Phi, and Gemini; report baseline/tuned/cloud results, generalization gap, failure taxonomy, cost, chart-ready data, and article claims/caveats without holdout-driven prompt changes. |
 | LP-4.1 | Local-model results analysis and article planning | Published; owner-reported 2026-07-27 | `md/handoffs/LP-4.1-local-model-results-analysis-and-article-planning.md`; continuation: `md/handoffs/LP-4.1-complete-results-continuation.md` | Analysis: `md/handoffs/reports/LP-4.1-local-model-results-analysis-brief.md`; article: `md/handoffs/reports/LP-4.1-article-draft-v2.md`; record: `md/handoffs/reports/LP-4.1-publication-record.md` | `md/handoffs/reports/LP-4.1-validation-review.md` | Exact six-arm UTS/sensitivity, article drafts, editorial briefs, final LinkedIn introduction, and two aggregate SVG figures are retained. The owner reports the long-form LinkedIn article published; external URL not supplied. |
 | REL-0.2.0 | MCP recall source release and LinkedIn progress post | Source commit/tag published; LinkedIn posted; GitHub release page pending | `md/handoffs/REL-0.2.0-mcp-recall-release-linkedin-progress.md` | `md/handoffs/reports/REL-0.2.0-completion-report.md`; publication: `md/handoffs/reports/REL-0.2.0-publication-record.md` | `md/handoffs/reports/REL-0.2.0-validation-review.md` | Release commit `46ec79f`; final tagged commit `e67579b`; remote annotated tag `v0.2.0` peels to `e67579b`. The owner reports the primary LinkedIn progress post published on 2026-07-28; external LinkedIn URL not supplied. GitHub's public release-by-tag API returned 404, so release-page publication remains the only release-closure gate. The later MCP-on-Windows publication is closed separately as LP-5. |
@@ -179,10 +179,10 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Commit the accepted B3A completion report, article evidence brief, PM review,
-   master-plan update, and ledger update.
-2. Write WP-5.2B3B with common context fixed at 8,192 and freeze a balanced
-   10-development/20-holdout split before prompt inspection.
+1. Execute and validate the WP-5.2B3B Gate 1 non-prefix selection-manifest
+   extension, then have the manager commit that generic benchmark patch.
+2. Freeze the metadata-balanced 10-development/20-holdout split at common
+   context 8,192 before prompt or outcome inspection.
 3. Compare the approved global P0/P1/P2 four-task prompt packages only on the
    ten development conversations across Qwen and Phi, with Gemini portability
    evidence.
