@@ -34,19 +34,17 @@ from chat_chronicle.ai import (
 from chat_chronicle.ai_config import (
     interpolate_prompt,
     load_model_catalog,
-    load_task_catalog,
     resolve_generation,
     resolve_model,
 )
 
-from .config import _relative
+from .config import _relative, resolve_task_catalogs
 from .implementation import ImplementationIdentity, measure_implementation
 from .io import (
     atomic_json,
     atomic_text,
     deterministic_zip,
     digest,
-    digest_bytes,
     safe_extract,
     verify_checksums,
     write_checksums,
@@ -189,10 +187,12 @@ def build_authority(
         selected_inputs = inputs[:effective_limit]
     if any(item.corpus_version != config.corpus_id for item in selected_inputs):
         raise ValueError("accepted corpus identity mismatch")
-    task_path = _relative(config_path, config.task_catalog)
-    tasks = load_task_catalog(task_path)
-    task_hash = digest_bytes(task_path.read_bytes())
-    if any(item.task_catalog_hash_reference != task_hash for item in selected_inputs):
+    catalogs = resolve_task_catalogs(config, config_path)
+    tasks = catalogs.active
+    if any(
+        item.task_catalog_hash_reference != catalogs.authority_sha256
+        for item in selected_inputs
+    ):
         raise ValueError("accepted input task catalog hash mismatch")
     models = load_model_catalog(_relative(config_path, config.model_catalog))
     profile = models.profiles[config.candidate.profile]
@@ -237,6 +237,25 @@ def build_authority(
                 "generation": digest(generation),
                 "request_construction": "1",
             }
+            if catalogs.portable_identity is not None:
+                prompt_identity = catalogs.portable_identity["active_prompt_identities"][task_name]
+                identities.update(
+                    {
+                        "task_catalog_authority": catalogs.authority_sha256,
+                        "task_catalog_active": catalogs.active_sha256,
+                        "task_catalog_policy": digest(
+                            {
+                                "policy": catalogs.portable_identity["policy"],
+                                "policy_version": catalogs.portable_identity["policy_version"],
+                            }
+                        ),
+                        "task_non_prompt_contract": catalogs.portable_identity[
+                            "non_prompt_contract_sha256"
+                        ],
+                        "active_system_prompt": prompt_identity["system_prompt_sha256"],
+                        "active_user_prompt": prompt_identity["user_prompt_sha256"],
+                    }
+                )
             alias = f"c{source.selection_index:03d}--{task_name}"
             cases.append(
                 BundleCase(
@@ -409,7 +428,10 @@ def prepare(
     (root / "contracts").mkdir()
     for case in cases:
         atomic_json(root / "cases" / f"{case.alias}.json", case.model_dump(mode="json"))
-    atomic_json(root / "bundle-manifest.json", _bundle_manifest(config, cases, profile, scope))
+    atomic_json(
+        root / "bundle-manifest.json",
+        _bundle_manifest(config, config_path, cases, profile, scope),
+    )
     (root / "README-private.txt").write_text(
         "PRIVATE: selected conversation content. Transfer only by an owner-approved method.\n",
         encoding="utf-8",
@@ -442,6 +464,7 @@ def _candidate_identity(config: EvaluationConfig) -> dict[str, Any]:
 
 def _bundle_manifest(
     config: EvaluationConfig,
+    config_path: Path,
     cases: list[BundleCase],
     profile: Any,
     scope: ConversationScope,
@@ -449,7 +472,11 @@ def _bundle_manifest(
     entries = [
         {"alias": case.alias, "fingerprint": case.fingerprint, "task": case.task} for case in cases
     ]
-    return {
+    catalog_identity = resolve_task_catalogs(config, config_path).portable_identity
+    content_identity: dict[str, Any] = {"scope": _scope_dump(scope), "cases": entries}
+    if catalog_identity is not None:
+        content_identity["task_catalog_experiment"] = catalog_identity
+    manifest = {
         "version": 1,
         "corpus_id": config.corpus_id,
         "expected_cases": scope.case_count,
@@ -458,10 +485,34 @@ def _bundle_manifest(
         "application_version": application_version,
         "required_candidate": _candidate_identity(config),
         "required_profile": _profile_identity(profile),
-        "content_id": digest(
-            {"scope": _scope_dump(scope), "cases": entries}
-        ),
+        "content_id": digest(content_identity),
     }
+    if catalog_identity is not None:
+        manifest["task_catalog_experiment"] = catalog_identity
+    return manifest
+
+
+def _require_catalog_identity(
+    config: EvaluationConfig,
+    config_path: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any] | None:
+    expected = resolve_task_catalogs(config, config_path).portable_identity
+    actual = manifest.get("task_catalog_experiment")
+    if actual != expected:
+        raise ValueError("task catalog authority/active identity mismatch")
+    return expected
+
+
+def _bundle_content_identity(
+    scope: ConversationScope,
+    entries: list[dict[str, Any]],
+    catalog_identity: dict[str, Any] | None,
+) -> str:
+    value: dict[str, Any] = {"scope": _scope_dump(scope), "cases": entries}
+    if catalog_identity is not None:
+        value["task_catalog_experiment"] = catalog_identity
+    return digest(value)
 
 
 def _authority_bundle_content_id(
@@ -479,7 +530,10 @@ def _authority_bundle_content_id(
         (root / "contracts").mkdir()
         for case in cases:
             atomic_json(root / "cases" / f"{case.alias}.json", case.model_dump(mode="json"))
-        atomic_json(root / "bundle-manifest.json", _bundle_manifest(config, cases, profile, scope))
+        atomic_json(
+            root / "bundle-manifest.json",
+            _bundle_manifest(config, config_path, cases, profile, scope),
+        )
         (root / "README-private.txt").write_text(
             "PRIVATE: selected conversation content. Transfer only by an owner-approved method.\n",
             encoding="utf-8",
@@ -533,13 +587,14 @@ async def generate(
         verify_checksums(bundle)
         manifest = json.loads((bundle / "bundle-manifest.json").read_text(encoding="utf-8"))
         scope = _validate_scope_manifest(config, manifest["cases"], manifest.get("scope"))
+        catalog_identity = _require_catalog_identity(config, config_path, manifest)
         if (
             len(manifest["cases"]) != scope.case_count
             or manifest.get("expected_cases") != scope.case_count
         ):
             raise ValueError("bundle case accounting mismatch")
-        if manifest.get("content_id") != digest(
-            {"scope": _scope_dump(scope), "cases": manifest["cases"]}
+        if manifest.get("content_id") != _bundle_content_identity(
+            scope, manifest["cases"], catalog_identity
         ):
             raise ValueError("bundle scope/case content identity mismatch")
         models = load_model_catalog(_relative(config_path, config.model_catalog))
@@ -560,6 +615,8 @@ async def generate(
             ),
             "scope": _scope_dump(scope),
         }
+        if catalog_identity is not None:
+            work_identity["task_catalog_experiment"] = catalog_identity
         work_manifest = work / "work-manifest.json"
         if work_manifest.exists():
             if json.loads(work_manifest.read_text(encoding="utf-8")) != work_identity:
@@ -760,6 +817,7 @@ def package_candidate(
         raise ValueError("candidate package destination already exists")
     destination.mkdir(parents=True)
     bundle_manifest = json.loads((bundle / "bundle-manifest.json").read_text(encoding="utf-8"))
+    catalog_identity = _require_catalog_identity(config, config_path, bundle_manifest)
     (destination / "results").mkdir()
     for item in bundle_manifest["cases"]:
         alias = item["alias"]
@@ -833,6 +891,8 @@ def package_candidate(
         "usage_available": sum(item.usage is not None for item in current),
         "no_references_or_judge_results": True,
     }
+    if catalog_identity is not None:
+        manifest["task_catalog_experiment"] = catalog_identity
     atomic_json(destination / "candidate-manifest.json", manifest)
     atomic_json(
         destination / "case-accounting.json",
@@ -869,6 +929,7 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
         root = _open_package(package_path, Path(temporary), candidate=True)
         content_id = verify_checksums(root)
         manifest = json.loads((root / "candidate-manifest.json").read_text(encoding="utf-8"))
+        catalog_identity = _require_catalog_identity(config, config_path, manifest)
         scope = _validate_scope_manifest(config, manifest["cases"], manifest.get("scope"))
         authority = build_authority(config, config_path, scope.requested_conversation_limit)
         authoritative_scope = _scope(
@@ -998,7 +1059,7 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
         ):
             raise ValueError("candidate resolved model/runtime provenance mismatch")
         _scan_leakage(root, authority)
-        return {
+        result = {
             "valid": True,
             "content_id": content_id,
             "expected": len(baseline),
@@ -1007,6 +1068,9 @@ def verify(package_path: Path, config: EvaluationConfig, config_path: Path) -> d
             "total_attempts": len(all_attempts),
             "scope": _scope_dump(scope),
         }
+        if catalog_identity is not None:
+            result["task_catalog_experiment"] = catalog_identity
+        return result
 
 
 def _verify_file_allowlist(root: Path, aliases: set[str]) -> None:
@@ -1098,12 +1162,16 @@ def validate_reference_authority(
         reference = references[case.alias]
         source = inputs_by_index[int(case.alias[1:4])]
         spec = _schema_spec(case.schema_name)
+        authority_catalog_hash = case.contract_hashes.get(
+            "task_catalog_authority", source.task_catalog_hash_reference
+        )
         if (
             reference.task_version != case.task_version
             or reference.output_schema != case.schema_name
             or reference.provider_schema_version != spec.version
             or reference.finalizer_version != spec.finalizer_version
-            or reference.task_catalog_hash != source.task_catalog_hash_reference
+            or source.task_catalog_hash_reference != authority_catalog_hash
+            or reference.task_catalog_hash != authority_catalog_hash
         ):
             raise ValueError("reference task/schema/finalizer/catalog identity mismatch")
         validated = spec.final_model.model_validate(reference.output).model_dump(mode="json")
@@ -1301,12 +1369,17 @@ def score(package_path: Path, config: EvaluationConfig, config_path: Path) -> di
                 "no_valid_output": sum(not item["valid"] for item in case_scores),
             },
         }
+        catalog_identity = verification.get("task_catalog_experiment")
+        if catalog_identity is not None:
+            metrics["task_catalog_experiment"] = catalog_identity
         output_root = resolve_member(config, config_path, config.paths.scoring, output=True)
         run_manifest_path = output_root / "run-manifest.json"
         if run_manifest_path.exists():
             prior_run = json.loads(run_manifest_path.read_text(encoding="utf-8"))
             if prior_run.get("package_content_id") != verification["content_id"]:
                 raise ValueError("scoring directory belongs to a different candidate package")
+            if prior_run.get("task_catalog_experiment") != catalog_identity:
+                raise ValueError("scoring task catalog identity mismatch")
         deterministic = output_root / "deterministic"
         deterministic.mkdir(parents=True, exist_ok=True)
         case_scores_text = "".join(json.dumps(item, sort_keys=True) + "\n" for item in case_scores)
@@ -1336,16 +1409,16 @@ def score(package_path: Path, config: EvaluationConfig, config_path: Path) -> di
                 atomic_json(run_manifest_path, prior_run)
         write_aggregate_reports(output_root, metrics, judge_metrics)
         if not run_manifest_path.exists():
-            atomic_json(
-                run_manifest_path,
-                {
-                    "version": 1,
-                    "deterministic_only": True,
-                    "package_content_id": verification["content_id"],
-                    "scope": verification["scope"],
-                    "created_at_utc": utc_now(),
-                },
-            )
+            run_manifest = {
+                "version": 1,
+                "deterministic_only": True,
+                "package_content_id": verification["content_id"],
+                "scope": verification["scope"],
+                "created_at_utc": utc_now(),
+            }
+            if catalog_identity is not None:
+                run_manifest["task_catalog_experiment"] = catalog_identity
+            atomic_json(run_manifest_path, run_manifest)
         return metrics
 
 

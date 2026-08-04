@@ -36,6 +36,38 @@ frozen prefix. Verification and scoring independently reconstruct that same pref
 complete local corpus and complete FABLE reference directories. Never copy, rewrite, or make
 subset directories for either authority source.
 
+## Prompt-only task-catalog experiments
+
+Accepted inputs and references bind the exact task catalog that created them. Keep that immutable
+catalog as the authority when testing revised prompts; do not rewrite accepted envelopes or
+references. Set `task_catalog` to the active experimental catalog and add a strict declaration:
+
+```yaml
+task_catalog: prompts/p1-schema-first.yaml
+task_catalog_authority:
+  path: accepted/ai-tasks.default.yaml
+  sha256: REPLACE_WITH_AUTHORITY_CATALOG_FILE_SHA256
+  active_sha256: REPLACE_WITH_ACTIVE_PROMPT_CATALOG_FILE_SHA256
+  allowed_changes: prompts-only
+```
+
+Both hashes cover the exact catalog file bytes. Before bundle creation, Chronicle loads both files
+through the strict task-catalog parser and requires identical task names/order, versions, enabled
+states, descriptions, model profiles, selectors, output schemas, generation settings,
+dependencies, input limits, and recent-message counts. Only `system_prompt` and `user_prompt` may
+differ. Normal placeholder validation still applies to every active prompt.
+
+For an opted-in experiment, portable bundle, generation-work, candidate-package, verification,
+deterministic-score, and judge identities separately bind the authority catalog hash, active
+catalog hash, prompt-only policy/version, unchanged non-prompt contract hash, and per-task active
+system/user prompt hashes. Portable artifacts contain those identities but no catalog path. Every
+later stage rechecks the configured files, so a byte change or policy/hash mismatch stops before
+candidate use or scoring.
+
+Omit `task_catalog_authority` for ordinary and historical runs. In that mode, `task_catalog`
+remains both the authority and active catalog, accepted input/reference hashes must match it
+exactly, and existing manifest serialization and package verification remain unchanged.
+
 ## Ordered non-prefix selection manifests
 
 Use a private ordered selection manifest when an approved development or holdout scope is not a

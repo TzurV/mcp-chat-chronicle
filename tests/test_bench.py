@@ -448,6 +448,31 @@ def with_run_paths(config: EvaluationConfig, label: str) -> EvaluationConfig:
     return config.model_copy(update={"paths": paths})
 
 
+def with_active_prompt_catalog(
+    config: EvaluationConfig,
+    config_path: Path,
+    label: str,
+    mutate,
+) -> tuple[EvaluationConfig, Path]:
+    authority_path = Path(config.task_catalog)
+    if not authority_path.is_absolute():
+        authority_path = (config_path.parent / authority_path).resolve()
+    active_path = config_path.parent / f"tasks-{label}.yaml"
+    active_data = yaml.safe_load(authority_path.read_text(encoding="utf-8"))
+    mutate(active_data)
+    active_path.write_text(yaml.safe_dump(active_data, sort_keys=False), encoding="utf-8")
+    data = config.model_dump(mode="json")
+    data["candidate"]["artifact_path"] = config.candidate.artifact_path
+    data["task_catalog"] = str(active_path)
+    data["task_catalog_authority"] = {
+        "path": str(authority_path),
+        "sha256": hashlib.sha256(authority_path.read_bytes()).hexdigest(),
+        "active_sha256": hashlib.sha256(active_path.read_bytes()).hexdigest(),
+        "allowed_changes": "prompts-only",
+    }
+    return EvaluationConfig.model_validate(data), active_path
+
+
 def hosted_workspace(
     tmp_path: Path, conversation_count: int = 2
 ) -> tuple[EvaluationConfig, Path]:
@@ -1113,6 +1138,289 @@ def test_non_prefix_ordered_selection_cross_stage_and_judge_scope(tmp_path: Path
     judge = SyntheticJudge()
     judged = asyncio.run(score_with_judge(package, config, config_path, client=judge))
     assert (judged["eligible"], judged["completed"], judge.calls) == (8, 8, 8)
+
+
+def test_prompt_only_catalog_cross_stage_and_selected_reference_authority(
+    tmp_path: Path,
+) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=4)
+    selected, _, _ = with_selection_manifest(base, config_path, [3, 1])
+
+    def mutate(data) -> None:
+        for task in data["tasks"].values():
+            task["system_prompt"] += "\nReturn the synthetic result concisely."
+            task["user_prompt"] += "\nSynthetic prompt-only experiment."
+
+    experimental, _ = with_active_prompt_catalog(selected, config_path, "cross-stage", mutate)
+    config = with_run_paths(experimental, "prompt-cross-stage")
+    authority_hash = config.task_catalog_authority.sha256
+    for index in (1, 3):
+        source = json.loads(
+            (tmp_path / "private" / "inputs" / f"c{index:03d}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert source["task_catalog_hash_reference"] == authority_hash
+        for task in config.tasks:
+            reference = json.loads(
+                (
+                    tmp_path
+                    / "private"
+                    / "references"
+                    / task
+                    / f"c{index:03d}.json"
+                ).read_text(encoding="utf-8")
+            )
+            assert reference["task_catalog_hash"] == authority_hash
+    for unselected in (2, 4):
+        (tmp_path / "private" / "inputs" / f"c{unselected:03d}.json").write_text(
+            "unselected input must remain unopened", encoding="utf-8"
+        )
+        for task in config.tasks:
+            (
+                tmp_path
+                / "private"
+                / "references"
+                / task
+                / f"c{unselected:03d}.json"
+            ).write_text("unselected reference must remain unopened", encoding="utf-8")
+
+    prepared = prepare(config, config_path)
+    with zipfile.ZipFile(prepared["archive"]) as archive:
+        bundle_manifest = json.loads(archive.read("bundle-manifest.json"))
+        first_case = json.loads(archive.read("cases/c003--conversation-summary.json"))
+    identity = bundle_manifest["task_catalog_experiment"]
+    assert identity["authority_catalog_sha256"] == authority_hash
+    assert identity["active_catalog_sha256"] == config.task_catalog_authority.active_sha256
+    assert identity["policy"] == "prompts-only"
+    assert identity["policy_version"] == "1"
+    assert set(identity["active_prompt_identities"]) == set(config.tasks)
+    assert first_case["contract_hashes"]["task_catalog_authority"] == authority_hash
+    assert first_case["contract_hashes"]["task_catalog_active"] == identity[
+        "active_catalog_sha256"
+    ]
+    assert "tasks-cross-stage.yaml" not in json.dumps(bundle_manifest)
+    assert str(tmp_path) not in json.dumps(bundle_manifest)
+
+    generated = asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            config,
+            config_path,
+            client=SyntheticClient(),
+            implementation_probe=clean_test_identity,
+        )
+    )
+    package = Path(generated["archive"])
+    work_manifest = json.loads(
+        (
+            tmp_path
+            / "private"
+            / "work"
+            / "generation-prompt-cross-stage"
+            / "work-manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert work_manifest["task_catalog_experiment"] == identity
+    with zipfile.ZipFile(package) as archive:
+        candidate_manifest = json.loads(archive.read("candidate-manifest.json"))
+    assert candidate_manifest["task_catalog_experiment"] == identity
+    checked = verify(package, config, config_path)
+    assert checked["task_catalog_experiment"] == identity
+    metrics = score(package, config, config_path)
+    assert metrics["task_catalog_experiment"] == identity
+    scoring_root = tmp_path / "private" / "runs" / "prompt-cross-stage"
+    run_manifest = json.loads(
+        (scoring_root / "run-manifest.json").read_text(encoding="utf-8")
+    )
+    assert run_manifest["task_catalog_experiment"] == identity
+    judge = SyntheticJudge()
+    judged = asyncio.run(score_with_judge(package, config, config_path, client=judge))
+    assert judged["task_catalog_experiment"] == identity
+    judge_metrics = json.loads(
+        (scoring_root / "judge" / "metrics.json").read_text(encoding="utf-8")
+    )
+    assert judge_metrics["task_catalog_experiment"] == identity
+    assert (judged["eligible"], judged["completed"], judge.calls) == (8, 8, 8)
+
+
+@pytest.mark.parametrize("prompt_field", ["system_prompt", "user_prompt"])
+def test_single_prompt_field_change_is_accepted(
+    tmp_path: Path, prompt_field: str
+) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=1)
+
+    def mutate(data) -> None:
+        data["tasks"]["conversation-summary"][prompt_field] += "\nSynthetic-only change."
+
+    experimental, _ = with_active_prompt_catalog(base, config_path, prompt_field, mutate)
+    prepared = prepare(with_run_paths(experimental, prompt_field), config_path)
+    assert prepared["cases"] == 4
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("version", "2"),
+        ("input_selector", "recent-meaningful-v1"),
+        ("output_schema", "work-mode-classification-v1"),
+        ("generation", {"temperature": 0, "max_tokens": 351}),
+        ("model_profile", "different-profile"),
+        ("max_input_chars", 49999),
+        ("recent_message_count", 19),
+        ("enabled", False),
+        ("depends_on", ["title-assessment"]),
+        ("description", "Changed synthetic description."),
+    ],
+)
+def test_prompt_experiment_rejects_non_prompt_changes(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=1)
+
+    def mutate(data) -> None:
+        data["tasks"]["conversation-summary"][field] = value
+
+    experimental, _ = with_active_prompt_catalog(base, config_path, field, mutate)
+    with pytest.raises(AIConfigError, match="non-prompt field"):
+        prepare(with_run_paths(experimental, field), config_path)
+
+
+@pytest.mark.parametrize("catalog", ["authority", "active"])
+def test_prompt_experiment_rejects_wrong_configured_hash(
+    tmp_path: Path, catalog: str
+) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=1)
+
+    def mutate(data) -> None:
+        data["tasks"]["conversation-summary"]["system_prompt"] += "\nSynthetic change."
+
+    experimental, _ = with_active_prompt_catalog(base, config_path, catalog, mutate)
+    declaration = experimental.task_catalog_authority
+    update = {"sha256" if catalog == "authority" else "active_sha256": "f" * 64}
+    changed = experimental.model_copy(
+        update={"task_catalog_authority": declaration.model_copy(update=update)}
+    )
+    with pytest.raises(AIConfigError, match=f"{catalog}.*hash mismatch"):
+        prepare(with_run_paths(changed, f"wrong-{catalog}"), config_path)
+
+
+def test_active_catalog_change_after_generation_is_rejected_by_verification(
+    tmp_path: Path,
+) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=1)
+
+    def mutate(data) -> None:
+        data["tasks"]["conversation-summary"]["system_prompt"] += "\nSynthetic change."
+
+    experimental, active_path = with_active_prompt_catalog(base, config_path, "immutable", mutate)
+    config = with_run_paths(experimental, "immutable")
+    prepared = prepare(config, config_path)
+    generated = asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            config,
+            config_path,
+            client=SyntheticClient(),
+            implementation_probe=clean_test_identity,
+        )
+    )
+    active_path.write_text(
+        active_path.read_text(encoding="utf-8") + "\n# byte-level tamper\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(AIConfigError, match="active prompt catalog file hash mismatch"):
+        verify(Path(generated["archive"]), config, config_path)
+
+
+def test_prompt_catalog_package_identity_tampering_is_rejected(tmp_path: Path) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=1)
+
+    def mutate(data) -> None:
+        data["tasks"]["conversation-summary"]["system_prompt"] += "\nSynthetic change."
+
+    experimental, _ = with_active_prompt_catalog(base, config_path, "tamper", mutate)
+    config = with_run_paths(experimental, "prompt-tamper")
+    prepared = prepare(config, config_path)
+    asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            config,
+            config_path,
+            client=SyntheticClient(),
+            implementation_probe=clean_test_identity,
+        )
+    )
+    package = tmp_path / "private" / "work" / "package-prompt-tamper"
+    manifest_path = package / "candidate-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["task_catalog_experiment"]["active_catalog_sha256"] = "e" * 64
+    write_json(manifest_path, manifest)
+    write_checksums(package)
+    with pytest.raises(ValueError, match="catalog authority/active identity"):
+        verify(package, config, config_path)
+
+
+def test_distinct_active_catalogs_share_authority_and_contract_identity(
+    tmp_path: Path,
+) -> None:
+    base, config_path = synthetic_workspace(tmp_path, conversation_count=1)
+
+    def p1(data) -> None:
+        data["tasks"]["conversation-summary"]["system_prompt"] += "\nP1 synthetic."
+
+    def p2(data) -> None:
+        data["tasks"]["conversation-summary"]["system_prompt"] += "\nP2 synthetic."
+
+    first, _ = with_active_prompt_catalog(base, config_path, "p1", p1)
+    second, _ = with_active_prompt_catalog(base, config_path, "p2", p2)
+    first_prepared = prepare(with_run_paths(first, "p1"), config_path)
+    second_prepared = prepare(with_run_paths(second, "p2"), config_path)
+    with zipfile.ZipFile(first_prepared["archive"]) as archive:
+        first_manifest = json.loads(archive.read("bundle-manifest.json"))
+    with zipfile.ZipFile(second_prepared["archive"]) as archive:
+        second_manifest = json.loads(archive.read("bundle-manifest.json"))
+    first_identity = first_manifest["task_catalog_experiment"]
+    second_identity = second_manifest["task_catalog_experiment"]
+    assert first_identity["authority_catalog_sha256"] == second_identity[
+        "authority_catalog_sha256"
+    ]
+    assert first_identity["non_prompt_contract_sha256"] == second_identity[
+        "non_prompt_contract_sha256"
+    ]
+    assert first_identity["active_catalog_sha256"] != second_identity[
+        "active_catalog_sha256"
+    ]
+    assert first_manifest["content_id"] != second_manifest["content_id"]
+    assert first_manifest["cases"] != second_manifest["cases"]
+
+
+def test_historical_catalog_serialization_remains_unchanged(tmp_path: Path) -> None:
+    config, config_path = synthetic_workspace(tmp_path, conversation_count=1)
+    prepared = prepare(config, config_path)
+    with zipfile.ZipFile(prepared["archive"]) as archive:
+        bundle_manifest = json.loads(archive.read("bundle-manifest.json"))
+        case = json.loads(archive.read("cases/c001--conversation-summary.json"))
+    assert "task_catalog_experiment" not in bundle_manifest
+    assert not any(name.startswith("task_catalog_") for name in case["contract_hashes"])
+    generated = asyncio.run(
+        generate(
+            Path(prepared["archive"]),
+            config,
+            config_path,
+            client=SyntheticClient(),
+            implementation_probe=clean_test_identity,
+        )
+    )
+    package = Path(generated["archive"])
+    with zipfile.ZipFile(package) as archive:
+        candidate_manifest = json.loads(archive.read("candidate-manifest.json"))
+    assert "task_catalog_experiment" not in candidate_manifest
+    assert "task_catalog_experiment" not in verify(package, config, config_path)
+    metrics = score(package, config, config_path)
+    assert "task_catalog_experiment" not in metrics
+    judged = asyncio.run(score_with_judge(package, config, config_path, client=SyntheticJudge()))
+    assert "task_catalog_experiment" not in judged
 
 
 @pytest.mark.parametrize("role", ["development", "holdout"])

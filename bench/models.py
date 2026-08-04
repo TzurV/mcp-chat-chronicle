@@ -121,6 +121,13 @@ class SelectionManifestConfig(StrictModel):
         return self
 
 
+class TaskCatalogAuthorityConfig(StrictModel):
+    path: str = Field(min_length=1)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    active_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    allowed_changes: Literal["prompts-only"]
+
+
 class EvaluationConfig(StrictModel):
     version: Literal[1] = 1
     corpus_id: str
@@ -128,6 +135,7 @@ class EvaluationConfig(StrictModel):
     expected_cases: int = Field(default=120, gt=0)
     tasks: list[str] = Field(default_factory=lambda: list(TASK_ORDER))
     task_catalog: str = "ai-tasks.default.yaml"
+    task_catalog_authority: TaskCatalogAuthorityConfig | None = None
     model_catalog: str = "ai-models.default.yaml"
     paths: Paths
     selection_manifest: SelectionManifestConfig | None = None

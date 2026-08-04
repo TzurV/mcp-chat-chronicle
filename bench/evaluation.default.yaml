@@ -8,6 +8,13 @@ tasks:
   - last-activity
   - title-assessment
 task_catalog: ../../../../ai-tasks.default.yaml
+# Optional prompt-only experiment. `task_catalog` above is the active prompt catalog; this
+# declaration pins the immutable catalog that created accepted inputs and references.
+# task_catalog_authority:
+#   path: ../../../../ai-tasks.default.yaml
+#   sha256: REPLACE_WITH_AUTHORITY_CATALOG_FILE_SHA256
+#   active_sha256: REPLACE_WITH_ACTIVE_PROMPT_CATALOG_FILE_SHA256
+#   allowed_changes: prompts-only
 model_catalog: ai-models.yaml
 # Optional private non-prefix scope. The manifest path may be relative to this file.
 # Do not combine this declaration with prepare --conversation-limit.

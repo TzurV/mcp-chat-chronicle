@@ -1,0 +1,178 @@
+version: 1
+tasks:
+  conversation-summary:
+    enabled: true
+    version: "1"
+    description: "Concise factual conversation summary with application-owned dates."
+    model_profile: service-local
+    input_selector: conversation-overview-v1
+    output_schema: conversation-summary-v1
+    system_prompt: |
+      Return exactly one JSON object matching the supplied response schema. Return no prose,
+      Markdown, code fence, extra key, or hidden reasoning.
+
+      Required content:
+      - summary: an array of 2-5 non-empty strings. Each string must be one complete concise
+        sentence. Use at most 120 words across the entire array.
+      - evidence_message_ids: 1-8 integer message_id values copied only from the selected input
+        when meaningful content exists; otherwise []. Never invent an ID.
+
+      Summarize the principal goal or topic, material work or decisions, and supported outcome or
+      current position. Use only supplied facts. Do not invent success, decisions, blockers, next
+      actions, or dates. Do not output dates; Chronicle adds authoritative dates after validation.
+
+      Fictional examples (final JSON only):
+      Input facts: on 2032-04-10, message_id 9101 requests a bicycle-light comparison;
+      message_id 9102 compares battery life and mounting; message_id 9103 selects the
+      longer-lasting light.
+      {"summary":["The conversation compared two fictional bicycle lights for commuting.","It selected the longer-lasting option after reviewing battery life and mounting."],"evidence_message_ids":[9101,9102,9103]}
+
+      Input facts: on 2032-04-11, no meaningful conversation message is available.
+      {"summary":["The selected conversation contains no meaningful request.","No supported work or outcome can be identified."],"evidence_message_ids":[]}
+    user_prompt: |
+      Selected conversation messages:
+      {transcript}
+    generation:
+      temperature: 0
+      max_tokens: 350
+    depends_on: []
+    max_input_chars: 50000
+    recent_message_count: 20
+
+  work-mode-classification:
+    enabled: true
+    version: "1"
+    description: "Whole-conversation manager, executor, one-off, mixed, or unknown classification."
+    model_profile: service-local
+    input_selector: conversation-overview-v1
+    output_schema: work-mode-classification-v1
+    system_prompt: |
+      Return exactly one JSON object matching the supplied response schema. Return no prose,
+      Markdown, code fence, extra key, or hidden reasoning.
+
+      Required fields:
+      - mode: exactly one of manager, executor, one_off, mixed, unknown.
+      - confidence: a number from 0 to 1.
+      - reason: a concise explanation of at most 60 words.
+      - evidence_message_ids: up to 8 integer message_id values copied only from the selected input.
+        Use [] only for unknown or when no meaningful evidence exists. Never invent an ID.
+
+      Classify the whole conversation:
+      - manager: coordination, scope, delegation, prioritization, validation, approval, or rework
+        dominates.
+      - executor: concrete inspection, implementation, testing, debugging, or delivery dominates.
+      - one_off: one bounded standalone question, explanation, recommendation, troubleshooting
+        exchange, or small request.
+      - mixed: substantial manager and executor phases, or another substantial independent purpose;
+        ordinary planning inside execution is not mixed.
+      - unknown: evidence is insufficient, malformed, or fragmentary.
+
+      Support the selected mode from supplied evidence only.
+
+      Fictional examples (final JSON only):
+      Input facts: on 2032-05-03, messages 9201-9203 inspect and repair a fictional lantern timer,
+      then run tests.
+      {"mode":"executor","confidence":0.94,"reason":"Concrete diagnosis, repair, and testing dominate the conversation.","evidence_message_ids":[9201,9202,9203]}
+
+      Input facts: on 2032-05-04, message 9210 is a truncated greeting with no request or work.
+      {"mode":"unknown","confidence":0.2,"reason":"The fragment does not contain enough evidence to identify a work mode.","evidence_message_ids":[]}
+    user_prompt: |
+      Selected conversation messages:
+      {transcript}
+    generation:
+      temperature: 0
+      max_tokens: 250
+    depends_on: []
+    max_input_chars: 50000
+    recent_message_count: 20
+
+  last-activity:
+    enabled: true
+    version: "1"
+    description: "Recent meaningful work, status, blockers, and supported next action."
+    model_profile: service-local
+    input_selector: recent-meaningful-v1
+    output_schema: last-activity-v1
+    system_prompt: |
+      Return exactly one JSON object matching the supplied response schema. Return no prose,
+      Markdown, code fence, extra key, or hidden reasoning.
+
+      Required fields:
+      - recent_work: a factual description of at most 100 words about only the selected recent
+        meaningful messages.
+      - status: exactly one of in_progress, completed, blocked, awaiting_input, unknown.
+      - blockers: 0-3 non-empty concise strings, each at most 40 words; use [] when none are stated.
+      - next_action: either null or an object with exactly basis and action. basis is explicit when
+        the action is stated, otherwise inferred only for a conservative directly supported
+        continuation. action is non-empty and at most 40 words. Use null when no defensible action
+        exists.
+      - evidence_message_ids: up to 8 integer message_id values copied only from the selected input.
+        Use [] only for unknown or when no meaningful evidence exists. Never invent an ID.
+
+      Status rules: in_progress means active unfinished work; completed means accepted or finished
+      with no unfinished follow-up; blocked requires a stated technical or external blocker;
+      awaiting_input requires an owner/user decision, credential, data, approval, or report;
+      unknown means the state is not reliable. Do not invent blockers or turn suggestions into
+      commitments.
+
+      Fictional examples (final JSON only):
+      Input facts: on 2032-06-08, message 9301 says the fictional garden-sensor test passed and the
+      change was accepted with no follow-up.
+      {"recent_work":"The garden-sensor test passed and the change was accepted.","status":"completed","blockers":[],"next_action":null,"evidence_message_ids":[9301]}
+
+      Input facts: on 2032-06-09, message 9310 requests the owner's choice of blue or green casing
+      before assembly; message 9311 says assembly must wait for that choice.
+      {"recent_work":"Assembly is waiting for the owner to choose a casing color.","status":"awaiting_input","blockers":["The casing color has not been chosen."],"next_action":{"basis":"explicit","action":"Choose either the blue or green casing."},"evidence_message_ids":[9310,9311]}
+    user_prompt: |
+      Recent selected messages:
+      {transcript}
+    generation:
+      temperature: 0
+      max_tokens: 350
+    depends_on: []
+    max_input_chars: 24000
+    recent_message_count: 12
+
+  title-assessment:
+    enabled: true
+    version: "1"
+    description: "Suggestion-only assessment of whether the stored title fits actual activity."
+    model_profile: service-local
+    input_selector: conversation-overview-v1
+    output_schema: title-assessment-v1
+    system_prompt: |
+      Return exactly one JSON object matching the supplied response schema. Return no prose,
+      Markdown, code fence, extra key, or hidden reasoning.
+
+      Required fields:
+      - title_fits: boolean.
+      - confidence: a number from 0 to 1.
+      - reason: a concise explanation of at most 60 words.
+      - suggested_title: null when title_fits is true; when false, a concrete non-empty replacement
+        of 3-10 words and at most 80 characters.
+      - evidence_message_ids: up to 8 integer message_id values copied only from the selected input.
+        Never invent an ID.
+
+      Set title_fits false when the source title is empty, placeholder, unrelated, obsolete after a
+      topic change, materially misleading, or too generic to distinguish the work. A replacement
+      should reflect dominant activity, preserve meaningful names and acronyms, and make no
+      unsupported outcome claim. This task suggests only and never renames data.
+
+      Fictional examples (final JSON only):
+      Input title: Garden Sensor Calibration. Input facts: on 2032-07-12, messages 9401-9403
+      calibrate and test a fictional garden sensor.
+      {"title_fits":true,"confidence":0.96,"reason":"The title specifically matches the dominant calibration and testing work.","suggested_title":null,"evidence_message_ids":[9401,9402,9403]}
+
+      Input title: Notes. Input facts: on 2032-07-13, messages 9410-9412 compare fictional
+      rain-barrel pump sizes.
+      {"title_fits":false,"confidence":0.98,"reason":"The generic title does not identify the pump-sizing comparison.","suggested_title":"Compare Rain-Barrel Pump Sizes","evidence_message_ids":[9410,9411,9412]}
+    user_prompt: |
+      Source title: {title}
+      Selected conversation messages:
+      {transcript}
+    generation:
+      temperature: 0
+      max_tokens: 250
+    depends_on: []
+    max_input_chars: 50000
+    recent_message_count: 20

@@ -204,6 +204,7 @@ async def score_with_judge(
     with tempfile.TemporaryDirectory() as temporary:
         package = _open_package(package_path, Path(temporary), candidate=True)
         verification = verify(package, config, config_path)
+        catalog_identity = verification.get("task_catalog_experiment")
         requested_limit = verification["scope"]["requested_conversation_limit"]
         authority = build_authority(config, config_path, requested_limit)
         selected_indexes = list(dict.fromkeys(int(case.alias[1:4]) for case in authority))
@@ -246,21 +247,22 @@ async def score_with_judge(
                 "request_construction_version": JUDGE_REQUEST_CONSTRUCTION_VERSION,
                 "rubric_dimension_identity": digest(list(RUBRICS[case.task])),
             }
-            identity = digest(
-                {
-                    "candidate": digest(candidate.result),
-                    "source": case.contract_hashes["input"],
-                    "reference": digest(reference.output),
-                    "rubric": rubric_value,
-                    "profile": config.judge.profile,
-                    "resolved_model": resolved["model"],
-                    "profile_config": {
-                        key: value for key, value in resolved.items() if key != "api_key"
-                    },
-                    "generation": config.judge.model_dump(mode="json"),
-                    "judge_contract": judge_contract,
-                }
-            )
+            identity_payload = {
+                "candidate": digest(candidate.result),
+                "source": case.contract_hashes["input"],
+                "reference": digest(reference.output),
+                "rubric": rubric_value,
+                "profile": config.judge.profile,
+                "resolved_model": resolved["model"],
+                "profile_config": {
+                    key: value for key, value in resolved.items() if key != "api_key"
+                },
+                "generation": config.judge.model_dump(mode="json"),
+                "judge_contract": judge_contract,
+            }
+            if catalog_identity is not None:
+                identity_payload["task_catalog_experiment"] = catalog_identity
+            identity = digest(identity_payload)
             case_cache = attempts_root / case.alias / identity
             existing = sorted(case_cache.glob("*.json")) if case_cache.exists() else []
             existing_records = [json.loads(path.read_text(encoding="utf-8")) for path in existing]
@@ -420,6 +422,8 @@ async def score_with_judge(
             ),
             "total_attempts": sum(1 for _ in attempts_root.glob("*/*/*.json")),
         }
+        if catalog_identity is not None:
+            metrics["task_catalog_experiment"] = catalog_identity
         atomic_json(judge_root / "metrics.json", metrics)
         deterministic_metrics = json.loads(
             (output_root / "deterministic" / "metrics.json").read_text(encoding="utf-8")
@@ -431,6 +435,12 @@ async def score_with_judge(
             if run_manifest_path.exists()
             else {"version": 1}
         )
+        if run_manifest_path.exists() and run_manifest.get(
+            "task_catalog_experiment"
+        ) != catalog_identity:
+            raise ValueError("judge task catalog identity mismatch")
+        if catalog_identity is not None:
+            run_manifest["task_catalog_experiment"] = catalog_identity
         run_manifest.update(
             deterministic_only=False,
             judge_profile=config.judge.profile,
