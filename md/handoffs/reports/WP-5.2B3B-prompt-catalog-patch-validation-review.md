@@ -87,3 +87,9 @@ After the manager commit, the executor must:
 6. leave the 20-conversation holdout unopened until WP-5.2B3C.
 
 Commit ownership remains with the manager.
+
+## Commit Record
+
+The manager committed the accepted implementation as `0e920c8` with subject
+`feat: support prompt catalog experiments`. No private candidate or provider call occurred before
+that commit.

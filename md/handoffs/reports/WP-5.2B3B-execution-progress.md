@@ -385,3 +385,14 @@ Pre-existing manager/accepted worktree entries preserved without patch edits:
 The patch is ready for manager validation and commit. All delivery changes are intentionally
 unstaged and uncommitted. Do not amend the existing split/prompt freeze, rerun fictional gates, or
 resume private generation until the manager commit exists.
+
+## Manager patch acceptance and commit
+
+- Manager validation: accepted with no blocking findings.
+- Prompt-catalog patch commit: `0e920c8` (`feat: support prompt catalog experiments`).
+- Independent manager validation: 474 passed, 1 skipped; Ruff, Poetry, benchmark help, privacy
+  tracking, and diff checks passed.
+- No private candidate generation or external provider call occurred before the commit.
+- Execution may resume from the subsequent clean documentation checkpoint by appending the required
+  private provenance amendment, revalidating the frozen split and prompt hashes, and rerunning the
+  fictional Qwen P1/P2 gates before private generation.
