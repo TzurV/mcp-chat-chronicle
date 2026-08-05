@@ -2,7 +2,7 @@
 
 **Repo:** first public source release under `mcp-chat-chronicle`; later rename/PyPI candidate `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** Chat Chronicle v0.2.0 source content is committed and the remote annotated `v0.2.0` tag is available; the public GitHub release page remains an open publication gate · real-history core prototype accepted; ingest/collect/stats/search/phrase/recent/open work across the owner's real ChatGPT, Claude, OpenAI Codex, and Claude Code histories · WP-5.1 configurable AI-task foundation, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 Windows CI portability, the frozen 30-conversation x four-task FABLE development corpus, and WP-5.2A1 Llama 3.2 1B evaluation-floor integration are accepted · WP-5.2B1 through WP-5.2B2.2 are accepted · six aligned complete development arms cover the Gemini 3.5 Flash cloud control and five local models: Qwen3.5-4B, Llama 3.2 1B, Phi-4 Mini, Llama 3.2 3B, and Gemma 3 4B · complete-arm schema-valid results are Gemini 112/120, Qwen 84/120, Phi 77/120, Llama 3B 71/120, Gemma 3 62/120, and Llama 1B 57/120; every candidate position and eligible fixed-Pro judge position has a terminal outcome · LP-4.1 exact UTS/sensitivity analysis, article drafts, editorial review, and publication figures are accepted, and the owner reports the long-form LinkedIn article published on 2026-07-27 · WP-4.1 read-only MCP recall and local-client E2E are accepted; the owner reports the v0.2.0 MCP progress post published on 2026-07-28 and the LP-5 MCP-on-Windows article/feed post published on 2026-07-29 · WP-5.2C1 RunPod Qwen speed/context study is accepted with repeated 8K, maximum-context 262K, matched Gemini, publication, backup, cost, and resource-cleanup evidence · WP-5.2B3A full local 8K/16K context comparison is accepted: Qwen remained 84/120 valid, Phi fell from 77/120 to 69/120, and no prior context failure recovered; common 8K is frozen for WP-5.2B3B · WP-5.2B3B global prompt development is approved and handed off on a dedicated branch, beginning with strict non-prefix split support before model calls · Chrome Gemini Nano, Edge Aion, and Phi Silica have preliminary research/planning only; their feasibility spikes and adapters have not started · the later untouched evaluation set remains TBD · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, controlled context/prompt studies, and remote hardware comparison)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-08-04
+**Status:** Chat Chronicle v0.2.0 source/tag, real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and the published LP-4.1/LP-4.2/LP-5 material are accepted · the public GitHub release page remains an administrative publication gate · WP-5.2B3A accepted common 8K after local 16K recovered no prior context failures · WP-5.2B3B is executor-reported ready for PM validation as a controlled manual-prompt experiment: P0 remained best at 62/80 pooled local usable cases while P1/P2 each produced 58/80, portability regressed, P3 was not triggered, and holdout access stayed zero · established automatic optimization is approved for detailed planning through BootstrapFewShot and GEPA remote search, followed by local finalist transfer validation and only then one-shot holdout evaluation · Chrome Gemini Nano, Edge Aion, and Phi Silica remain preliminary research/planning only · the later independent untouched evaluation set remains TBD · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, controlled context/prompt studies, remote hardware comparison, and established automatic prompt optimization)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-08-05
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Release update (2026-07-28):** v0.2.0 release content is committed on
@@ -602,8 +602,8 @@ failures became timeouts; Phi fell from 77/120 to 69/120 and retained 11 context
 failures. Neither model recovered a prior context failure. Combined validity
 fell from 161/240 to 153/240. Common 8K is frozen for B3B.
 
-**WP-5.2B3B Global prompt development.** *(approved and handed off; common 8K
-frozen by B3A acceptance; handoff:
+**WP-5.2B3B Global prompt development.** *(executor-reported complete and ready
+for PM validation; common 8K frozen by B3A acceptance; handoff:
 `md/handoffs/WP-5.2B3B-global-prompt-development.md`)*
 *Objective:* Select one globally applied four-task prompt package using only ten
 frozen development conversations.
@@ -623,8 +623,80 @@ attempt and selection rule is reproducible; the methodology report contains
 enough aggregate evidence to explain optimization and overfitting risk in a
 future article.
 
+*Controlled experiment observation (executor-reported; pending PM acceptance):*
+P0 remained the selected package. P1 schema-first and P2 bounded-few-shot each
+reduced pooled Qwen/Phi reliability from 62/80 to 58/80. Qwen fell from 30/40
+to 26/40 under both variants, Phi remained 32/40, and Gemini portability fell
+from 38/40 to 32/40 for P1 and 36/40 for P2. Isolated survivor-quality,
+agreement, and latency gains did not overcome reliability and portability
+guardrails. Longer prompts added tokens, Qwen timeouts increased, the fixed
+context failures remained, and P3 was not triggered because the shared failure
+required selector/context/application changes rather than another global prompt
+revision. The holdout remained unopened. Treat this as a controlled ten-
+conversation development result, not a general claim that explicit or few-shot
+prompts are inferior.
+
+**WP-5.2B3B.1 Established automatic prompt optimization and remote search.**
+*(approved for detailed handoff; not started)*
+*Objective:* Test the potential of established prompt-improvement methods rather
+than adding further manually invented variants.
+*Tasks:* Use DSPy BootstrapFewShot as the low-data comparison baseline and GEPA
+as the primary reflective optimizer. Keep P0/P1/P2 as frozen controls. Optimize
+one globally portable four-task package against the existing ten-conversation
+development scope using Qwen and Phi jointly; prioritize schema/evidence-valid
+count, worst-model reliability, minimum task reliability, UTS, and prompt/token
+overhead. Use Gemini only as a finalist portability guardrail. Keep the
+twenty-conversation holdout unopened. The optimizer/proposer model is configured
+externally through LiteLLM and should differ from the fixed Gemini judge when a
+practical provider is available; any same-family use must be disclosed.
+
+Run the search on an owner-controlled RunPod Pod using the exact accepted GGUF
+artifacts and context 8,192. Preferred planning target is an RTX 5090 32 GB Pod,
+already proven by WP-5.2C1; [current public RunPod pricing](https://www.runpod.io/pricing)
+lists Secure Cloud at approximately US$0.99/hour. Use a four-hour pilot checkpoint and a maximum twelve-hour initial
+search ceiling, approximately US$3.96 and US$11.88 compute respectively before
+storage and proposer API usage. An RTX 4090 24 GB at approximately US$0.69/hour
+is an allowed availability/cost fallback only after the same artifact/runtime
+preflight. Capture actual console price, region, host resources, storage, API
+usage, and final billing because availability and rates can change.
+
+Only the frozen development bundle may be transferred. Use encrypted transfer,
+fresh run identities, append-only traces, and remote deletion after returned
+artifacts verify locally. Candidate-model inference and optimizer control may run
+remotely. If reflective proposal calls originate on the Pod, inject only a
+temporary least-privilege provider credential through RunPod secrets or process
+environment; never copy it into YAML, bundles, images, logs, shell history, or
+Git. Revoke or rotate it after teardown. Keep fixed-judge credentials local and
+run final judging after candidate artifacts return unless a later authorization
+explicitly changes that boundary.
+
+*AC:* Optimizer/version/configuration, proposer identity, seed, candidate budget,
+feedback, Pareto/search trace, every prompt candidate, metric, failure, latency,
+token count, API call, and cost are reproducible; no holdout input or outcome is
+opened; no key or private artifact is tracked; remote resources and private data
+are deleted after verified return; and a bounded shortlist, not a hand-selected
+single prompt, is delivered for local transfer testing.
+
+**WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
+gated by B3B.1 shortlist)*
+*Objective:* Determine whether gains found on the remote GPU transfer to the
+owner's local target machine.
+*Tasks:* Rerun P0 plus the top three to five frozen optimizer candidates locally
+with the accepted Qwen/Phi artifacts, context, runtime policy, and terminal
+failure accounting. Do not use RunPod wall time as laptop evidence. Compare
+local reliability, per-task failures, deterministic metrics, UTS, prompt size,
+tokens, and latency against both remote search and manual B3B controls. Run
+Gemini portability and fixed judging locally after candidate packages return.
+Select one complete package by a predeclared reliability-first rule and freeze
+it before any holdout access.
+*AC:* Every finalist is byte-identical to its remote candidate; local runs are
+terminal and immutable; remote-to-local deltas are explicit; no post-local prompt
+edit occurs; one winner or an explicit P0/no-improvement result is frozen; and
+the evidence supports an article about prompt-optimization potential without
+claiming generalization.
+
 **WP-5.2B3C One-shot prompt holdout evaluation.** *(planned; starts only after
-B3B prompt freeze)*
+B3B.2 local winner freeze)*
 *Objective:* Measure whether development gains survive on the 20-conversation
 internal prompt holdout.
 *Tasks:* Run the frozen package exactly once over 80 cases per candidate for
@@ -643,6 +715,16 @@ baseline/tuned/cloud comparisons reconcile with explicit denominators; article
 evidence distinguishes context, prompt, model, reliability, semantic quality,
 and runtime effects; results are labeled internal development holdout rather
 than independent final evaluation.
+
+**LP-4.3 Established prompt optimization potential.** *(planned; gated by
+B3B.1/B3B.2 and preferably B3C)*
+Produce a technical LinkedIn article comparing the controlled manual P0/P1/P2
+experiment with established BootstrapFewShot/GEPA search, remote optimization
+economics, remote-to-local transfer, and one-shot holdout behavior. Separate
+prompt-search potential from model, context, compute, and judge effects. Publish
+complete denominators, search budget, rejected candidates, cost, transfer gap,
+limitations, and negative results; do not claim general prompt superiority or
+local transfer until the corresponding evidence exists.
 
 **WP-5.2C Remote execution and later independent evaluation.** *(remote
 execution activated through WP-5.2C1; independent evaluation set remains
@@ -786,7 +868,7 @@ the checked Chronicle Claude Code project were represented in the database.
 
 In rough priority order: **Gemini Takeout/My Activity importer** (chat text lives under My Activity filtered to Gemini Apps, not necessarily the plain Gemini product checkbox) · **Claude Code/OpenAI Codex warning-taxonomy hardening and ingest-error summary** · **Codex cross-client workspace-association spike** (RS-3: determine whether VS Code/Codex Desktop visibility is keyed by path, repository identity, local metadata, or service association before changing project grouping) · **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **optional host-model work after WP-5.2A2/A3**, including Edge Aion and any future browser resident model, each requiring its own feasibility and adapter approval; Phi Silica remains WP-5.4/Windows App SDK scope · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **Microsoft GraphRAG spike after V2-1** (small private subset; retain only if graph retrieval beats simpler baselines for cross-conversation questions at acceptable indexing and update cost) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
 
-**Sequencing & calendar** (~6 focused hrs/week): prototype fast path = WP-1.4 → CO-1 → WP-2.1 → WP-3.1 → real-history demo, accepted. Claude project metadata, WP-1.5/WP-1.6 usability polish, WP-2.3.2 search punctuation hardening, WP-5.1 configurable AI-task infrastructure, WP-5.1.1 production task contracts, WP-5.1.3 local LM Studio compatibility/smoke, WP-5.1.4 CI portability, and the public v0.1.0 source release are accepted. The resumed AI-development sequence through WP-5.2B2.2 is accepted: frozen snapshot → direct FABLE references → Llama floor integration → split local/hosted harness and fixed Pro judge → same-prefix pilot and complete Gemini/Qwen/Llama-1B arms → qualification and checkpoints for Phi/Llama-3B/Gemma-3 → independent complete 120-case arms for all five local models. LP-4.1 then consolidated exact per-case UTS/sensitivity, task/model interpretation, editorial review, final article copy, and aggregate figures; the owner reports the LinkedIn long-form article published on 2026-07-27. WP-4.1 MCP recall is accepted, REL-0.2.0 has a public source commit/tag plus an owner-reported published LinkedIn progress post, and LP-5's MCP-on-Windows article/feed post is owner-reported published on 2026-07-29; public GitHub release-page verification remains an administrative closure action. WP-5.2C1 remote Qwen execution, evidence consolidation, matched Gemini comparison, local backup verification, and RunPod resource cleanup are accepted. Its LP-4.2 hardware/context follow-up article is owner-reported published on 2026-08-05, with the posted article, feed copy, and visual assets retained in the repository. B3A is accepted and freezes common 8K; the active development sequence is B3B global prompt development on ten conversations → immutable prompt freeze → B3C one-shot evaluation on twenty conversations. Accepted baseline packages must not be overwritten. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. Chrome Gemini Nano, Edge Aion, and Phi Silica have survey/planning evidence but no executed feasibility spike or adapter. A separate untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later work unless explicitly reprioritized.
+**Sequencing & calendar** (~6 focused hrs/week): the archive, real-history prototype, configurable AI tasks, evaluation harness, five-local-model plus Gemini development study, MCP recall, v0.2.0 source/tag, and published LP-4.1/LP-4.2/LP-5 material are accepted. WP-5.2C1 remote Qwen hardware/context execution and B3A common-8K decision are accepted. B3B now provides the controlled manual-prompt baseline and is awaiting final PM validation: P0 beat the manually authored schema-first and few-shot variants while the holdout remained untouched. The active AI sequence becomes B3B acceptance → B3B.1 established BootstrapFewShot/GEPA search on RunPod using only development data → B3B.2 local finalist transfer qualification and winner freeze → B3C one-shot holdout evaluation → LP-4.3 prompt-optimization-potential article. Accepted baseline packages must not be overwritten. Remote search timing is not local deployment evidence; only local finalist reruns can establish transfer. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. Chrome Gemini Nano, Edge Aion, and Phi Silica have survey/planning evidence but no executed feasibility spike or adapter. A later independent untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later unless explicitly reprioritized.
 
 ---
 
