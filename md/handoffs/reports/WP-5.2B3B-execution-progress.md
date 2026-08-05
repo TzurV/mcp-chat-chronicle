@@ -2,12 +2,11 @@
 
 ## Current status
 
-**The generic prompt-catalog patch is implemented and fully validated. Execution is stopped for
-manager patch validation and commit before any private candidate generation or provider/judge
-call. The accepted split, P0 reconstruction, P1/P2 prompt bytes, and Qwen synthetic gates remain
-unchanged.**
+**Execution complete and ready for PM validation. P0 is selected and frozen; all six P1/P2
+development packages are terminal, verified, deterministically scored, judged, and replayed from
+cache with zero provider calls. The holdout remains unopened.**
 
-Last updated: 2026-08-03
+Last updated: 2026-08-05
 
 ## Gate 1 acceptance and resume
 
@@ -396,3 +395,172 @@ resume private generation until the manager commit exists.
 - Execution may resume from the subsequent clean documentation checkpoint by appending the required
   private provenance amendment, revalidating the frozen split and prompt hashes, and rerunning the
   fictional Qwen P1/P2 gates before private generation.
+
+## Post-patch resume checkpoint
+
+- Resume branch: `codex/wp-5.2b3b-prompt-development`.
+- Clean application HEAD: `f25505ae3762fae337d3ed0b7a364689f0cc8853`.
+- Prompt-catalog implementation commit: `0e920c8`.
+- The original private prompt freeze was preserved byte-for-byte.
+- An append-only private provenance amendment binds the clean application HEAD, prompt-catalog
+  implementation commit, `prompts-only` policy version 1, unchanged P1/P2 hashes, and unchanged
+  split identities.
+- The amendment and its separate checksum validate.
+- The frozen development and holdout manifests remain byte-identical to the original freeze.
+- P0, P1, and P2 task-catalog file hashes remain byte-identical to the original freeze.
+- The development split still contains 10 conversations/40 cases with provider quotas 3/3/2/2
+  and length quotas 4/3/3.
+- The holdout split still contains 20 conversations/80 cases. Its raw inputs, references,
+  historical outcomes, and per-case labels remain unopened.
+- No private candidate generation or external provider call occurred before the provenance
+  amendment.
+
+## Post-patch fictional gates
+
+- Qwen P1 post-patch fictional strict-schema gate: 4/4 valid.
+- Qwen P2 post-patch fictional strict-schema gate: 4/4 valid.
+- Both new gate artifacts were written separately; the accepted historical Qwen gates were not
+  overwritten.
+- The gates used only the obviously fictional greenhouse-sensor fixture.
+
+The accepted Phi artifact, Q4_K_M quantization, model identifier, 8,192-token context, and
+parallelism one were reproduced before its private run. The Phi P1 fictional gate then produced
+3/4 valid, with `title-assessment` failing application schema validation. One identical,
+separately preserved diagnostic rerun changed no setting and again produced 3/4 with the same task
+and normalized category. Repeated schema retries or a prompt/runtime change would violate the
+approved experimental boundary, so private Phi generation did not begin.
+
+## Qwen P1/P2 development results
+
+Both prompt packages used the same frozen 10-conversation/40-case development scope and the
+accepted Qwen3.5-4B Q4_K_M artifact at context 8,192 and parallelism one. Every candidate position
+has exactly one terminal attempt. Both packages verify locally and have complete deterministic
+scoring.
+
+| Package | Valid | Total | Summary | Work mode | Last activity | Title | Context | Timeout |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| P1 | 26 | 40 | 6 | 6 | 8 | 6 | 6 | 8 |
+| P2 | 26 | 40 | 6 | 6 | 8 | 6 | 6 | 8 |
+
+Deterministic exact agreement on the ten development conversations:
+
+| Package | Work mode | Last activity | Title fit |
+| --- | ---: | ---: | ---: |
+| P1 | 20% | 60% | 50% |
+| P2 | 30% | 60% | 60% |
+
+P1 median task latencies ranged from 87.6 to 106.1 seconds; P2 ranged from 60.5 to 73.4 seconds.
+Every task's p95 was approximately the fixed 180-second timeout because terminal timeouts remain
+in the metric. P1's command wrapper reached its one-hour orchestration timeout after 36 terminal
+positions, but the original generator subprocess remained active, completed all 40 positions,
+and packaged without a duplicate invocation. This operational interruption did not repeat a
+completed position.
+
+## Current stop boundary
+
+- Qwen private candidate positions: 80/80 terminal.
+- Qwen packages verified and deterministically scored: 2/2.
+- Phi private candidate positions: 0.
+- Gemini private candidate positions: 0.
+- Fixed-judge calls: 0.
+- Holdout raw/reference/outcome files opened: 0.
+- P1/P2 prompt bytes after freeze: unchanged.
+- P3: absent.
+- Tracked delivery change: this execution-progress report only.
+- Nothing is staged or committed by the executor.
+
+This was the historical manager stop: direction was required before interpreting the per-model 4/4
+fictional gate. The next section records the manager's resolution. No prompt, schema, runtime,
+timeout, retry, or context change had been made at that stop.
+
+## Manager decision and clean execution identity
+
+The manager approved Option A and the execution-identity recommendation. Continuation used a
+dedicated detached checkout pinned exactly to clean application commit
+`f25505ae3762fae337d3ed0b7a364689f0cc8853`. The active branch checkout, accepted Qwen packages,
+frozen prompts, split, holdout, and application code were not modified. The existing two unchanged
+Phi P1 fictional 3/4 gates remain preserved as experimental evidence.
+
+## Phi continuation
+
+- Exactly one unchanged 40-position Phi P1 run: 32 valid, 8 failed; task validity 8/7/9/8;
+  failures context 6 and schema 2; 40 attempts; zero rescue retries.
+- Phi P2 fictional gate: 4/4 valid before private input.
+- Exactly one unchanged 40-position Phi P2 run: 32 valid, 8 failed; task validity 8/7/10/7;
+  failures context 6 and schema 2; 40 attempts; zero rescue retries.
+- Both packages verified and deterministically scored.
+
+## Gemini continuation
+
+- P1: 32/40 valid; task validity 7/7/9/9; invalid JSON 7 and provider response 1.
+- P2: 36/40 valid; task validity 9/9/10/8; invalid JSON 4.
+- Both used the authorized global `vertex_ai/gemini-3.5-flash` route, had exactly 40 calls and
+  zero candidate retries, and passed package verification and deterministic scoring.
+
+## Fixed judge and replay
+
+- Fictional fixed-judge gate: 4/4 valid.
+- Fixed judge identity: global `vertex_ai/gemini-3.1-pro-preview`, rubric v1, temperature 0,
+  max tokens 1,000, reasoning none, concurrency one.
+- New packages: 184 eligible, 182 completed, 2 terminal `provider_invalid_json` failures, 56
+  invalid candidates skipped.
+- Cache-only proof: six package replays, 184 before/after attempt files, zero cache misses, zero
+  provider calls, byte-stable attempt evidence.
+
+## P3 and selection
+
+P3 was not triggered. Shared P1/P2 local context failures were already present in P0 and were not
+plausibly addressable by model-neutral prompt wording without forbidden selector/context/application
+changes. Qwen timeouts and Phi schema failures were not shared categories.
+
+The frozen selection rule produced:
+
+| Package | Pooled local usable/80 | Lower model/40 | Summary/work/last/title | Minimum task | Pooled local UTS | Result |
+|---|---:|---:|---|---:|---:|---|
+| P0 | 62 | 30 | 13/15/20/14 | 13 | 63.0 | selected |
+| P1 | 58 | 26 | 14/13/17/14 | 13 | 57.5 | ineligible |
+| P2 | 58 | 26 | 14/13/18/13 | 13 | 56.4 | ineligible |
+
+P1 and P2 also fail Gemini portability guardrails. P0 is frozen as one complete four-task package;
+the tracked selected copy is byte-identical to the accepted P0 catalog. Production defaults remain
+unchanged.
+
+## Completed call and privacy accounting
+
+- New candidate positions: 240/240 terminal (160 local, 80 hosted).
+- Development judge calls: 184; synthetic judge calls: 4.
+- Cache-only provider calls: 0.
+- Holdout raw inputs, references, or per-case outcomes opened: 0.
+- Holdout candidate, score, and judge calls: 0.
+- P1/P2 prompt bytes after freeze: unchanged.
+- Existing P0, Qwen packages, DBs, and WP-5.2C1 artifacts: unchanged.
+
+## Completion delivery
+
+- Selected package: `bench/prompts/wp-5.2b3b/selected-p0.yaml`.
+- Completion report: `md/handoffs/reports/WP-5.2B3B-completion-report.md`.
+- Article evidence brief: `md/handoffs/reports/WP-5.2B3B-prompt-development-evidence-brief.md`.
+- Manager decision record retained and marked approved.
+- Nothing was staged or committed by the executor.
+
+## Final delivery validation
+
+- Poetry environment: dedicated-checkout `.venv` identity passed via a junction to the existing
+  repository `.venv`.
+- Focused ordered-manifest/prompt-catalog matrix: 26 passed.
+- Full suite: 474 passed, 1 skipped.
+- Repository-wide Ruff: passed.
+- Poetry metadata: passed.
+- Benchmark root/prepare/generate/verify/score help: passed.
+- Chronicle root help and AI-task list: passed using ignored checkout-local default catalogs.
+- `git diff --check`: passed.
+- Private tracking query: zero tracked `.chronicle`, DB, SQLite, ZIP, or export artifacts.
+- Final private delivery validator: passed; six verified packages, 240 terminal candidates,
+  182 completed judges, two terminal judge failures, zero cache provider calls, no P3, zero holdout
+  access, active checkout unchanged, and zero staged files.
+
+The first full-suite attempt used an external `VIRTUAL_ENV` override and failed only the packaging
+test's checkout-local environment assertion (473 passed, 1 failed, 1 skipped). After replacing the
+temporary empty environment with the validation-only `.venv` junction, the isolated test passed and
+the complete suite passed. This was validation setup only; no experiment variable or evidence
+changed.

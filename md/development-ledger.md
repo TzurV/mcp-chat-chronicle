@@ -7,11 +7,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Field | Status |
 | --- | --- |
 | Date | 2026-08-05 |
-| Phase | WP-5.2B3B controlled manual-prompt experiment is executor-reported complete and awaiting PM validation; established automatic optimization is approved for planning |
-| Last accepted delivery | WP-5.2C1 RunPod Qwen speed/context study and publication evidence |
+| Phase | WP-5.2B3B controlled manual-prompt experiment accepted; established automatic optimization is next |
+| Last accepted delivery | WP-5.2B3B controlled manual global-prompt experiment and unchanged P0 selection |
 | Current milestone state | M0/M1/M2 core and real-history prototype accepted; the configurable AI-task/evaluation stack and six aligned complete development arms are accepted; WP-4.1 read-only MCP recall is accepted; v0.2.0 is committed and remotely tagged; the primary v0.2.0 LinkedIn progress post and LP-5 MCP-on-Windows article/feed post are owner-reported published; the public GitHub release page remains pending verification |
-| Next action | Validate and accept the B3B P0-selection delivery, then write WP-5.2B3B.1 for bounded BootstrapFewShot/GEPA search on RunPod; keep the twenty-conversation holdout unopened |
-| Current branch | `codex/wp-5.2b3b-prompt-development` |
+| Next action | Write WP-5.2B3B.1 for bounded BootstrapFewShot/GEPA search on RunPod; keep the twenty-conversation holdout unopened |
+| Current branch | `main` after merging the accepted B3B branch |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
 ## Work Package Ledger
@@ -62,9 +62,9 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.2B2 | Complete comparative development evaluation | Accepted | See WP-5.2B1.4 and WP-5.2B2.2 | See accepted child reports | See accepted child reviews | Six aligned complete 120-case arms are available. Reliability, deterministic agreement, fixed-Pro semantic evidence, latency, usage, runtime, failures, and privacy-safe provenance are retained for LP-4.1 analysis. |
 | WP-5.2B2.1 | Three-qualified-candidate 40-case checkpoint | Accepted | `md/handoffs/WP-5.2B2.1-three-qualified-candidate-40-case-checkpoint.md` | `md/handoffs/reports/WP-5.2B2.1-completion-report.md` | `md/handoffs/reports/WP-5.2B2.1-validation-review.md` | All 120 candidate positions are terminal. Schema-valid results: Phi 26/40, Llama 3B 26/40, Gemma 3 23/40. Fixed-Pro accounting recovered to 74 completed/one terminal failure/45 skipped, with three zero-call cache replays. Phi and Llama 3B are admitted to complete arms; Gemma 3 is admitted as an explicitly weak research comparator for the five-local-model article dataset. |
 | WP-5.2B2.2 | Three retained candidate complete arms | Accepted | `md/handoffs/WP-5.2B2.2-three-retained-candidate-complete-arms.md` | `md/handoffs/reports/WP-5.2B2.2-completion-report.md` | `md/handoffs/reports/WP-5.2B2.2-validation-review.md` | All 360 candidate positions are terminal. Schema-valid results: Phi 77/120, Llama 3B 71/120, Gemma 3 62/120. Fixed-Pro accounting is 208 completed/two retained failures/150 skipped invalid. Three cache-only replays made zero calls; checkpoint, historical, and database evidence remained immutable. |
-| WP-5.2B3 | Controlled context and prompt-optimization program | In progress; B3A accepted and B3B awaiting PM validation | See WP-5.2B3A/B/B.1/B.2/C | B3A accepted; B3B delivery reported; automated optimization, transfer, and holdout pending | See child reviews | Common 8K remains the controlled context. Manual P1/P2 did not beat P0. Next use established optimizers on the frozen ten-conversation development scope, validate finalists locally, then evaluate one frozen winner on the untouched twenty-conversation holdout. |
+| WP-5.2B3 | Controlled context and prompt-optimization program | In progress; B3A and B3B accepted | See WP-5.2B3A/B/B.1/B.2/C | B3A and B3B accepted; automated optimization, transfer, and holdout pending | See child reviews | Common 8K remains the controlled context. Manual P1/P2 did not beat P0. Next use established optimizers on the frozen ten-conversation development scope, validate finalists locally, then evaluate one frozen winner on the untouched twenty-conversation holdout. |
 | WP-5.2B3A | Full local 8K/16K context comparison | Accepted | `md/handoffs/WP-5.2B3A-full-context-comparison.md` | `md/handoffs/reports/WP-5.2B3A-completion-report.md`; article brief: `md/handoffs/reports/WP-5.2B3A-context-comparison-article-brief.md` | `md/handoffs/reports/WP-5.2B3A-validation-review.md` | Qwen remained 84/120 valid; Phi fell from 77/120 to 69/120; no prior context failure recovered; combined validity fell from 161/240 to 153/240. Fixed-Pro/cache evidence passed. Common 8K is frozen for B3B. |
-| WP-5.2B3B | Controlled manual global-prompt experiment | Executor reports ready for PM validation | `md/handoffs/WP-5.2B3B-global-prompt-development.md` | Progress: `md/handoffs/reports/WP-5.2B3B-execution-progress.md`; completion and evidence brief delivered in the dedicated checkout and pending manager transfer/validation; decision report: `md/handoffs/reports/WP-5.2B3B-manager-decision-report.md` | Pending final validation | Controlled experiment result: P0 pooled local reliability was 62/80; P1 and P2 each produced 58/80. Qwen fell 30/40 to 26/40, Phi stayed 32/40, and Gemini fell 38/40 to 32/40 for P1 and 36/40 for P2. P0 was selected; P3 was not triggered; 240/240 candidates were terminal; 182 judge results completed with two retained failures; cache replay made zero calls; holdout access remained zero. Treat observations as ten-conversation development evidence, not a general prompt claim. |
+| WP-5.2B3B | Controlled manual global-prompt experiment | Accepted | `md/handoffs/WP-5.2B3B-global-prompt-development.md` | `md/handoffs/reports/WP-5.2B3B-completion-report.md`; evidence: `md/handoffs/reports/WP-5.2B3B-prompt-development-evidence-brief.md`; progress: `md/handoffs/reports/WP-5.2B3B-execution-progress.md`; decision: `md/handoffs/reports/WP-5.2B3B-manager-decision-report.md` | `md/handoffs/reports/WP-5.2B3B-validation-review.md` | Controlled experiment result: P0 pooled local reliability was 62/80; P1 and P2 each produced 58/80. Qwen fell 30/40 to 26/40, Phi stayed 32/40, and Gemini fell 38/40 to 32/40 for P1 and 36/40 for P2. P0 was selected and its tracked copy matches both default catalogs; P3 was not triggered; 240/240 candidates were terminal; 182 judge results completed with two retained failures; cache replay made zero calls; holdout access remained zero. Treat observations as ten-conversation development evidence, not a general prompt claim. |
 | WP-5.2B3B.1 | Established automatic prompt optimization and remote search | Approved for detailed handoff; not started | Pending | Completion report, optimizer trace, cost report, and article evidence required | Pending | Use BootstrapFewShot as the low-data baseline and GEPA as primary optimizer. Search on the frozen ten-conversation development scope across Qwen and Phi, with Gemini only as finalist portability guardrail. Preferred RunPod target is RTX 5090 32 GB: four-hour pilot and twelve-hour initial ceiling; current public Secure Cloud rate is about US$0.99/hour, excluding storage and proposer API usage. Holdout remains unopened. |
 | WP-5.2B3B.2 | Local transfer qualification and winner freeze | Planned; gated by B3B.1 shortlist | Pending | Completion report and remote-to-local transfer evidence required | Pending | Rerun P0 and the top three to five immutable optimizer candidates on the local machine. Select one complete package using a predeclared reliability-first rule, or retain P0 explicitly. Keep judging credentials and final scoring local; do not treat RunPod timing as laptop evidence. |
 | WP-5.2B3C | One-shot prompt holdout evaluation | Planned; gated by B3B.2 winner freeze | Pending | Completion and publication evidence brief required | Pending | Run one frozen optimizer-selected package once over 80 holdout cases each for Qwen, Phi, and Gemini; compare with accepted P0 evidence and report generalization, transfer, reliability, failure taxonomy, cost, and chart-ready data without holdout-driven prompt changes. |
@@ -183,20 +183,18 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Validate and commit the WP-5.2B3B controlled manual-prompt delivery and its
-   selected byte-identical P0 package.
-2. Write and approve WP-5.2B3B.1 for bounded BootstrapFewShot and GEPA search
+1. Write and approve WP-5.2B3B.1 for bounded BootstrapFewShot and GEPA search
    using only the frozen ten-conversation development scope.
-3. Run a four-hour RunPod pilot, review optimizer behavior/cost, then permit at
+2. Run a four-hour RunPod pilot, review optimizer behavior/cost, then permit at
    most the approved twelve-hour initial search ceiling.
-4. Return a frozen shortlist and validate P0 plus the top three to five
+3. Return a frozen shortlist and validate P0 plus the top three to five
    candidates locally under WP-5.2B3B.2.
-5. Freeze one complete winner, or explicitly retain P0, before any holdout
+4. Freeze one complete winner, or explicitly retain P0, before any holdout
    access.
-6. Run WP-5.2B3C once on the untouched twenty-conversation holdout and do not
+5. Run WP-5.2B3C once on the untouched twenty-conversation holdout and do not
    revise prompts afterward.
-7. Close REL-0.2.0 separately by publishing and verifying the GitHub release
+6. Close REL-0.2.0 separately by publishing and verifying the GitHub release
    page for the existing `v0.2.0` tag; no rebuild or retag is required.
-8. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
-9. Continue treating the 120 FABLE-reference cases as private silver
+7. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
+8. Continue treating the 120 FABLE-reference cases as private silver
    development data, not an untouched final evaluation set.
