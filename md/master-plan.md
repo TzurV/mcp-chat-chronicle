@@ -637,7 +637,8 @@ conversation development result, not a general claim that explicit or few-shot
 prompts are inferior.
 
 **WP-5.2B3B.1 Established automatic prompt optimization and remote search.**
-*(approved for detailed handoff; not started)*
+*(handoff ready; not started; handoff:
+`md/handoffs/WP-5.2B3B.1-automatic-prompt-optimization-remote-search.md`)*
 *Objective:* Test the potential of established prompt-improvement methods rather
 than adding further manually invented variants.
 *Tasks:* Use DSPy BootstrapFewShot as the low-data comparison baseline and GEPA
