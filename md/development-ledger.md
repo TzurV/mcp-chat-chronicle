@@ -6,11 +6,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 
 | Field | Status |
 | --- | --- |
-| Date | 2026-08-04 |
-| Phase | WP-5.2B3B private prompt-development execution is the active stream; WP-5.2C1 remote Qwen study is accepted and closed |
+| Date | 2026-08-05 |
+| Phase | WP-5.2B3B private prompt-development execution remains active; LP-4.2 remote Qwen follow-up article is published and closed |
 | Last accepted delivery | WP-5.2C1 RunPod Qwen speed/context study and publication evidence |
 | Current milestone state | M0/M1/M2 core and real-history prototype accepted; the configurable AI-task/evaluation stack and six aligned complete development arms are accepted; WP-4.1 read-only MCP recall is accepted; v0.2.0 is committed and remotely tagged; the primary v0.2.0 LinkedIn progress post and LP-5 MCP-on-Windows article/feed post are owner-reported published; the public GitHub release page remains pending verification |
-| Next action | Amend private B3B provenance to the clean resume commit, rerun the fictional P1/P2 gates, then execute private P1/P2 development-scope generation in the handoff's fixed order |
+| Next action | Continue B3B private prompt-development execution from the accepted prompt-catalog checkpoint, then freeze the selected prompt before B3C holdout evaluation |
 | Current branch | `codex/wp-5.2b3b-prompt-development` |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -67,6 +67,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.2B3B | Global prompt development | Prompt-catalog patch accepted and committed; private development runs may resume | `md/handoffs/WP-5.2B3B-global-prompt-development.md` | Progress: `md/handoffs/reports/WP-5.2B3B-execution-progress.md`; Gate 1 review: `md/handoffs/reports/WP-5.2B3B-gate1-validation-review.md`; blocker review: `md/handoffs/reports/WP-5.2B3B-prompt-catalog-blocker-review.md`; patch review: `md/handoffs/reports/WP-5.2B3B-prompt-catalog-patch-validation-review.md`; final completion report plus prompt-development evidence brief required | `md/handoffs/reports/WP-5.2B3B-prompt-catalog-patch-validation-review.md` | The balanced 10/20 split, P0 reconstruction, and P1/P2 catalogs remain frozen. Commit `0e920c8` separates immutable P0 input/reference authority from active prompt identity, permits only system/user prompt changes, propagates portable provenance through all benchmark stages, and preserves historical serialization. Independent validation passed 474 tests with one skip. No private candidate or provider call occurred before the commit. |
 | WP-5.2B3C | One-shot prompt holdout evaluation | Planned; gated by B3B prompt freeze | Pending | Completion and publication evidence brief required | Pending | Run the frozen prompt package once over 80 holdout cases each for Qwen, Phi, and Gemini; report baseline/tuned/cloud results, generalization gap, failure taxonomy, cost, chart-ready data, and article claims/caveats without holdout-driven prompt changes. |
 | LP-4.1 | Local-model results analysis and article planning | Published; owner-reported 2026-07-27 | `md/handoffs/LP-4.1-local-model-results-analysis-and-article-planning.md`; continuation: `md/handoffs/LP-4.1-complete-results-continuation.md` | Analysis: `md/handoffs/reports/LP-4.1-local-model-results-analysis-brief.md`; article: `md/handoffs/reports/LP-4.1-article-draft-v2.md`; record: `md/handoffs/reports/LP-4.1-publication-record.md` | `md/handoffs/reports/LP-4.1-validation-review.md` | Exact six-arm UTS/sensitivity, article drafts, editorial briefs, final LinkedIn introduction, and two aggregate SVG figures are retained. The owner reports the long-form LinkedIn article published; external URL not supplied. |
+| LP-4.2 | RunPod Qwen hardware/context follow-up LinkedIn article | Published; owner-reported 2026-08-05 | `md/handoffs/LP-4.2-runpod-qwen-context-followup-linkedin-article.md` | Published source package: `md/20260805_linkedin-runpod-qwen-followup-article/`; record: `md/handoffs/reports/LP-4.2-publication-record.md` | Accepted WP-5.2C1 evidence | Follow-up to `md/handoffs/reports/LP-4.1-article-draft-v2.md`. The retained package contains the posted long-form source, feed copy, two chart pairs, and cover image. The owner completed editorial review and publication outside the repository's planned gate sequence; the posted source is authoritative. External LinkedIn URL not supplied. |
 | REL-0.2.0 | MCP recall source release and LinkedIn progress post | Source commit/tag published; LinkedIn posted; GitHub release page pending | `md/handoffs/REL-0.2.0-mcp-recall-release-linkedin-progress.md` | `md/handoffs/reports/REL-0.2.0-completion-report.md`; publication: `md/handoffs/reports/REL-0.2.0-publication-record.md` | `md/handoffs/reports/REL-0.2.0-validation-review.md` | Release commit `46ec79f`; final tagged commit `e67579b`; remote annotated tag `v0.2.0` peels to `e67579b`. The owner reports the primary LinkedIn progress post published on 2026-07-28; external LinkedIn URL not supplied. GitHub's public release-by-tag API returned 404, so release-page publication remains the only release-closure gate. The later MCP-on-Windows publication is closed separately as LP-5. |
 | LP-5 | MCP on Windows article and feed post | Published; owner-reported 2026-07-29 | Publication source: `md/20260729_chronical_mcp_setting_post_v0.3.md` | Paste guide: `md/20260729_chronical_mcp_article_linkedin_paste_guide.md`; record: `md/handoffs/reports/LP-5-mcp-windows-publication-record.md` | WP-4.1A/WP-4.1B accepted evidence | Article and feed post cover the tested four-client Windows setup, launch contract, verification behavior, and privacy boundary. External LinkedIn URLs were not supplied. Earlier standalone copy is retained as a superseded unpublished alternative. |
 | WP-5.2C | Remote runs and independent evaluation set | Remote Qwen study accepted; independent set deferred | See WP-5.2C1 | WP-5.2C1 complete; later independent-set report pending | See WP-5.2C1 | The controlled remote Qwen hardware/context study is accepted. The later untouched evaluation-set size/process remains a separate decision. |
@@ -189,9 +190,8 @@ If Poetry reports another project environment, the executor must stop and fix th
 4. Freeze one global prompt package before starting WP-5.2B3C.
 5. Preserve the twenty-conversation holdout untouched until the one-shot B3C
    run.
-6. Resume WP-5.2C1 independently when its VM becomes available.
-7. Close REL-0.2.0 separately by publishing and verifying the GitHub release
+6. Close REL-0.2.0 separately by publishing and verifying the GitHub release
    page for the existing `v0.2.0` tag; no rebuild or retag is required.
-8. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
-9. Continue treating the 120 FABLE-reference cases as private silver
+7. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
+8. Continue treating the 120 FABLE-reference cases as private silver
    development data, not an untouched final evaluation set.
