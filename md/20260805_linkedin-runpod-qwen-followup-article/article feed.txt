@@ -1,0 +1,27 @@
+Three things I learned about running small LLMs locally:
+
+1. Faster hardware removes timeouts — but it cannot fix inputs that do not fit the context window.
+
+2. A larger context window buys nothing if the machine cannot process it. On my laptop, moving from 8K to 16K recovered nothing; the failures merely changed from context errors to timeouts.
+
+3. Context and compute have to grow together. Each alone left the context wall standing.
+
+Using the same quantised 4B model, the same prompts and the same 120 real-work tasks:
+
+Laptop, 8K context: 84/120 valid outputs
+Stronger machine (rented GPU), 8K context: 89/120
+Same machine, maximum context: 119/120
+
+𝐅𝐫𝐨𝐦 𝟕𝟎% 𝐭𝐨 𝟗𝟗% 𝐯𝐚𝐥𝐢𝐝 𝐨𝐮𝐭𝐩𝐮𝐭𝐬.
+The model did not change. The resource envelope did.
+
+The article also compares this small local Qwen model directly with Gemini 3.5 Flash — including the one metric where the 4B model comes out ahead.
+
+That is the real takeaway: local-model performance is not only a model-selection problem. 𝐈𝐭 𝐢𝐬 𝐚 𝐬𝐲𝐬𝐭𝐞𝐦𝐬 𝐩𝐫𝐨𝐛𝐥𝐞𝐦.
+
+Full article and methodology in the comments.
+
+— — —
+📩 With many years of experience in R&D and solution development, I'm available for contract / project work — building exactly this kind of thing (AI solutions, evaluation, honest measurement). If you have a project that's a fit, let's talk.
+
+#AI #LLM #LocalLLM #AIEngineering #MachineLearning #AIconsulting
