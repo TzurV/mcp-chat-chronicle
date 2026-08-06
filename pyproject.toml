@@ -24,6 +24,10 @@ dependencies = [
 [project.optional-dependencies]
 enrich = ["litellm[google] (>=1.74,<2.0)"]
 mcp = ["fastmcp (>=2.0,<4.0)"]
+optimization = [
+    "dspy==3.3.0; python_version < '3.15'",
+    "gepa[dspy]==0.1.1; python_version < '3.15'",
+]
 
 [project.urls]
 Repository = "https://github.com/tzurv/mcp-chat-chronicle"

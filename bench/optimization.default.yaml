@@ -1,0 +1,110 @@
+version: 1
+optimizer_id: wp-5.2b3b.1-example
+run_id: wp-5.2b3b.1-example
+application_commit: "0000000000000000000000000000000000000000"
+seed: 520231
+split_seed: wp-5.2b3b.1-optimizer-split-v1
+versions:
+  dspy: 3.3.0
+  gepa: 0.1.1
+  gepa_result_schema: dspy-gepa-result-v0.1.1
+tasks:
+  - conversation-summary
+  - work-mode-classification
+  - last-activity
+  - title-assessment
+mutable_fields:
+  - tasks.conversation-summary.system_prompt
+  - tasks.work-mode-classification.system_prompt
+  - tasks.last-activity.system_prompt
+  - tasks.title-assessment.system_prompt
+context_window: 8192
+accepted_task_catalog_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+development_manifest_sha256: "4444444444444444444444444444444444444444444444444444444444444444"
+train_manifest:
+  path: private/optimizer-train.json
+  sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+  role: optimizer-train
+  conversations: 6
+  cases: 24
+validation_manifest:
+  path: private/optimizer-validation.json
+  sha256: "1111111111111111111111111111111111111111111111111111111111111111"
+  role: optimizer-validation
+  conversations: 4
+  cases: 16
+candidate_models:
+  - id: qwen
+    profile: runpod-qwen
+    artifact_sha256: "2222222222222222222222222222222222222222222222222222222222222222"
+    artifact_path: private/models/qwen.gguf
+    expected_provider: lm_studio
+    expected_model: qwen
+    litellm_model: lm_studio/qwen
+    api_base: http://127.0.0.1:1234/v1
+    api_key_env: null
+    timeout_seconds: 120
+    estimated_seconds_per_task: 30
+    reasoning_effort: none
+    context_window: 8192
+    concurrency: 1
+    infrastructure_retries: 1
+    semantic_retries: 0
+  - id: phi
+    profile: runpod-phi
+    artifact_sha256: "3333333333333333333333333333333333333333333333333333333333333333"
+    artifact_path: private/models/phi.gguf
+    expected_provider: lm_studio
+    expected_model: phi
+    litellm_model: lm_studio/phi
+    api_base: http://127.0.0.1:1234/v1
+    api_key_env: null
+    timeout_seconds: 120
+    estimated_seconds_per_task: 30
+    reasoning_effort: none
+    context_window: 8192
+    concurrency: 1
+    infrastructure_retries: 1
+    semantic_retries: 0
+proposer:
+  id: claude-sonnet-5-global
+  litellm_model: anthropic/claude-sonnet-5
+  provider: Anthropic
+  region: global
+  credential_mode: api-key-environment
+  api_key_env: OPTIMIZER_PROPOSER_API_KEY
+  max_calls: 250
+  per_call_input_tokens: 50000
+  per_call_output_tokens: 8000
+  max_input_tokens: 12500000
+  max_output_tokens: 2000000
+  input_usd_per_million: 2.0
+  output_usd_per_million: 10.0
+  max_cost_usd: 50.0
+  timeout_seconds: 120
+  concurrency: 1
+  temperature: 0
+  reasoning_effort: none
+  cache_namespace: wp-5.2b3b.1-example
+  disclosure: Owner-approved development prompts and structured diagnostics only.
+budget:
+  pilot_candidates: 12
+  total_candidates: 40
+  task_invocations: 3000
+  pilot_compute_hours: 4
+  total_compute_hours: 12
+  compute_cost_usd: 12.05
+  prompt_token_ceiling: 7000
+paths:
+  development_manifest: private/development-selection-manifest.json
+  inputs: private/inputs
+  references: private/references
+  accepted_task_catalog: ai-tasks.default.yaml
+  run_root: private/optimizer-run
+bootstrap_max_labeled_demos: 1
+bootstrap_max_bootstrapped_demos: 1
+bootstrap_max_rounds: 1
+bootstrap_teacher: candidate-model
+gepa_track_stats: true
+gepa_instruction_only: true
+gepa_max_metric_calls_per_candidate: 20

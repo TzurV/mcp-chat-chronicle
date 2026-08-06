@@ -63,6 +63,7 @@ _SAFE_ERRORS = (
     "--judge-cache-only requires --with-judge",
     "deterministic artifact mismatch:",
     "judged scoring manifest is inconsistent",
+    "optimizer execution requires all remote disclosure and budget flags",
 )
 
 
@@ -135,8 +136,13 @@ def verify(
     package: Path = typer.Option(..., "--package"),
     config: Path = typer.Option(...),
 ) -> None:
-    """Verify a returned package without model calls."""
+    """Verify a returned benchmark or optimizer package without model calls."""
     try:
+        if package.suffix.casefold() == ".json":
+            from .optimization.operations import verify_candidate
+
+            emit(verify_candidate(config.resolve(), package.resolve()))
+            return
         emit(verify_package(package.resolve(), load_config(config), config.resolve()))
     except (AIConfigError, OSError, ValueError, KeyError) as exc:
         fail(exc)
@@ -185,6 +191,111 @@ def score(
         fail(exc)
     except RuntimeError:
         fail(RuntimeError("unexpected internal evaluation failure"))
+
+
+@app.command("preflight")
+def optimization_preflight(config: Path = typer.Option(...)) -> None:
+    """Validate frozen optimizer inputs, identities, budgets, and framework APIs."""
+    try:
+        from .optimization.operations import preflight
+
+        emit(preflight(config.resolve()))
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        fail(exc)
+
+
+@app.command("dry-run")
+def optimization_dry_run(config: Path = typer.Option(...)) -> None:
+    """Exercise the optimizer bridge and safe package model without provider calls."""
+    try:
+        from .optimization.operations import dry_run
+
+        emit(dry_run(config.resolve()))
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        fail(exc)
+
+
+def _execute_optimizer(config: Path, resume: bool) -> None:
+    from .optimization.execution import run_optimization
+
+    emit(run_optimization(config.resolve(), resume=resume))
+
+
+@app.command("optimize")
+def optimization_run(
+    config: Path = typer.Option(...),
+    allow_remote: bool = typer.Option(False),
+    confirm_private_eval: bool = typer.Option(False),
+    confirm_proposer_disclosure: bool = typer.Option(False),
+    confirm_paid_budget: bool = typer.Option(False),
+) -> None:
+    """Authorize a new provider-facing optimizer run after explicit disclosure gates."""
+    try:
+        if not all(
+            (allow_remote, confirm_private_eval, confirm_proposer_disclosure, confirm_paid_budget)
+        ):
+            raise ValueError("optimizer execution requires all remote disclosure and budget flags")
+        _execute_optimizer(config, False)
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        fail(exc)
+
+
+@app.command("resume")
+def optimization_resume(
+    config: Path = typer.Option(...),
+    allow_remote: bool = typer.Option(False),
+    confirm_private_eval: bool = typer.Option(False),
+    confirm_proposer_disclosure: bool = typer.Option(False),
+    confirm_paid_budget: bool = typer.Option(False),
+) -> None:
+    """Authorize resume from explicit current-attempt authority."""
+    try:
+        if not all(
+            (allow_remote, confirm_private_eval, confirm_proposer_disclosure, confirm_paid_budget)
+        ):
+            raise ValueError("optimizer execution requires all remote disclosure and budget flags")
+        _execute_optimizer(config, True)
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        fail(exc)
+
+
+@app.command("inspect")
+def optimization_inspect(config: Path = typer.Option(...)) -> None:
+    """Inspect aggregate current-attempt state without provider calls."""
+    try:
+        from .optimization.operations import inspect_run
+
+        emit(inspect_run(config.resolve()))
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        fail(exc)
+
+
+@app.command("package")
+def optimization_package(
+    config: Path = typer.Option(...), output: Path = typer.Option(...)
+) -> None:
+    """Package accepted P0 as a verified four-component JSON candidate."""
+    try:
+        from .optimization.operations import package_baseline
+
+        emit(package_baseline(config.resolve(), output.resolve()))
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        fail(exc)
+
+
+@app.command("export-shortlist")
+def optimization_export_shortlist(
+    config: Path = typer.Option(...),
+    output: Path = typer.Option(...),
+    limit: int = typer.Option(5, min=3, max=5),
+) -> None:
+    """Export only privacy-eligible immutable candidates without provider calls."""
+    try:
+        from .optimization.operations import export_shortlist
+
+        emit(export_shortlist(config.resolve(), output.resolve(), limit))
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        fail(exc)
 
 
 if __name__ == "__main__":

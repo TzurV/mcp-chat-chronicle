@@ -1,0 +1,1337 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+from collections import Counter
+from pathlib import Path
+
+import pytest
+import yaml
+from bench import __main__ as bench_cli
+from bench.core import _conversation_identity, _manifest_payload
+from bench.implementation import ImplementationIdentity
+from bench.io import digest
+from bench.models import TASK_ORDER
+from bench.optimization.authority import verify_authority
+from bench.optimization.budget import BudgetLedger, UsageCounters
+from bench.optimization.compat import EXPECTED_RESULT_FIELDS, verify_compatibility
+from bench.optimization.dspy_bridge import build_program, load_state_only, prompts_from_program
+from bench.optimization.execution import (
+    AdapterReservation,
+    AdapterUsage,
+    CaseOutcome,
+    EvaluationBatch,
+    ExecutionAdapters,
+    Proposal,
+    run_optimization,
+)
+from bench.optimization.feedback import Diagnostic, render_feedback
+from bench.optimization.metrics import MetricVector
+from bench.optimization.models import OptimizationConfig, load_optimization_config
+from bench.optimization.operations import (
+    _eligible,
+    export_shortlist,
+    inspect_run,
+    preflight,
+    verify_candidate,
+)
+from bench.optimization.package import (
+    CandidateAccounting,
+    CandidatePackage,
+    CandidateResult,
+    PrivacyEvidence,
+    RequestEnvelopeEvidence,
+    ResultAuthority,
+    baseline_package,
+    candidate_identity,
+    mutate_package,
+    read_package,
+    result_identity,
+    write_package,
+)
+from bench.optimization.privacy import scan_package
+from bench.optimization.production import DspyOptimizerAdapter, LiteLLMCandidateAdapter
+from bench.optimization.request_envelope import estimate_request_envelope
+from bench.optimization.split import OptimizationSplitManifest, freeze_split
+from bench.optimization.trials import TrialStore
+from pydantic import ValidationError
+from typer.testing import CliRunner
+
+from chat_chronicle.ai import CompletionResponse, canonical_hash
+from chat_chronicle.ai_config import load_task_catalog
+
+APPLICATION_COMMIT = "a" * 40
+PROVIDERS = ["chatgpt"] * 3 + ["openai_codex"] * 3 + ["claude"] * 2 + ["claude_code"] * 2
+LENGTHS = ["short", "medium", "long", "short", "medium", "long", "short", "medium", "long", "short"]
+
+
+def write_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+
+
+def synthetic_outputs(index: int) -> dict[str, dict[str, object]]:
+    evidence = [index * 10]
+    return {
+        "conversation-summary": {
+            "summary": "Synthetic work began. Synthetic work completed.",
+            "start_date": "2026-01-01",
+            "last_active_date": "2026-01-02",
+            "evidence_message_ids": evidence,
+        },
+        "work-mode-classification": {
+            "mode": "executor",
+            "confidence": 1,
+            "reason": "Concrete implementation work dominated.",
+            "evidence_message_ids": evidence,
+        },
+        "last-activity": {
+            "recent_work": "Synthetic work completed.",
+            "status": "completed",
+            "blockers": [],
+            "next_action": None,
+            "next_action_basis": "unknown",
+            "evidence_message_ids": evidence,
+        },
+        "title-assessment": {
+            "title_fits": True,
+            "confidence": 1,
+            "reason": "The title is specific and accurate.",
+            "suggested_title": None,
+            "evidence_message_ids": evidence,
+        },
+    }
+
+
+def synthetic_workspace(
+    tmp_path: Path,
+    *,
+    pilot_candidates: int = 3,
+    total_candidates: int = 40,
+    task_invocations: int = 3000,
+) -> Path:
+    repository = Path(__file__).parents[1]
+    task_catalog = tmp_path / "tasks.yaml"
+    shutil.copyfile(repository / "ai-tasks.default.yaml", task_catalog)
+    task_hash = hashlib.sha256(task_catalog.read_bytes()).hexdigest()
+    inputs = tmp_path / "private" / "inputs"
+    references = tmp_path / "private" / "references"
+    input_values = []
+    contracts = {
+        "conversation-summary": ("conversation-summary-v1", "conversation-overview-v1", "2"),
+        "work-mode-classification": (
+            "work-mode-classification-v1",
+            "conversation-overview-v1",
+            "1",
+        ),
+        "last-activity": ("last-activity-v1", "recent-meaningful-v1", "2"),
+        "title-assessment": ("title-assessment-v1", "conversation-overview-v1", "1"),
+    }
+    for index in range(1, 11):
+        envelope = {
+            "format_version": 1,
+            "corpus_version": "synthetic-v1",
+            "case_group_id": f"group-{index}",
+            "selection_index": index,
+            "source_conversation_id": index,
+            "provider": PROVIDERS[index - 1],
+            "source_content_hash": hashlib.sha256(f"source-{index}".encode()).hexdigest(),
+            "source_title": f"Synthetic title {index}",
+            "start_date": "2026-01-01",
+            "last_active_date": "2026-01-02",
+            "created_at_utc": "2026-01-03T00:00:00Z",
+            "snapshot_hash_reference": "snapshot",
+            "task_catalog_hash_reference": task_hash,
+        }
+        for key, selector in (
+            ("overview", "conversation-overview-v1"),
+            ("recent", "recent-meaningful-v1"),
+        ):
+            transcript = f"Synthetic selected content {index} {key}."
+            selected = [index * 10]
+            hash_value = {
+                "selector": selector,
+                "selector_version": "1",
+                "selected_message_ids": selected,
+                "transcript": transcript,
+            }
+            if key == "overview":
+                hash_value.update(
+                    source_title=f"Synthetic title {index}",
+                    start_date="2026-01-01",
+                    last_active_date="2026-01-02",
+                )
+            envelope[key] = {
+                "selector": selector,
+                "selector_version": "1",
+                "canonical_input_hash": canonical_hash(hash_value),
+                "transcript": transcript,
+                "selected_message_ids": selected,
+                "selection_metadata": {"synthetic": True},
+            }
+        write_json(inputs / f"c{index:03d}.json", envelope)
+        input_values.append(envelope)
+        outputs = synthetic_outputs(index)
+        for task, (schema, selector, finalizer) in contracts.items():
+            selector_key = "recent" if task == "last-activity" else "overview"
+            write_json(
+                references / task / f"c{index:03d}.json",
+                {
+                    "format_version": 1,
+                    "corpus_version": "synthetic-v1",
+                    "run_id": "synthetic",
+                    "case_id": f"case-{index}-{task}",
+                    "case_group_id": f"group-{index}",
+                    "source_conversation_id": index,
+                    "provider": PROVIDERS[index - 1],
+                    "task_name": task,
+                    "task_version": "1",
+                    "output_schema": schema,
+                    "provider_schema_version": "1",
+                    "finalizer_version": finalizer,
+                    "input_selector": selector,
+                    "selector_version": "1",
+                    "input_hash": envelope[selector_key]["canonical_input_hash"],
+                    "task_catalog_hash": task_hash,
+                    "teacher_alias": "teacher",
+                    "teacher_model": "teacher-model",
+                    "teacher_session_id": "session",
+                    "status": "success",
+                    "output": outputs[task],
+                    "failure": None,
+                    "created_at_utc": "2026-01-03T00:00:00Z",
+                    "validated_at_utc": "2026-01-03T00:00:00Z",
+                },
+            )
+    from bench.models import InputEnvelope, SelectionManifest
+
+    parsed_inputs = [InputEnvelope.model_validate(value) for value in input_values]
+    entries = [
+        {
+            "authority_index": index,
+            "conversation_identity": _conversation_identity(parsed_inputs[index - 1]),
+            "provider": PROVIDERS[index - 1],
+            "length_stratum": LENGTHS[index - 1],
+            "date_bin": "synthetic",
+        }
+        for index in range(1, 11)
+    ]
+    development_payload = {
+        "format_version": 1,
+        "algorithm_version": "synthetic-development-v1",
+        "role": "development",
+        "source_selection_identity": "9" * 64,
+        "ordered_conversations": entries,
+        "conversation_count": 10,
+        "expected_case_count": 40,
+        "provider_counts": dict(Counter(PROVIDERS)),
+        "length_stratum_counts": dict(Counter(LENGTHS)),
+        "date_bin_counts": {"synthetic": 10},
+        "created_at_utc": "2026-08-06T00:00:00Z",
+        "manifest_sha256": "0" * 64,
+    }
+    provisional = SelectionManifest.model_validate(development_payload)
+    development_payload["manifest_sha256"] = digest(_manifest_payload(provisional))
+    development = tmp_path / "private" / "development.json"
+    write_json(development, development_payload)
+    train_path, validation_path = freeze_split(development, tmp_path / "private" / "split")
+    train = OptimizationSplitManifest.model_validate_json(train_path.read_text(encoding="utf-8"))
+    validation = OptimizationSplitManifest.model_validate_json(
+        validation_path.read_text(encoding="utf-8")
+    )
+    artifacts = []
+    for name in ("qwen.gguf", "phi.gguf"):
+        path = tmp_path / "private" / name
+        path.write_bytes(name.encode())
+        artifacts.append(hashlib.sha256(path.read_bytes()).hexdigest())
+    config = {
+        "version": 1,
+        "optimizer_id": "synthetic-run",
+        "run_id": "synthetic-run",
+        "application_commit": APPLICATION_COMMIT,
+        "seed": 7,
+        "split_seed": "wp-5.2b3b.1-optimizer-split-v1",
+        "versions": {
+            "dspy": "3.3.0",
+            "gepa": "0.1.1",
+            "gepa_result_schema": "dspy-gepa-result-v0.1.1",
+        },
+        "tasks": list(TASK_ORDER),
+        "mutable_fields": [f"tasks.{task}.system_prompt" for task in TASK_ORDER],
+        "context_window": 8192,
+        "accepted_task_catalog_sha256": task_hash,
+        "development_manifest_sha256": development_payload["manifest_sha256"],
+        "train_manifest": {
+            "path": "private/split/optimizer-train.json",
+            "sha256": train.manifest_sha256,
+            "role": "optimizer-train",
+            "conversations": 6,
+            "cases": 24,
+        },
+        "validation_manifest": {
+            "path": "private/split/optimizer-validation.json",
+            "sha256": validation.manifest_sha256,
+            "role": "optimizer-validation",
+            "conversations": 4,
+            "cases": 16,
+        },
+        "candidate_models": [
+            {
+                "id": model,
+                "profile": model,
+                "artifact_sha256": artifacts[ordinal],
+                "artifact_path": f"private/{model}.gguf",
+                "expected_provider": "synthetic",
+                "expected_model": model,
+                "litellm_model": f"lm_studio/{model}",
+                "api_base": "http://127.0.0.1:1234/v1",
+                "api_key_env": None,
+                "timeout_seconds": 5,
+                "estimated_seconds_per_task": 1,
+                "reasoning_effort": "none",
+                "context_window": 8192,
+                "concurrency": 1,
+                "infrastructure_retries": 1,
+                "semantic_retries": 0,
+            }
+            for ordinal, model in enumerate(("qwen", "phi"))
+        ],
+        "proposer": {
+            "id": "synthetic-proposer",
+            "litellm_model": "anthropic/synthetic",
+            "provider": "Anthropic",
+            "region": "global",
+            "credential_mode": "api-key-environment",
+            "api_key_env": "SYNTHETIC_KEY",
+            "timeout_seconds": 5,
+            "concurrency": 1,
+            "temperature": 0,
+            "reasoning_effort": "none",
+            "cache_namespace": "synthetic-run",
+            "max_calls": 250,
+            "per_call_input_tokens": 50000,
+            "per_call_output_tokens": 8000,
+            "max_input_tokens": 12500000,
+            "max_output_tokens": 2000000,
+            "input_usd_per_million": 2,
+            "output_usd_per_million": 10,
+            "max_cost_usd": 50,
+            "disclosure": "Synthetic development prompts only.",
+        },
+        "budget": {
+            "pilot_candidates": pilot_candidates,
+            "total_candidates": total_candidates,
+            "task_invocations": task_invocations,
+            "pilot_compute_hours": 4,
+            "total_compute_hours": 12,
+            "compute_cost_usd": 12.05,
+            "prompt_token_ceiling": 7000,
+        },
+        "paths": {
+            "development_manifest": "private/development.json",
+            "inputs": "private/inputs",
+            "references": "private/references",
+            "accepted_task_catalog": "tasks.yaml",
+            "run_root": "private/run",
+        },
+        "bootstrap_max_labeled_demos": 1,
+        "bootstrap_max_bootstrapped_demos": 1,
+        "bootstrap_max_rounds": 1,
+        "bootstrap_teacher": "candidate-model",
+        "gepa_track_stats": True,
+        "gepa_instruction_only": True,
+    }
+    config_path = tmp_path / "optimization.yaml"
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    return config_path
+
+
+class FakeCandidateAdapter:
+    def __init__(
+        self,
+        *,
+        gepa_valid: bool = True,
+        reliability_tradeoff: str | None = None,
+    ) -> None:
+        self.calls = 0
+        self.gepa_valid = gepa_valid
+        self.reliability_tradeoff = reliability_tradeoff
+
+    def reservation(self, scope: str, model_id: str) -> AdapterReservation:
+        del model_id
+        return AdapterReservation(task_calls=24 if scope == "train" else 16, compute_hours=0.01)
+
+    def evaluate(
+        self, candidate: CandidatePackage, scope: str, model_id: str, authority
+    ) -> EvaluationBatch:
+        self.calls += 1
+        manifest = authority.train if scope == "train" else authority.validation
+        outcomes = []
+        for entry in manifest.ordered_conversations:
+            for task in TASK_ORDER:
+                valid = self._valid(candidate, scope, model_id, manifest, entry, task)
+                outcomes.append(
+                    CaseOutcome(
+                        alias=f"c{entry.authority_index:03d}--{task}",
+                        task=task,
+                        model_id=model_id,
+                        terminal=True,
+                        valid=valid,
+                        semantic_agreement=1 if valid else 0,
+                        diagnostics=[] if valid else [Diagnostic(category="schema")],
+                    )
+                )
+        return EvaluationBatch(
+            scope=scope,
+            model_id=model_id,
+            outcomes=outcomes,
+            usage=AdapterUsage(task_calls=len(outcomes), compute_hours=0.001, latency_ms=10),
+        )
+
+    def _valid(self, candidate, scope, model_id, manifest, entry, task) -> bool:
+        if self.reliability_tradeoff is None or scope != "validation":
+            return (
+                self.gepa_valid
+                if candidate.lineage.optimizer == "gepa"
+                else not (entry == manifest.ordered_conversations[0] and task == TASK_ORDER[0])
+            )
+        entry_index = manifest.ordered_conversations.index(entry)
+        if candidate.lineage.optimizer != "gepa":
+            return not (entry_index == 0 and task in TASK_ORDER[:2])
+        if self.reliability_tradeoff == "worst-model":
+            return not (model_id == "qwen" and entry_index == 0 and task in TASK_ORDER[:3])
+        if self.reliability_tradeoff == "minimum-task":
+            return not (
+                task == TASK_ORDER[0]
+                and (
+                    (model_id == "qwen" and entry_index < 2)
+                    or (model_id == "phi" and entry_index == 0)
+                )
+            )
+        raise AssertionError("unknown synthetic reliability tradeoff")
+
+
+class FakeOptimizerAdapter:
+    def __init__(
+        self,
+        *,
+        fail_gepa_once: int | None = None,
+        max_gepa: int | None = 3,
+        prompt_padding: int = 0,
+    ) -> None:
+        self.fail_gepa_once = fail_gepa_once
+        self.failed = False
+        self.calls: list[str] = []
+        self.max_gepa = max_gepa
+        self.prompt_padding = prompt_padding
+
+    def reservation(self, optimizer: str) -> AdapterReservation:
+        if optimizer == "bootstrap-few-shot":
+            return AdapterReservation(task_calls=1)
+        return AdapterReservation(proposer_calls=1, input_tokens=50, output_tokens=20)
+
+    def bootstrap(self, parent: CandidatePackage, authority) -> Proposal:
+        del authority
+        self.calls.append("bootstrap")
+        return Proposal(
+            prompts={
+                task: parent.prompts[task].text + "\nSynthetic bootstrap." for task in TASK_ORDER
+            },
+            strategy="synthetic-bootstrap",
+            usage=AdapterUsage(task_calls=1),
+        )
+
+    def gepa(self, parent: CandidatePackage, authority, feedback: str, ordinal: int) -> Proposal:
+        del authority, feedback
+        self.calls.append(f"gepa-{ordinal}")
+        if self.max_gepa is not None and ordinal > self.max_gepa:
+            return Proposal(
+                prompts={task: parent.prompts[task].text for task in TASK_ORDER},
+                strategy="synthetic-search-exhausted",
+                usage=AdapterUsage(proposer_calls=1, input_tokens=10, output_tokens=5),
+                search_exhausted=True,
+            )
+        if self.fail_gepa_once == ordinal and not self.failed:
+            self.failed = True
+            raise RuntimeError("synthetic interruption")
+        return Proposal(
+            prompts={
+                task: parent.prompts[task].text
+                + f"\nSynthetic GEPA strategy {ordinal}."
+                + ("x" * self.prompt_padding if task == TASK_ORDER[0] else "")
+                for task in TASK_ORDER
+            },
+            strategy=f"synthetic-gepa-{ordinal}",
+            usage=AdapterUsage(proposer_calls=1, input_tokens=40, output_tokens=10),
+        )
+
+
+class FakeLiteLLMClient:
+    def __init__(self, *, provider: str = "synthetic", model: str = "qwen") -> None:
+        self.provider = provider
+        self.model = model
+        self.requests = []
+
+    async def complete(self, request) -> CompletionResponse:
+        self.requests.append(request)
+        properties = request.response_schema["properties"]
+        evidence = properties["evidence_message_ids"]["items"]["enum"]
+        if "summary" in properties:
+            output = synthetic_outputs(evidence[0] // 10)["conversation-summary"]
+        elif "mode" in properties:
+            output = synthetic_outputs(evidence[0] // 10)["work-mode-classification"]
+        elif "recent_work" in properties:
+            output = synthetic_outputs(evidence[0] // 10)["last-activity"]
+        else:
+            output = synthetic_outputs(evidence[0] // 10)["title-assessment"]
+        return CompletionResponse(
+            json.dumps(output),
+            self.provider,
+            self.model,
+            {"prompt_tokens": 12, "completion_tokens": 5},
+        )
+
+
+class StepClock:
+    def __init__(self, step_ms: int = 7) -> None:
+        self.value = -step_ms * 1_000_000
+        self.step = step_ms * 1_000_000
+
+    def __call__(self) -> int:
+        self.value += self.step
+        return self.value
+
+
+def clean_identity() -> ImplementationIdentity:
+    return ImplementationIdentity(APPLICATION_COMMIT, False, None)
+
+
+def finish_synthetic_run(
+    config_path: Path,
+    adapters: ExecutionAdapters,
+    *,
+    monotonic_ns=None,
+) -> dict[str, object]:
+    kwargs = {"identity_probe": clean_identity}
+    if monotonic_ns is not None:
+        kwargs["monotonic_ns"] = monotonic_ns
+    result = run_optimization(config_path, adapters, resume=False, **kwargs)
+    if result["status"] == "pilot-complete":
+        result = run_optimization(config_path, adapters, resume=True, **kwargs)
+    return result
+
+
+def metric(**updates: object) -> MetricVector:
+    value = {
+        "total_valid": 30,
+        "worst_model_valid": 15,
+        "minimum_task_valid": 7,
+        "semantic_agreement": 0.5,
+        "complete_package_uts": 0.5,
+        "prompt_tokens": 1000,
+        "candidate_id": "b",
+    }
+    value.update(updates)
+    return MetricVector.model_validate(value)
+
+
+def test_config_is_strict_and_models_operational_proposer_policy(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert OptimizationConfig.model_validate(data).bootstrap_teacher == "candidate-model"
+    with pytest.raises(ValidationError):
+        OptimizationConfig.model_validate({**data, "unknown": True})
+    data["paths"]["run_root"] = "private/holdout/run"
+    with pytest.raises(ValidationError, match="holdout"):
+        OptimizationConfig.model_validate(data)
+
+
+def test_public_template_declares_the_single_operational_proposer() -> None:
+    template = yaml.safe_load(
+        (Path(__file__).parents[1] / "bench" / "optimization.default.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    config = OptimizationConfig.model_validate(template)
+    assert (
+        config.proposer.provider,
+        config.proposer.region,
+        config.proposer.litellm_model,
+    ) == ("Anthropic", "global", "anthropic/claude-sonnet-5")
+
+
+def test_optional_import_boundary_does_not_import_dspy() -> None:
+    before = set(sys.modules)
+    __import__("bench.optimization.models")
+    assert not ({"dspy", "gepa"} & (set(sys.modules) - before))
+
+
+def test_ordinary_and_optimization_extra_imports_in_fresh_processes() -> None:
+    ordinary = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys, bench.__main__; assert 'dspy' not in sys.modules; "
+            "assert 'gepa' not in sys.modules",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert ordinary.returncode == 0, ordinary.stderr
+    extra = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import dspy, gepa; from bench.optimization.compat import verify_compatibility; "
+            "verify_compatibility()",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert extra.returncode == 0, extra.stderr
+
+
+def test_exact_pinned_optimizer_api_and_result_schema() -> None:
+    result = verify_compatibility()
+    assert result["versions"] == {"dspy": "3.3.0", "gepa": "0.1.1"}
+    assert set(result["gepa_result_fields"]) == EXPECTED_RESULT_FIELDS
+
+
+def test_production_candidate_adapter_is_networkless_injected_and_identity_bound(
+    tmp_path: Path,
+) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    candidate = baseline_package(tmp_path / "tasks.yaml")
+    client = FakeLiteLLMClient()
+    adapter = LiteLLMCandidateAdapter(config, config_path, client=client)
+    batch = adapter.evaluate(candidate, "validation", "qwen", authority)
+    assert len(batch.outcomes) == 16
+    assert batch.usage.task_calls == 16
+    assert batch.usage.input_tokens == 16 * 12
+    assert all(outcome.valid and outcome.terminal for outcome in batch.outcomes)
+    assert all(request.retries == 0 for request in client.requests)
+
+    mismatched = LiteLLMCandidateAdapter(
+        config,
+        config_path,
+        client=FakeLiteLLMClient(provider="unexpected"),
+    )
+    with pytest.raises(ValueError, match="response identity mismatch"):
+        mismatched.evaluate(candidate, "validation", "qwen", authority)
+
+
+def test_real_dspy_bootstrap_demos_are_packaged_and_replayed_without_network(
+    tmp_path: Path,
+) -> None:
+    import dspy
+
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    baseline = baseline_package(tmp_path / "tasks.yaml")
+    dummy_answers = [{"response_json": "{}"}] * 200
+    optimizer = object.__new__(DspyOptimizerAdapter)
+    optimizer.config = config
+    optimizer.config_path = config_path
+    optimizer.authority = authority
+    optimizer.tasks = load_task_catalog(tmp_path / "tasks.yaml")
+    optimizer.candidate_lms = {
+        "qwen": dspy.utils.DummyLM(list(dummy_answers)),
+        "phi": dspy.utils.DummyLM(list(dummy_answers)),
+    }
+    optimizer._metric = lambda *args, **kwargs: False
+
+    proposal = optimizer.bootstrap(baseline, authority)
+    assert all(len(proposal.demonstrations[task]) == 1 for task in TASK_ORDER)
+    candidate = mutate_package(
+        baseline,
+        proposal.prompts,
+        optimizer="bootstrap-few-shot",
+        proposer_id=None,
+        mutation_ordinal=1,
+        strategy=proposal.strategy,
+        demonstrations=proposal.demonstrations,
+    )
+    assert candidate.candidate_id != baseline.candidate_id
+    duplicated = {task: list(values) for task, values in proposal.demonstrations.items()}
+    duplicated[TASK_ORDER[0]] = duplicated[TASK_ORDER[0]] * 2
+    with pytest.raises(ValidationError, match="one labeled/bootstrapped"):
+        mutate_package(
+            baseline,
+            proposal.prompts,
+            optimizer="bootstrap-few-shot",
+            proposer_id=None,
+            mutation_ordinal=2,
+            demonstrations=duplicated,
+        )
+    demo_text = proposal.demonstrations[TASK_ORDER[0]][0].selected_input
+    assert not scan_package(candidate, [demo_text], environment={}).eligible
+    path = tmp_path / "bootstrap-candidate.json"
+    write_package(path, candidate)
+    assert read_package(path) == candidate
+
+    client = FakeLiteLLMClient()
+    batch = LiteLLMCandidateAdapter(config, config_path, client=client).evaluate(
+        candidate, "validation", "qwen", authority
+    )
+    assert len(batch.outcomes) == 16
+    for request in client.requests:
+        assert [message["role"] for message in request.messages] == [
+            "system",
+            "user",
+            "assistant",
+            "user",
+        ]
+
+
+def test_four_component_program_and_safe_state_boundary() -> None:
+    package = baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml")
+    program = build_program(package)
+    assert prompts_from_program(program) == {
+        task: package.prompts[task].text for task in TASK_ORDER
+    }
+    assert len(program.named_predictors()) == 4
+    with pytest.raises(ValueError, match="unsafe"):
+        load_state_only(object(), Path("program.pkl"))
+
+
+def test_candidate_identity_is_stable_across_result_evidence(tmp_path: Path) -> None:
+    package = baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml")
+    original = package.candidate_id
+    authority = ResultAuthority(
+        run_id="synthetic",
+        application_commit=APPLICATION_COMMIT,
+        config_sha256="1" * 64,
+        train_manifest_sha256="2" * 64,
+        validation_manifest_sha256="3" * 64,
+        model_artifact_sha256={"qwen": "4" * 64, "phi": "5" * 64},
+        proposer_identity_sha256="6" * 64,
+        optimizer_identity_sha256="7" * 64,
+    )
+    payload = {
+        "format_version": 1,
+        "candidate_id": original,
+        "authority": authority.model_dump(mode="json"),
+        "train_metric": metric(candidate_id=original).model_dump(mode="json"),
+        "validation_metric": metric(candidate_id=original).model_dump(mode="json"),
+        "validation_model_valid": {"qwen": 15, "phi": 15},
+        "validation_task_valid": {task: 7 for task in TASK_ORDER},
+        "prompt_token_max": 1000,
+        "request_envelope": RequestEnvelopeEvidence(
+            estimator_version="complete-request-envelope-v1",
+            context_window=8192,
+            max_case_alias="c001--conversation-summary",
+            max_task="conversation-summary",
+            input_tokens=7000,
+            output_allowance_tokens=1000,
+            total_tokens=8000,
+            fits_context=True,
+        ).model_dump(mode="json"),
+        "prompt_fits_context": True,
+        "privacy": PrivacyEvidence(
+            scanner_version="optimizer-prompt-privacy-v1",
+            ngram_words=8,
+            eligible=True,
+            finding_count=0,
+            counts={},
+            evidence_sha256="8" * 64,
+        ).model_dump(mode="json"),
+        "accounting": CandidateAccounting(
+            task_invocations=80,
+            proposer_calls=0,
+            infrastructure_retries=0,
+            terminal_invocations=80,
+            expected_invocations=80,
+            failures={},
+            latency_ms=1,
+            usage={},
+        ).model_dump(mode="json"),
+        "trial_id": "trial",
+    }
+    result = CandidateResult(result_id=result_identity(payload), **payload)
+    assert result.candidate_id == package.candidate_id == original
+    changed = result.model_copy(update={"prompt_token_max": 1001})
+    changed_payload = changed.model_dump(mode="json", exclude={"result_id"})
+    changed = CandidateResult(result_id=result_identity(changed_payload), **changed_payload)
+    assert changed.candidate_id == original
+    assert changed.result_id != result.result_id
+
+
+@pytest.mark.parametrize(
+    ("better", "worse"),
+    [
+        (
+            metric(total_valid=31, semantic_agreement=0),
+            metric(total_valid=30, semantic_agreement=1),
+        ),
+        (metric(worst_model_valid=16, semantic_agreement=0), metric(semantic_agreement=1)),
+        (metric(minimum_task_valid=8, semantic_agreement=0), metric(semantic_agreement=1)),
+        (metric(semantic_agreement=0.6), metric(semantic_agreement=0.5, prompt_tokens=0)),
+        (metric(candidate_id="a"), metric(candidate_id="b")),
+    ],
+)
+def test_metric_order_and_scalar_dominance(better: MetricVector, worse: MetricVector) -> None:
+    assert better > worse
+    if better.ordering_key()[:3] != worse.ordering_key()[:3]:
+        assert better.scalar() > worse.scalar()
+
+
+def test_feedback_and_privacy_never_retain_source_text() -> None:
+    assert render_feedback([Diagnostic(category="invalid-enum", expected="completed")])
+    with pytest.raises(ValidationError, match="forbidden"):
+        Diagnostic(category="schema", observed="API_KEY=private-value")
+    baseline = baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml")
+    leaked = mutate_package(
+        baseline,
+        {
+            **{task: baseline.prompts[task].text for task in TASK_ORDER},
+            TASK_ORDER[0]: "Special Alpha 4817",
+        },
+        optimizer="gepa",
+        proposer_id="synthetic",
+        mutation_ordinal=1,
+    )
+    result = scan_package(leaked, [], exact_values=["Special Alpha", "4817"], environment={})
+    assert not result.eligible
+    assert "Special Alpha" not in result.model_dump_json()
+
+
+def test_budget_reserves_before_boundary_and_persists_resume(tmp_path: Path) -> None:
+    config = load_optimization_config(synthetic_workspace(tmp_path))
+    root = tmp_path / "budget"
+    ledger = BudgetLedger(root, config)
+    ledger.initialize()
+    exact = ledger.reserve(
+        "proposer", proposer_calls=250, input_tokens=12500000, output_tokens=2000000
+    )
+    with pytest.raises(ValueError, match="ceiling"):
+        ledger.reserve("proposer", proposer_calls=1)
+    actual = exact.reserved.model_copy(update={"proposer_calls": 249})
+    state = ledger.reconcile(exact.reservation_id, actual)
+    assert state.counters.proposer_calls == 249
+    resumed = BudgetLedger(root, config).load()
+    assert resumed.state_sha256 == state.state_sha256
+
+
+def test_achievable_next_operation_uses_every_total_ceiling(tmp_path: Path) -> None:
+    config = load_optimization_config(synthetic_workspace(tmp_path))
+    ledger = BudgetLedger(tmp_path / "capacity", config, pilot=False)
+    ledger.initialize()
+    operation = UsageCounters(
+        candidates=1,
+        task_invocations=1,
+        proposer_calls=1,
+        proposer_input_tokens=50000,
+        proposer_output_tokens=8000,
+        compute_hours=1,
+        compute_cost_usd=1,
+    )
+    assert ledger.can_fit(operation)
+    assert ledger.achievable_operations(operation) == 12
+
+
+def test_budget_retains_interrupted_and_missing_usage_reservation(tmp_path: Path) -> None:
+    config = load_optimization_config(synthetic_workspace(tmp_path))
+    ledger = BudgetLedger(tmp_path / "budget", config)
+    ledger.initialize()
+    reservation = ledger.reserve("task", task_calls=1, retries=1)
+    with pytest.raises(ValueError, match="usage is missing"):
+        ledger.reconcile(reservation.reservation_id, None, interrupted=True)
+    state = ledger.load()
+    assert state.counters.task_invocations == 1
+    assert state.reservations[-1].status == "interrupted"
+
+
+@pytest.mark.parametrize("mode", ["missing", "dangling", "stale", "hash"])
+def test_trial_authority_rejects_every_invalid_pointer(tmp_path: Path, mode: str) -> None:
+    store = TrialStore(tmp_path)
+    store.append("trial", "interrupted", {"calls": 1})
+    store.append("trial", "failed", {"calls": 2})
+    current = tmp_path / "trials" / "trial" / "current.json"
+    if mode == "missing":
+        current.unlink()
+    else:
+        value = json.loads(current.read_text(encoding="utf-8"))
+        if mode == "dangling":
+            value["current_attempt"] = 3
+        elif mode == "stale":
+            value["current_attempt"] = 1
+        else:
+            value["attempt_sha256"] = "f" * 64
+        current.write_text(json.dumps(value), encoding="utf-8")
+    with pytest.raises(ValueError, match="missing|dangling|stale|mismatch"):
+        store.current("trial")
+
+
+def test_preflight_proves_complete_development_authority(tmp_path: Path) -> None:
+    result = preflight(synthetic_workspace(tmp_path))
+    assert result["zero_holdout"] is True
+    assert result["authority_files"] == {"inputs": 10, "references": 40}
+    assert result["split"][0]["conversations"] == 6
+    assert result["split"][1]["conversations"] == 4
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["overlap", "foreign-parent", "altered-order", "duplicate", "missing-input", "reference"],
+)
+def test_preflight_rejects_split_and_authority_tampering(tmp_path: Path, tamper: str) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    train_path = tmp_path / config["train_manifest"]["path"]
+    validation_path = tmp_path / config["validation_manifest"]["path"]
+    if tamper in {"overlap", "foreign-parent", "altered-order", "duplicate"}:
+        value = json.loads(validation_path.read_text(encoding="utf-8"))
+        train = json.loads(train_path.read_text(encoding="utf-8"))
+        if tamper == "overlap":
+            value["ordered_conversations"][0] = train["ordered_conversations"][0]
+        elif tamper == "foreign-parent":
+            value["parent_development_manifest_sha256"] = "e" * 64
+        elif tamper == "altered-order":
+            value["ordered_conversations"][0:2] = reversed(value["ordered_conversations"][0:2])
+        else:
+            value["ordered_conversations"][1] = value["ordered_conversations"][0]
+        value["manifest_sha256"] = digest(
+            {k: v for k, v in value.items() if k != "manifest_sha256"}
+        )
+        write_json(validation_path, value)
+        config["validation_manifest"]["sha256"] = value["manifest_sha256"]
+        config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    elif tamper == "missing-input":
+        next((tmp_path / "private" / "inputs").glob("*.json")).unlink()
+    else:
+        reference = next((tmp_path / "private" / "references").glob("*/*.json"))
+        value = json.loads(reference.read_text(encoding="utf-8"))
+        value["source_conversation_id"] = 999
+        write_json(reference, value)
+    with pytest.raises((ValueError, ValidationError)):
+        preflight(config_path)
+
+
+def test_end_to_end_synthetic_optimize_resume_verify_and_shortlist(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    candidate = FakeCandidateAdapter()
+    interrupted = FakeOptimizerAdapter(fail_gepa_once=2)
+    clock = StepClock()
+    with pytest.raises(ValueError, match="usage is missing"):
+        run_optimization(
+            config_path,
+            ExecutionAdapters(candidate, interrupted),
+            resume=False,
+            identity_probe=clean_identity,
+            monotonic_ns=clock,
+        )
+    root = tmp_path / "private" / "run"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    assert len(state["gepa_result_ids"]) == 1
+    resumed_optimizer = FakeOptimizerAdapter()
+    pilot = run_optimization(
+        config_path,
+        ExecutionAdapters(candidate, resumed_optimizer),
+        resume=True,
+        identity_probe=clean_identity,
+        monotonic_ns=clock,
+    )
+    assert pilot["status"] == "pilot-complete"
+    assert pilot["pilot_checkpoint"]["decision"] == "continue"
+    completed = run_optimization(
+        config_path,
+        ExecutionAdapters(candidate, resumed_optimizer),
+        resume=True,
+        identity_probe=clean_identity,
+        monotonic_ns=clock,
+    )
+    assert completed["status"] == "complete"
+    assert completed["gepa_results"] == 3
+    assert completed["budget"]["proposer_calls"] == 5  # includes interruption + exhaustion
+    resumed_proposal = TrialStore(root).current("proposal-gepa-0002")
+    assert resumed_proposal is not None
+    assert resumed_proposal.attempt == 2
+    assert resumed_proposal.status == "complete"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    for result_id in [state["baseline_result_id"], *state["gepa_result_ids"]]:
+        result = CandidateResult.model_validate_json(
+            (root / "results" / f"{result_id}.json").read_text(encoding="utf-8")
+        )
+        verified = verify_candidate(
+            config_path, root / "candidates" / f"{result.candidate_id}.json"
+        )
+        assert verified["valid"] is True
+    inspection = inspect_run(config_path)
+    assert inspection["status"] == "complete"
+    assert inspection["timing"] == {
+        "optimizer_attempts": 6,
+        "optimizer_wall_ms": 42,
+        "candidate_wall_ms": 200,
+    }
+    shortlist = export_shortlist(config_path, tmp_path / "shortlist", 3)
+    assert shortlist["status"] == "shortlist"
+    assert shortlist["count"] == 3
+    assert len(list((tmp_path / "shortlist").glob("candidate-*.json"))) == 4
+    assert candidate.calls == 20  # five candidates x train/validation x two models
+
+
+def test_pilot_checkpoint_stops_when_continuation_criteria_fail(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(
+        tmp_path, pilot_candidates=2, total_candidates=5, task_invocations=500
+    )
+    result = run_optimization(
+        config_path,
+        ExecutionAdapters(FakeCandidateAdapter(gepa_valid=False), FakeOptimizerAdapter()),
+        resume=False,
+        identity_probe=clean_identity,
+    )
+    checkpoint = result["pilot_checkpoint"]
+    assert result["status"] == "pilot-no-improvement"
+    assert checkpoint["decision"] == "stop"
+    assert checkpoint["validation_no_worse_than_p0"] is False
+    assert result["gepa_results"] == 2
+    assert (
+        run_optimization(
+            config_path,
+            ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter()),
+            resume=True,
+            identity_probe=clean_identity,
+        )["status"]
+        == "pilot-no-improvement"
+    )
+
+
+@pytest.mark.parametrize(
+    ("tradeoff", "lower_component"),
+    [("worst-model", "worst_model_valid"), ("minimum-task", "minimum_task_valid")],
+)
+def test_pilot_rejects_total_gain_with_component_reliability_loss(
+    tmp_path: Path, tradeoff: str, lower_component: str
+) -> None:
+    config_path = synthetic_workspace(
+        tmp_path, pilot_candidates=1, total_candidates=3, task_invocations=500
+    )
+    result = run_optimization(
+        config_path,
+        ExecutionAdapters(
+            FakeCandidateAdapter(reliability_tradeoff=tradeoff),
+            FakeOptimizerAdapter(max_gepa=1),
+        ),
+        resume=False,
+        identity_probe=clean_identity,
+    )
+    root = tmp_path / "private" / "run"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    baseline = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['baseline_result_id']}.json").read_text(encoding="utf-8")
+    )
+    candidate = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['gepa_result_ids'][0]}.json").read_text(encoding="utf-8")
+    )
+    assert candidate.validation_metric.total_valid > baseline.validation_metric.total_valid
+    assert getattr(candidate.validation_metric, lower_component) < getattr(
+        baseline.validation_metric, lower_component
+    )
+    assert result["status"] == "pilot-no-improvement"
+    assert result["pilot_checkpoint"]["validation_no_worse_than_p0"] is False
+    assert result["pilot_checkpoint"]["decision"] == "stop"
+
+
+def test_pilot_checkpoint_permits_continuation_without_rewriting_attempts(
+    tmp_path: Path,
+) -> None:
+    config_path = synthetic_workspace(
+        tmp_path, pilot_candidates=2, total_candidates=4, task_invocations=1000
+    )
+    adapters = ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter(max_gepa=4))
+    pilot = run_optimization(config_path, adapters, resume=False, identity_probe=clean_identity)
+    assert pilot["status"] == "pilot-complete"
+    assert pilot["pilot_checkpoint"]["decision"] == "continue"
+    root = tmp_path / "private" / "run"
+    attempts_before = {
+        path: path.read_bytes() for path in sorted((root / "trials").glob("*/current.json"))
+    }
+    checkpoint_before = pilot["pilot_checkpoint"]["checkpoint_sha256"]
+    completed = run_optimization(config_path, adapters, resume=True, identity_probe=clean_identity)
+    assert completed["status"] == "complete"
+    assert completed["stop_reason"] == "candidate-ceiling-reached"
+    assert completed["gepa_results"] == 4
+    assert completed["pilot_checkpoint"]["checkpoint_sha256"] == checkpoint_before
+    assert all(path.read_bytes() == value for path, value in attempts_before.items())
+
+
+def test_continuation_stops_before_budget_limited_next_operation(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(
+        tmp_path, pilot_candidates=2, total_candidates=5, task_invocations=500
+    )
+    adapters = ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter(max_gepa=5))
+    pilot = run_optimization(config_path, adapters, resume=False, identity_probe=clean_identity)
+    assert pilot["status"] == "pilot-complete"
+    assert pilot["pilot_checkpoint"]["achievable_additional_candidates"] == 2
+    result = run_optimization(config_path, adapters, resume=True, identity_probe=clean_identity)
+    assert result["status"] == "budget-limited"
+    assert result["stop_reason"] == "next-operation-exceeds-total-ceiling"
+    assert result["gepa_results"] == 4
+    assert result["budget"]["task_invocations"] == 481
+
+
+def test_shortlist_returns_explicit_no_improvement(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=2)
+    adapters = ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter(max_gepa=2))
+    finish_synthetic_run(config_path, adapters)
+    result = export_shortlist(config_path, tmp_path / "shortlist", 3)
+    assert result["status"] == "no-improvement"
+    assert result["count"] == 0
+
+
+def test_shortlist_rejects_result_and_trial_tampering(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=3)
+    finish_synthetic_run(
+        config_path,
+        ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter()),
+    )
+    root = tmp_path / "private" / "run"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    result_path = root / "results" / f"{state['gepa_result_ids'][0]}.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    current = root / "trials" / result["trial_id"] / "current.json"
+    value = json.loads(current.read_text(encoding="utf-8"))
+    value["attempt_sha256"] = "0" * 64
+    write_json(current, value)
+    with pytest.raises((ValueError, ValidationError), match="mismatch|inconsistent"):
+        export_shortlist(config_path, tmp_path / "shortlist", 3)
+
+
+def test_config_aware_verify_rejects_self_consistent_contract_tampering(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=3)
+    finish_synthetic_run(
+        config_path,
+        ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter()),
+    )
+    root = tmp_path / "private" / "run"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    result = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['gepa_result_ids'][0]}.json").read_text(encoding="utf-8")
+    )
+    package = read_package(root / "candidates" / f"{result.candidate_id}.json")
+    value = package.model_dump(mode="json", exclude={"candidate_id"})
+    value["contracts"][TASK_ORDER[0]]["input_selector"] = "substituted-selector"
+    malicious = CandidatePackage(candidate_id=candidate_identity(value), **value)
+    path = tmp_path / "malicious.json"
+    write_package(path, malicious)
+    with pytest.raises(ValueError, match="accepted P0 contracts"):
+        verify_candidate(config_path, path)
+
+
+def test_result_authority_tampering_is_rejected_even_when_rehashed(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=3)
+    finish_synthetic_run(
+        config_path,
+        ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter()),
+    )
+    root = tmp_path / "private" / "run"
+    state_path = root / "run-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    old_id = state["gepa_result_ids"][0]
+    result_path = root / "results" / f"{old_id}.json"
+    value = json.loads(result_path.read_text(encoding="utf-8"))
+    value["authority"]["config_sha256"] = "9" * 64
+    value["result_id"] = result_identity(
+        {key: item for key, item in value.items() if key != "result_id"}
+    )
+    new_id = value["result_id"]
+    write_json(root / "results" / f"{new_id}.json", value)
+    state["gepa_result_ids"][0] = new_id
+    state["state_sha256"] = digest(
+        {key: item for key, item in state.items() if key != "state_sha256"}
+    )
+    write_json(state_path, state)
+    with pytest.raises(ValueError, match="configuration identity"):
+        export_shortlist(config_path, tmp_path / "shortlist", 3)
+
+
+@pytest.mark.parametrize(
+    "guardrail",
+    ["total", "model", "task", "privacy", "terminal", "fit", "lineage"],
+)
+def test_every_shortlist_guardrail_is_fail_closed(tmp_path: Path, guardrail: str) -> None:
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=3)
+    finish_synthetic_run(
+        config_path,
+        ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter()),
+    )
+    root = tmp_path / "private" / "run"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    p0 = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['baseline_result_id']}.json").read_text(encoding="utf-8")
+    )
+    result = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['gepa_result_ids'][0]}.json").read_text(encoding="utf-8")
+    )
+    package = read_package(root / "candidates" / f"{result.candidate_id}.json")
+    if guardrail == "total":
+        result.validation_metric.total_valid = p0.validation_metric.total_valid - 1
+    elif guardrail == "model":
+        result.validation_model_valid["qwen"] = p0.validation_model_valid["qwen"] - 2
+    elif guardrail == "task":
+        result.validation_task_valid[TASK_ORDER[0]] = p0.validation_task_valid[TASK_ORDER[0]] - 2
+    elif guardrail == "privacy":
+        result.privacy.eligible = False
+        result.privacy.finding_count = 1
+        result.privacy.counts = {"synthetic": 1}
+    elif guardrail == "terminal":
+        result.accounting.terminal_invocations -= 1
+    elif guardrail == "fit":
+        result.prompt_fits_context = False
+    else:
+        package.lineage.optimizer = "bootstrap-few-shot"
+    assert not _eligible(package, result, p0)
+
+
+def test_complete_request_envelope_inside_outside_and_promotion_rejection(
+    tmp_path: Path,
+) -> None:
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=1, total_candidates=2)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    tasks = load_task_catalog(tmp_path / "tasks.yaml")
+    baseline = baseline_package(tmp_path / "tasks.yaml")
+
+    def with_padding(length: int) -> CandidatePackage:
+        return mutate_package(
+            baseline,
+            {
+                task: baseline.prompts[task].text
+                + (("x" * length) if task == TASK_ORDER[0] else "")
+                for task in TASK_ORDER
+            },
+            optimizer="gepa",
+            proposer_id="synthetic",
+            mutation_ordinal=length + 1,
+        )
+
+    low, high = 0, 40000
+    while low + 1 < high:
+        middle = (low + high) // 2
+        if estimate_request_envelope(with_padding(middle), tasks, authority).fits_context:
+            low = middle
+        else:
+            high = middle
+    inside = estimate_request_envelope(with_padding(low), tasks, authority)
+    outside = estimate_request_envelope(with_padding(high), tasks, authority)
+    assert inside.total_tokens == 8192
+    assert outside.total_tokens == 8193
+    assert inside.output_allowance_tokens > 0
+
+    run = run_optimization(
+        config_path,
+        ExecutionAdapters(
+            FakeCandidateAdapter(),
+            FakeOptimizerAdapter(max_gepa=1, prompt_padding=40000),
+        ),
+        resume=False,
+        identity_probe=clean_identity,
+    )
+    assert run["status"] == "pilot-no-improvement"
+    root = tmp_path / "private" / "run"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    p0 = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['baseline_result_id']}.json").read_text(encoding="utf-8")
+    )
+    result = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['gepa_result_ids'][0]}.json").read_text(encoding="utf-8")
+    )
+    package = read_package(root / "candidates" / f"{result.candidate_id}.json")
+    assert result.request_envelope.total_tokens > 8192
+    assert not result.prompt_fits_context
+    assert not _eligible(package, result, p0)
+
+
+def test_cli_lifecycle_routes_through_synthetic_orchestrator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=3)
+    adapters = ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter())
+
+    def execute(path: Path, resume: bool) -> None:
+        bench_cli.emit(
+            run_optimization(path.resolve(), adapters, resume=resume, identity_probe=clean_identity)
+        )
+
+    monkeypatch.setattr(bench_cli, "_execute_optimizer", execute)
+    flags = [
+        "--allow-remote",
+        "--confirm-private-eval",
+        "--confirm-proposer-disclosure",
+        "--confirm-paid-budget",
+    ]
+    result = CliRunner().invoke(bench_cli.app, ["optimize", "--config", str(config_path), *flags])
+    assert result.exit_code == 0
+    assert '"status": "pilot-complete"' in result.output
+    resumed = CliRunner().invoke(bench_cli.app, ["resume", "--config", str(config_path), *flags])
+    assert resumed.exit_code == 0
+    assert '"status": "complete"' in resumed.output
+    root = tmp_path / "private" / "run"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    candidate_result = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['gepa_result_ids'][0]}.json").read_text(encoding="utf-8")
+    )
+    commands = [
+        ["preflight", "--config", str(config_path)],
+        ["dry-run", "--config", str(config_path)],
+        ["inspect", "--config", str(config_path)],
+        [
+            "verify",
+            "--config",
+            str(config_path),
+            "--package",
+            str(root / "candidates" / f"{candidate_result.candidate_id}.json"),
+        ],
+        [
+            "package",
+            "--config",
+            str(config_path),
+            "--output",
+            str(tmp_path / "p0.json"),
+        ],
+        [
+            "export-shortlist",
+            "--config",
+            str(config_path),
+            "--output",
+            str(tmp_path / "shortlist"),
+            "--limit",
+            "3",
+        ],
+    ]
+    for command in commands:
+        called = CliRunner().invoke(bench_cli.app, command)
+        assert called.exit_code == 0, called.output
+
+
+def test_remote_cli_requires_every_disclosure_flag(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    for command in ("optimize", "resume"):
+        result = CliRunner().invoke(bench_cli.app, [command, "--config", str(config_path)])
+        assert result.exit_code == 2
+        assert "requires all remote disclosure and budget flags" in result.output
+
+
+def test_package_serialization_and_lineage_are_append_only(tmp_path: Path) -> None:
+    baseline = baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml")
+    changed = mutate_package(
+        baseline,
+        {task: baseline.prompts[task].text + "\nSynthetic." for task in TASK_ORDER},
+        optimizer="gepa",
+        proposer_id="synthetic",
+        mutation_ordinal=1,
+    )
+    path = tmp_path / "candidate.json"
+    write_package(path, changed)
+    assert read_package(path) == changed
+    assert changed.lineage.parent_id == baseline.candidate_id
+    with pytest.raises(ValueError, match="safe JSON"):
+        write_package(tmp_path / "candidate.pkl", changed)
