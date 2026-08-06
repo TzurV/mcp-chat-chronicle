@@ -67,24 +67,33 @@ candidate_models:
     infrastructure_retries: 1
     semantic_retries: 0
 proposer:
-  id: claude-sonnet-5-global
-  litellm_model: anthropic/claude-sonnet-5
-  provider: Anthropic
+  id: gemini-3.1-pro-preview-vertex-global
+  litellm_model: vertex_ai/gemini-3.1-pro-preview
+  provider: Google Vertex AI
   region: global
-  credential_mode: api-key-environment
-  api_key_env: OPTIMIZER_PROPOSER_API_KEY
+  credential_mode: vertex-adc
+  api_key_env: null
+  google_cloud_project_env: GOOGLE_CLOUD_PROJECT
+  google_cloud_location_env: GOOGLE_CLOUD_LOCATION
+  vertex_project_env: VERTEXAI_PROJECT
+  vertex_location_env: VERTEXAI_LOCATION
+  vertex_enable_env: GOOGLE_GENAI_USE_VERTEXAI
+  resolved_location: global
   max_calls: 250
   per_call_input_tokens: 50000
   per_call_output_tokens: 8000
   max_input_tokens: 12500000
   max_output_tokens: 2000000
   input_usd_per_million: 2.0
-  output_usd_per_million: 10.0
+  output_usd_per_million: 12.0
   max_cost_usd: 50.0
   timeout_seconds: 120
   concurrency: 1
   temperature: 0
   reasoning_effort: none
+  infrastructure_retries: 1
+  semantic_retries: 0
+  output_repair: false
   cache_namespace: wp-5.2b3b.1-example
   disclosure: Owner-approved development prompts and structured diagnostics only.
 budget:

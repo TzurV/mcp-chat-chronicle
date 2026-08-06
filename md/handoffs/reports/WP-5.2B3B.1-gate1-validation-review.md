@@ -1,7 +1,7 @@
 # WP-5.2B3B.1 Gate 1 PM Validation Review
 
 **Date:** 2026-08-06  
-**Decision:** Accepted for manager commit; private/paid execution remains separately gated
+**Decision:** Gate 1 and the Vertex proposer-route amendment accepted; private/paid execution remains separately gated
 
 ## Executive decision
 
@@ -13,7 +13,7 @@ timing, verification, pilot continuation, and shortlist selection are connected.
 
 Gate 1 is accepted for manager commit. This acceptance covers the generic,
 network-independent optimizer foundation only. It does not authorize private
-transfer, credentials, RunPod allocation, Anthropic or other provider calls, or
+transfer, credentials/ADC, RunPod allocation, Vertex, Anthropic, or other provider calls, or
 spending. Those actions remain gated by the owner's explicit approval of the
 recorded disclosure wording and final cost ceilings.
 
@@ -373,3 +373,35 @@ than create a new work package. Leave all files unstaged and uncommitted. Report
 - confirmation that no private/provider/paid action occurred.
 
 Return status as `Ready for repeat Gate 1 PM validation`.
+
+## Provider-route amendment — 2026-08-06
+
+The owner subsequently selected Google Vertex AI instead of the historical Anthropic recommendation.
+This amendment does not reopen the accepted Gate 1 findings or authorize the private pilot. The
+tracked selected proposer is `vertex_ai/gemini-3.1-pro-preview`, provider Google Vertex AI, location
+`global`, credential mode `vertex-adc`, temperature zero, reasoning `none`, concurrency one, one
+infrastructure retry, no semantic retry, and no output repair.
+
+Tracked configuration contains only the environment-variable names `GOOGLE_CLOUD_PROJECT`,
+`GOOGLE_CLOUD_LOCATION`, `VERTEXAI_PROJECT`, `VERTEXAI_LOCATION`, and
+`GOOGLE_GENAI_USE_VERTEXAI`. The real project value, ADC material, credential values/files, and
+private paths are prohibited from configuration and artifacts. Runtime project/location resolution
+and ADC availability checks occur only when an explicitly authorized production proposer is built.
+
+The proposer ceilings are 250 calls, 12.5 million input tokens, and 2 million output tokens including
+reasoning. At US$2/million input and US$12/million output, the calculated maximum is US$49; the hard
+cap remains US$50. Pre-call reservation, retained interruption accounting, and all prior candidate,
+continuation, context, timing, privacy, authority, and shortlist controls remain authoritative.
+
+The optimizer proposer and later fixed judge are both Gemini 3.1 Pro. The fixed judge remains outside
+the optimization loop, and no fixed-judge rationale or score is supplied to BootstrapFewShot or GEPA.
+This same-family evaluation-bias risk must be disclosed in the completion report and any article; it
+does not invalidate deterministic schema, evidence, reliability, runtime, or cost measurements.
+
+The provider amendment was independently reviewed after its injected, network-free validation. The
+manager reran the focused optimizer suite (`68 passed`), Ruff, Poetry validation, and diff checks; the
+executor's complete suite reported `542 passed, 1 skipped`. The amendment is accepted for commit.
+
+This acceptance grants no authority to access ADC, call Vertex or Anthropic, transfer private data,
+allocate paid resources, spend money, or access holdout data. Those actions remain subject to the
+owner's explicit bounded disclosure and cost authorization.

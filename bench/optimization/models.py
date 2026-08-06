@@ -65,12 +65,21 @@ class ProposerProfile(StrictModel):
     litellm_model: str = Field(min_length=1)
     provider: str = Field(min_length=1)
     region: str = Field(min_length=1)
-    credential_mode: Literal["api-key-environment"] = "api-key-environment"
-    api_key_env: str = Field(pattern=r"^[A-Z][A-Z0-9_]*$")
+    credential_mode: Literal["api-key-environment", "vertex-adc"] = "api-key-environment"
+    api_key_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    google_cloud_project_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    google_cloud_location_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    vertex_project_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    vertex_location_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    vertex_enable_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    resolved_location: Literal["global"] | None = None
     timeout_seconds: float = Field(default=120, gt=0, le=600)
     concurrency: Literal[1] = 1
     temperature: float = Field(default=0, ge=0, le=1)
     reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] = "none"
+    infrastructure_retries: Literal[1] = 1
+    semantic_retries: Literal[0] = 0
+    output_repair: Literal[False] = False
     cache_namespace: str = Field(min_length=1)
     max_calls: StrictInt = Field(gt=0, le=250)
     per_call_input_tokens: StrictInt = Field(gt=0)
@@ -88,6 +97,33 @@ class ProposerProfile(StrictModel):
             raise ValueError("proposer per-call input reservation exceeds total token ceiling")
         if self.per_call_output_tokens * self.max_calls > self.max_output_tokens:
             raise ValueError("proposer per-call output reservation exceeds total token ceiling")
+        calculated_cost = (
+            self.max_input_tokens * self.input_usd_per_million
+            + self.max_output_tokens * self.output_usd_per_million
+        ) / 1_000_000
+        if calculated_cost > self.max_cost_usd:
+            raise ValueError("proposer token envelope exceeds hard cost ceiling")
+        vertex_fields = (
+            self.google_cloud_project_env,
+            self.google_cloud_location_env,
+            self.vertex_project_env,
+            self.vertex_location_env,
+            self.vertex_enable_env,
+        )
+        if self.credential_mode == "api-key-environment":
+            if self.api_key_env is None:
+                raise ValueError("api-key-environment proposer requires api_key_env")
+            if any(value is not None for value in vertex_fields) or self.resolved_location:
+                raise ValueError("api-key-environment proposer cannot contain Vertex ADC fields")
+            return self
+        if self.api_key_env is not None:
+            raise ValueError("vertex-adc proposer cannot require an API key")
+        if any(value is None for value in vertex_fields):
+            raise ValueError("vertex-adc proposer requires project and location environment names")
+        if self.provider != "Google Vertex AI" or not self.litellm_model.startswith("vertex_ai/"):
+            raise ValueError("vertex-adc proposer requires a Google Vertex AI LiteLLM model")
+        if self.region != "global" or self.resolved_location != "global":
+            raise ValueError("vertex-adc proposer location must resolve to global")
         return self
 
 
@@ -219,3 +255,22 @@ def optimization_config_identity(config: OptimizationConfig) -> str:
     from bench.io import digest
 
     return digest(config.model_dump(mode="json"))
+
+
+def proposer_identity(proposer: ProposerProfile) -> str:
+    """Bind only the tracked, non-secret proposer contract."""
+    from bench.io import digest
+
+    return digest(proposer.model_dump(mode="json"))
+
+
+def proposer_cache_identity(proposer: ProposerProfile) -> str:
+    """Namespace proposer caches by the full non-secret runtime contract."""
+    from bench.io import digest
+
+    return digest(
+        {
+            "cache_namespace": proposer.cache_namespace,
+            "proposer_identity_sha256": proposer_identity(proposer),
+        }
+    )

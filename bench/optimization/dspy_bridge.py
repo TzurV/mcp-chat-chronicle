@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -118,14 +117,47 @@ def package_compiled_program(
     )
 
 
-def proposer_lm(model: str, api_key_env: str, **kwargs: Any) -> Any:
+def proposer_lm(
+    model: str,
+    *,
+    credential_mode: str,
+    concurrency: int,
+    budget_contract: dict[str, int | float],
+    api_key: str | None = None,
+    vertex_project: str | None = None,
+    vertex_location: str | None = None,
+    **kwargs: Any,
+) -> Any:
     verify_compatibility()
     import dspy
 
-    secret = os.environ.get(api_key_env)
-    if not secret:
-        raise RuntimeError(f"missing required proposer environment variable {api_key_env}")
-    return dspy.LM(model, api_key=secret, **kwargs)
+    if concurrency != 1:
+        raise ValueError("optimizer proposer concurrency must be one")
+    required_budget_fields = {
+        "max_calls",
+        "max_input_tokens",
+        "max_output_tokens",
+        "input_usd_per_million",
+        "output_usd_per_million",
+        "max_cost_usd",
+    }
+    if set(budget_contract) != required_budget_fields:
+        raise ValueError("optimizer proposer budget contract is incomplete")
+    provider_kwargs: dict[str, Any]
+    if credential_mode == "api-key-environment":
+        if not api_key:
+            raise RuntimeError("API-key proposer credential is unavailable")
+        provider_kwargs = {"api_key": api_key}
+    elif credential_mode == "vertex-adc":
+        if api_key is not None or not vertex_project or vertex_location != "global":
+            raise RuntimeError("Vertex ADC proposer runtime is incomplete")
+        provider_kwargs = {
+            "vertex_project": vertex_project,
+            "vertex_location": vertex_location,
+        }
+    else:
+        raise ValueError("unsupported optimizer proposer credential mode")
+    return dspy.LM(model, **provider_kwargs, **kwargs)
 
 
 def compile_bootstrap(

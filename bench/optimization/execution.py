@@ -25,6 +25,7 @@ from .models import (
     OptimizationConfig,
     load_optimization_config,
     optimization_config_identity,
+    proposer_identity,
     resolve_config_path,
 )
 from .package import (
@@ -493,7 +494,7 @@ def _authorize(
         "model_artifact_sha256": {
             model.id: model.artifact_sha256 for model in config.candidate_models
         },
-        "proposer_identity_sha256": digest(config.proposer.model_dump(mode="json")),
+        "proposer_identity_sha256": proposer_identity(config.proposer),
         "optimizer_identity_sha256": digest(
             {
                 "versions": config.versions.model_dump(mode="json"),

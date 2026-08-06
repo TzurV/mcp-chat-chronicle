@@ -55,8 +55,11 @@ explicit flags: `--allow-remote`, `--confirm-private-eval`, `--confirm-proposer-
 development authority, persists and consumes an append-only execution authority, reserves every
 candidate/proposer/task/retry/token/time/cost allowance before its adapter call, and reconciles actual
 usage afterward. Missing or inconsistent usage fails closed while retaining the reservation. No
-credential is stored in YAML; production adapters read only the declared environment-variable name,
-and only after authorization has been consumed. Resume reloads the hashed budget/run state and strict
+credential or Google Cloud project value is stored in YAML. The selected `vertex-adc` route declares
+only the names `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `VERTEXAI_PROJECT`,
+`VERTEXAI_LOCATION`, and `GOOGLE_GENAI_USE_VERTEXAI`; production resolves their values and checks ADC
+only after authorization has been consumed. The paired project variables must agree, both locations
+must resolve to `global`, and the Vertex enable flag must be true. Resume reloads the hashed budget/run state and strict
 latest `current.json` attempt authorities while preserving interrupted history.
 
 A new `optimize` invocation stops after a durable four-hour/12-GEPA-maximum pilot checkpoint. The
@@ -70,10 +73,21 @@ the 40-candidate maximum, or before the first complete candidate/proposer/evalua
 would exceed the 3,000-task, 12-hour, proposer-call/token/cost, or compute-cost ceilings.
 
 BootstrapFewShot explicitly uses the candidate model as teacher, so those task calls are reserved and
-accounted as candidate-model disclosure. GEPA uses only the configured Anthropic/global proposer
-route; provider/model, request limits, reasoning policy, timeout, single-thread concurrency, and cache
-namespace all participate in the configuration/run identity. The tracked adapter does not advertise
-an unimplemented Vertex/ADC fallback.
+accounted as candidate-model disclosure. The selected GEPA proposer is Google Vertex AI
+`vertex_ai/gemini-3.1-pro-preview` in `global`, authenticated only with Application Default
+Credentials. Its tracked profile permits at most 250 calls, 12.5 million input tokens, and 2 million
+output tokens including separately reported reasoning tokens. At US$2/million input and
+US$12/million output the maximum token envelope is US$49 beneath the US$50 hard ceiling. One
+infrastructure retry, no semantic retry, no repair, temperature zero, reasoning `none`, cache disabled,
+and concurrency one are fixed. Provider/model, credential mode and environment-variable names,
+resolved location, settings, pricing, and ceilings participate in configuration, authorization, cache,
+trial, and result authority; environment values and ADC material do not. The older
+`api-key-environment` mode remains supported for compatible providers but is not the selected route.
+
+The proposer and later fixed judge are both Gemini 3.1 Pro. The judge remains outside the optimization
+loop, and no fixed-judge score or rationale reaches BootstrapFewShot or GEPA. This same-family design
+creates evaluation-bias risk and must be disclosed in the completion report and any article; it does
+not invalidate deterministic schema, evidence, reliability, runtime, or cost measurements.
 
 BootstrapFewShot is fixed at one labeled demo, one bootstrapped demo, and one round. Its package is
 private and ineligible unless the same promotion scanner passes. The production candidate adapter
@@ -107,7 +121,7 @@ Transfer only the approved development subset, four-task references needed by th
 artifacts, selected P0 catalog, private config, code/environment lock, and checksummed return paths.
 Never transfer the holdout, live database, unrelated conversation history, judge credentials, or
 historical packages not required as controls. Verify returned checksums locally before deleting the
-pod, then remove cloud volumes and revoke or rotate the proposer key.
+pod, then remove cloud volumes and clear the bounded Vertex runtime environment.
 
 ## Compatibility sources
 

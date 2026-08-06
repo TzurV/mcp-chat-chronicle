@@ -30,7 +30,13 @@ from bench.optimization.execution import (
 )
 from bench.optimization.feedback import Diagnostic, render_feedback
 from bench.optimization.metrics import MetricVector
-from bench.optimization.models import OptimizationConfig, load_optimization_config
+from bench.optimization.models import (
+    OptimizationConfig,
+    load_optimization_config,
+    optimization_config_identity,
+    proposer_cache_identity,
+    proposer_identity,
+)
 from bench.optimization.operations import (
     _eligible,
     export_shortlist,
@@ -53,7 +59,12 @@ from bench.optimization.package import (
     write_package,
 )
 from bench.optimization.privacy import scan_package
-from bench.optimization.production import DspyOptimizerAdapter, LiteLLMCandidateAdapter
+from bench.optimization.production import (
+    DspyOptimizerAdapter,
+    LiteLLMCandidateAdapter,
+    _history_usage,
+    build_proposer_client,
+)
 from bench.optimization.request_envelope import estimate_request_envelope
 from bench.optimization.split import OptimizationSplitManifest, freeze_split
 from bench.optimization.trials import TrialStore
@@ -560,7 +571,307 @@ def test_public_template_declares_the_single_operational_proposer() -> None:
         config.proposer.provider,
         config.proposer.region,
         config.proposer.litellm_model,
-    ) == ("Anthropic", "global", "anthropic/claude-sonnet-5")
+    ) == ("Google Vertex AI", "global", "vertex_ai/gemini-3.1-pro-preview")
+    assert config.proposer.credential_mode == "vertex-adc"
+    assert config.proposer.api_key_env is None
+    assert config.proposer.resolved_location == "global"
+    assert (
+        config.proposer.google_cloud_project_env,
+        config.proposer.google_cloud_location_env,
+        config.proposer.vertex_project_env,
+        config.proposer.vertex_location_env,
+        config.proposer.vertex_enable_env,
+    ) == (
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_CLOUD_LOCATION",
+        "VERTEXAI_PROJECT",
+        "VERTEXAI_LOCATION",
+        "GOOGLE_GENAI_USE_VERTEXAI",
+    )
+
+
+def _vertex_template() -> dict[str, object]:
+    return yaml.safe_load(
+        (Path(__file__).parents[1] / "bench" / "optimization.default.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("api_key_env", "GEMINI_API_KEY", "cannot require an API key"),
+        ("google_cloud_project_env", None, "requires project and location"),
+        ("google_cloud_location_env", None, "requires project and location"),
+        ("google_cloud_project_env", "owner-project-123", "string_pattern_mismatch"),
+        ("resolved_location", None, "must resolve to global"),
+        ("project_id", "owner-project-123", "extra_forbidden"),
+        ("credential_file", "C:/private/adc.json", "extra_forbidden"),
+    ],
+)
+def test_vertex_adc_profile_validation_is_strict(field: str, value: object, message: str) -> None:
+    template = _vertex_template()
+    template["proposer"][field] = value
+    with pytest.raises(ValidationError, match=message):
+        OptimizationConfig.model_validate(template)
+
+
+def test_vertex_adc_runtime_reaches_injected_client_without_api_key() -> None:
+    profile = OptimizationConfig.model_validate(_vertex_template()).proposer
+    project_marker = "synthetic-project-value-never-persist"
+    environment = {
+        "GOOGLE_CLOUD_PROJECT": project_marker,
+        "GOOGLE_CLOUD_LOCATION": "global",
+        "VERTEXAI_PROJECT": project_marker,
+        "VERTEXAI_LOCATION": "global",
+        "GOOGLE_GENAI_USE_VERTEXAI": "true",
+    }
+    captured: dict[str, object] = {}
+    sentinel = object()
+
+    def fake_lm(model: str, **kwargs: object) -> object:
+        captured.update(model=model, **kwargs)
+        return sentinel
+
+    assert (
+        build_proposer_client(
+            profile, lm_factory=fake_lm, environment=environment, adc_probe=lambda: True
+        )
+        is sentinel
+    )
+    assert captured == {
+        "model": "vertex_ai/gemini-3.1-pro-preview",
+        "credential_mode": "vertex-adc",
+        "concurrency": 1,
+        "budget_contract": {
+            "max_calls": 250,
+            "max_input_tokens": 12_500_000,
+            "max_output_tokens": 2_000_000,
+            "input_usd_per_million": 2.0,
+            "output_usd_per_million": 12.0,
+            "max_cost_usd": 50.0,
+        },
+        "temperature": 0.0,
+        "timeout": 120.0,
+        "num_retries": 1,
+        "cache": False,
+        "reasoning_effort": "none",
+        "max_tokens": 8000,
+        "vertex_project": project_marker,
+        "vertex_location": "global",
+    }
+    assert "api_key" not in captured
+
+
+def test_vertex_route_crosses_real_dspy_bridge_with_injected_lm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import dspy
+
+    profile = OptimizationConfig.model_validate(_vertex_template()).proposer
+    captured: dict[str, object] = {}
+
+    def fake_dspy_lm(model: str, **kwargs: object) -> object:
+        captured.update(model=model, **kwargs)
+        return object()
+
+    monkeypatch.setattr(dspy, "LM", fake_dspy_lm)
+    build_proposer_client(
+        profile,
+        environment={
+            "GOOGLE_CLOUD_PROJECT": "synthetic-project",
+            "GOOGLE_CLOUD_LOCATION": "global",
+            "VERTEXAI_PROJECT": "synthetic-project",
+            "VERTEXAI_LOCATION": "global",
+            "GOOGLE_GENAI_USE_VERTEXAI": "true",
+        },
+        adc_probe=lambda: True,
+    )
+    assert captured == {
+        "model": "vertex_ai/gemini-3.1-pro-preview",
+        "vertex_project": "synthetic-project",
+        "vertex_location": "global",
+        "temperature": 0.0,
+        "timeout": 120.0,
+        "num_retries": 1,
+        "cache": False,
+        "reasoning_effort": "none",
+        "max_tokens": 8000,
+    }
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_CLOUD_LOCATION",
+        "VERTEXAI_PROJECT",
+        "VERTEXAI_LOCATION",
+    ],
+)
+def test_vertex_adc_runtime_fails_clearly_for_missing_project_or_location(
+    missing: str,
+) -> None:
+    profile = OptimizationConfig.model_validate(_vertex_template()).proposer
+    environment = {
+        "GOOGLE_CLOUD_PROJECT": "synthetic-project",
+        "GOOGLE_CLOUD_LOCATION": "global",
+        "VERTEXAI_PROJECT": "synthetic-project",
+        "VERTEXAI_LOCATION": "global",
+        "GOOGLE_GENAI_USE_VERTEXAI": "true",
+    }
+    del environment[missing]
+    with pytest.raises(RuntimeError, match=missing):
+        build_proposer_client(
+            profile, lm_factory=lambda *_args, **_kwargs: object(), environment=environment
+        )
+
+
+def test_vertex_adc_runtime_fails_closed_for_adc_and_location() -> None:
+    profile = OptimizationConfig.model_validate(_vertex_template()).proposer
+    environment = {
+        "GOOGLE_CLOUD_PROJECT": "synthetic-project",
+        "GOOGLE_CLOUD_LOCATION": "global",
+        "VERTEXAI_PROJECT": "synthetic-project",
+        "VERTEXAI_LOCATION": "global",
+        "GOOGLE_GENAI_USE_VERTEXAI": "true",
+    }
+    with pytest.raises(RuntimeError, match="Credentials are unavailable"):
+        build_proposer_client(
+            profile,
+            lm_factory=lambda *_args, **_kwargs: object(),
+            environment=environment,
+            adc_probe=lambda: False,
+        )
+    environment["VERTEXAI_LOCATION"] = "not-global"
+    with pytest.raises(RuntimeError, match="must resolve to global"):
+        build_proposer_client(
+            profile,
+            lm_factory=lambda *_args, **_kwargs: object(),
+            environment=environment,
+            adc_probe=lambda: True,
+        )
+
+
+def test_anthropic_api_key_environment_remains_compatible(tmp_path: Path) -> None:
+    profile = load_optimization_config(synthetic_workspace(tmp_path)).proposer
+    captured: dict[str, object] = {}
+
+    def fake_lm(model: str, **kwargs: object) -> object:
+        captured.update(model=model, **kwargs)
+        return object()
+
+    build_proposer_client(
+        profile,
+        lm_factory=fake_lm,
+        environment={"SYNTHETIC_KEY": "synthetic-secret"},
+    )
+    assert captured["api_key"] == "synthetic-secret"
+    assert "vertex_project" not in captured
+
+
+def test_proposer_authorization_and_cache_identities_bind_non_secret_route(
+    tmp_path: Path,
+) -> None:
+    first = OptimizationConfig.model_validate(_vertex_template())
+    changed_data = _vertex_template()
+    changed_data["proposer"]["vertex_location_env"] = "ALTERNATE_VERTEX_LOCATION"
+    changed = OptimizationConfig.model_validate(changed_data)
+    assert optimization_config_identity(first) != optimization_config_identity(changed)
+    changed_model_data = _vertex_template()
+    changed_model_data["proposer"]["litellm_model"] = "vertex_ai/synthetic-alternate"
+    changed_model = OptimizationConfig.model_validate(changed_model_data).proposer
+    changed_provider_and_mode = load_optimization_config(synthetic_workspace(tmp_path)).proposer
+    for alternate in (changed.proposer, changed_model, changed_provider_and_mode):
+        assert proposer_identity(first.proposer) != proposer_identity(alternate)
+        assert proposer_cache_identity(first.proposer) != proposer_cache_identity(alternate)
+
+
+def test_vertex_runtime_values_never_enter_serialized_identity_artifacts() -> None:
+    config = OptimizationConfig.model_validate(_vertex_template())
+    project_marker = "runtime-only-project-marker"
+    credential_marker = "runtime-only-adc-marker"
+
+    def fake_lm(_model: str, **_kwargs: object) -> object:
+        return object()
+
+    build_proposer_client(
+        config.proposer,
+        lm_factory=fake_lm,
+        environment={
+            "GOOGLE_CLOUD_PROJECT": project_marker,
+            "GOOGLE_CLOUD_LOCATION": "global",
+            "VERTEXAI_PROJECT": project_marker,
+            "VERTEXAI_LOCATION": "global",
+            "GOOGLE_GENAI_USE_VERTEXAI": "true",
+        },
+        adc_probe=lambda: bool(credential_marker),
+    )
+    serialized = json.dumps(
+        {
+            "config": config.model_dump(mode="json"),
+            "config_sha256": optimization_config_identity(config),
+            "proposer_identity_sha256": proposer_identity(config.proposer),
+            "cache_identity_sha256": proposer_cache_identity(config.proposer),
+        },
+        sort_keys=True,
+    )
+    assert project_marker not in serialized
+    assert credential_marker not in serialized
+
+
+def test_vertex_budget_arithmetic_reasoning_and_pre_call_rejection(tmp_path: Path) -> None:
+    config = OptimizationConfig.model_validate(_vertex_template())
+    expected_cost = (
+        config.proposer.max_input_tokens * config.proposer.input_usd_per_million
+        + config.proposer.max_output_tokens * config.proposer.output_usd_per_million
+    ) / 1_000_000
+    assert expected_cost == 49
+    assert config.proposer.max_cost_usd == 50
+    usage = _history_usage(
+        [
+            type(
+                "LM",
+                (),
+                {
+                    "history": [
+                        {
+                            "usage": {
+                                "prompt_tokens": 10,
+                                "completion_tokens": 20,
+                                "completion_tokens_details": {"reasoning_tokens": 7},
+                            }
+                        }
+                    ]
+                },
+            )()
+        ],
+        [0],
+        proposer_index=0,
+    )
+    assert usage.output_tokens == 27
+
+    ledger = BudgetLedger(tmp_path, config, pilot=False)
+    ledger.initialize()
+    ledger.reserve(
+        "proposer",
+        task_calls=250,
+        proposer_calls=250,
+        retries=250,
+        input_tokens=12_500_000,
+        output_tokens=2_000_000,
+    )
+    assert ledger.load().counters.proposer_cost_usd == 49
+    assert not ledger.can_fit(
+        UsageCounters(
+            task_invocations=1,
+            proposer_calls=1,
+            infrastructure_retries=1,
+            proposer_input_tokens=1,
+            proposer_output_tokens=1,
+        )
+    )
 
 
 def test_optional_import_boundary_does_not_import_dspy() -> None:

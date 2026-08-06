@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -34,7 +35,12 @@ from .execution import (
     Proposal,
 )
 from .feedback import Diagnostic, render_feedback
-from .models import OptimizationConfig, resolve_config_path
+from .models import (
+    OptimizationConfig,
+    ProposerProfile,
+    proposer_cache_identity,
+    resolve_config_path,
+)
 from .package import CandidatePackage
 from .request_envelope import case_request_parts, verify_demonstration_authority
 
@@ -182,12 +188,97 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
         )
 
 
+def build_proposer_client(
+    profile: ProposerProfile,
+    *,
+    lm_factory: Callable[..., Any] = proposer_lm,
+    environment: Mapping[str, str] | None = None,
+    adc_probe: Callable[[], bool] | None = None,
+) -> Any:
+    """Resolve credentials transiently and build a proposer without serializing values."""
+    environ = os.environ if environment is None else environment
+    runtime: dict[str, Any] = {}
+    if profile.credential_mode == "api-key-environment":
+        assert profile.api_key_env is not None
+        api_key = environ.get(profile.api_key_env)
+        if not api_key:
+            raise RuntimeError(
+                f"missing required proposer environment variable {profile.api_key_env}"
+            )
+        runtime["api_key"] = api_key
+    else:
+        names = {
+            "Google Cloud project": profile.google_cloud_project_env,
+            "Google Cloud location": profile.google_cloud_location_env,
+            "Vertex project": profile.vertex_project_env,
+            "Vertex location": profile.vertex_location_env,
+            "Vertex enable flag": profile.vertex_enable_env,
+        }
+        values: dict[str, str] = {}
+        for label, name in names.items():
+            assert name is not None
+            value = environ.get(name)
+            if not value:
+                raise RuntimeError(f"missing required {label} environment variable {name}")
+            values[label] = value
+        if values["Google Cloud project"] != values["Vertex project"]:
+            raise RuntimeError("configured Vertex project environment variables disagree")
+        if values["Google Cloud location"] != "global" or values["Vertex location"] != "global":
+            raise RuntimeError("configured Vertex location must resolve to global")
+        if values["Vertex enable flag"].casefold() not in {"1", "true", "yes"}:
+            raise RuntimeError("configured Vertex enable environment variable must be true")
+        probe = _default_adc_probe if adc_probe is None else adc_probe
+        try:
+            adc_available = probe()
+        except Exception:
+            adc_available = False
+        if not adc_available:
+            raise RuntimeError("Google Vertex AI Application Default Credentials are unavailable")
+        runtime.update(
+            vertex_project=values["Google Cloud project"],
+            vertex_location="global",
+        )
+    budget_contract = {
+        "max_calls": profile.max_calls,
+        "max_input_tokens": profile.max_input_tokens,
+        "max_output_tokens": profile.max_output_tokens,
+        "input_usd_per_million": profile.input_usd_per_million,
+        "output_usd_per_million": profile.output_usd_per_million,
+        "max_cost_usd": profile.max_cost_usd,
+    }
+    try:
+        return lm_factory(
+            profile.litellm_model,
+            credential_mode=profile.credential_mode,
+            concurrency=profile.concurrency,
+            budget_contract=budget_contract,
+            temperature=profile.temperature,
+            timeout=profile.timeout_seconds,
+            num_retries=profile.infrastructure_retries,
+            cache=False,
+            reasoning_effort=profile.reasoning_effort,
+            max_tokens=profile.per_call_output_tokens,
+            **runtime,
+        )
+    except Exception:
+        raise RuntimeError("failed to initialize configured optimizer proposer") from None
+
+
+def _default_adc_probe() -> bool:
+    """Check ADC only when an explicitly authorized production adapter is constructed."""
+    try:
+        import google.auth
+
+        credentials, _ = google.auth.default()
+    except Exception:
+        return False
+    return credentials is not None
+
+
 class DspyOptimizerAdapter(OptimizerAdapter):
     def __init__(
         self, config: OptimizationConfig, config_path: Path, authority: VerifiedAuthority
     ) -> None:
-        if config.proposer.provider != "Anthropic" or config.proposer.region != "global":
-            raise ValueError("tracked proposer adapter supports Anthropic global processing only")
         self.config = config
         self.config_path = config_path
         self.authority = authority
@@ -195,15 +286,7 @@ class DspyOptimizerAdapter(OptimizerAdapter):
             resolve_config_path(config_path, config.paths.accepted_task_catalog)
         )
         self.candidate_lms = self._candidate_lms()
-        self.reflection_lm = proposer_lm(
-            config.proposer.litellm_model,
-            config.proposer.api_key_env,
-            temperature=config.proposer.temperature,
-            timeout=config.proposer.timeout_seconds,
-            num_retries=0,
-            cache=False,
-            reasoning_effort=config.proposer.reasoning_effort,
-        )
+        self.reflection_lm = build_proposer_client(config.proposer)
 
     def reservation(self, optimizer: Literal["bootstrap-few-shot", "gepa"]) -> AdapterReservation:
         if optimizer == "bootstrap-few-shot":
@@ -224,6 +307,7 @@ class DspyOptimizerAdapter(OptimizerAdapter):
             proposer_calls=proposer_calls,
             input_tokens=proposer_calls * self.config.proposer.per_call_input_tokens,
             output_tokens=proposer_calls * self.config.proposer.per_call_output_tokens,
+            retries=proposer_calls * self.config.proposer.infrastructure_retries,
             compute_hours=hours,
             compute_cost_usd=hours * _compute_hourly_cost(self.config),
         )
@@ -290,6 +374,7 @@ class DspyOptimizerAdapter(OptimizerAdapter):
             log_dir=resolve_config_path(self.config_path, self.config.paths.run_root)
             / "dspy"
             / self.config.proposer.cache_namespace
+            / proposer_cache_identity(self.config.proposer)[:16]
             / f"gepa-{ordinal:04d}",
         )
         usage = _history_usage(lms, before, proposer_index=len(lms) - 1)
@@ -479,7 +564,15 @@ def _history_usage(
             if index == proposer_index:
                 proposer_calls += 1
                 input_tokens += int(usage.get("prompt_tokens", 0) or 0)
-                output_tokens += int(usage.get("completion_tokens", 0) or 0)
+                completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+                details = usage.get("completion_tokens_details") or {}
+                separately_reported_reasoning = max(
+                    int(usage.get("reasoning_tokens", 0) or 0),
+                    int(details.get("reasoning_tokens", 0) or 0),
+                )
+                # Fail closed: separately reported reasoning is charged as output even when a
+                # provider's completion-token semantics are ambiguous.
+                output_tokens += completion_tokens + separately_reported_reasoning
             # DSPy history does not provide a portable latency field. The orchestrator records
             # one monotonic wall-clock duration around the complete optimizer attempt.
     return AdapterUsage(

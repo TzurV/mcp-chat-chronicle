@@ -18,6 +18,7 @@ from .execution import RunState
 from .models import (
     load_optimization_config,
     optimization_config_identity,
+    proposer_identity,
     resolve_config_path,
 )
 from .package import (
@@ -340,7 +341,7 @@ def _read_verified_result(root: Path, result_id: str, config) -> CandidateResult
         model.id: model.artifact_sha256 for model in config.candidate_models
     }:
         raise ValueError("optimizer result model artifact identity mismatch")
-    if result.authority.proposer_identity_sha256 != digest(config.proposer.model_dump(mode="json")):
+    if result.authority.proposer_identity_sha256 != proposer_identity(config.proposer):
         raise ValueError("optimizer result proposer identity mismatch")
     if result.authority.optimizer_identity_sha256 != digest(
         {

@@ -1,14 +1,15 @@
-# WP-5.2B3B.1 execution progress — repeat Gate 1 checkpoint
+# WP-5.2B3B.1 execution progress — Vertex proposer route amendment
 
 ## Status
 
-**Ready for final Gate 1 PM validation.** The original nine findings and four repeat-review findings
-remain resolved. Repeat Review Finding 5 is now corrected in the same unstaged, uncommitted patch.
+**Ready for Vertex proposer route PM validation.** The accepted Gate 1 implementation remains intact.
+This unstaged, uncommitted amendment replaces the selected proposer route with Google Vertex AI
+`vertex_ai/gemini-3.1-pro-preview`, `global`, authenticated through ADC.
 Work remains stopped before private transfer, provider/model calls, credential use, paid allocation,
 and holdout access.
 
-The clean starting authority remains `main` commit
-`365bb815185482b88182da75c948f139c676f3fb`. The manager-created commit containing this patch must
+The clean starting authority is `main` commit
+`97c204ddc6d2dd48b70927888667c91562ffd936`. The manager-created commit containing this patch must
 replace that value in the ignored private execution configuration before any future authorized run;
 the tracked orchestrator deliberately rejects a dirty tree or a different commit.
 
@@ -46,11 +47,12 @@ the tracked orchestrator deliberately rejects a dirty tree or a different commit
    run/config/commit, split, model artifact, proposer, optimizer, privacy-scanner, result hash,
    terminal accounting, run-state reference, and complete current trial. Syntax-only package parsing
    remains a separately named internal operation and is not reported as complete verification.
-8. **One operational proposer:** the unimplemented Vertex/ADC fallback was removed. Gate 1 now models
-   only the manager-recommended Anthropic `claude-sonnet-5`, global, API-key-environment route. Model,
-   provider, region, credential mode/name, timeout, concurrency, temperature, reasoning policy,
-   per-call/total usage, pricing ceilings, and cache namespace are config/run identity. Bootstrap uses
-   the candidate model as teacher and accounts those task calls.
+8. **Selected operational proposer:** strict configuration now supports both the selected `vertex-adc`
+   mode and the backward-compatible `api-key-environment` mode. The selected profile declares only
+   five environment-variable names, resolves paired project/location values transiently, requires
+   both locations to be `global`, checks ADC only during authorized adapter construction, and never
+   requires an API key. Model, provider, location, credential mode and variable names, generation and
+   retry settings, pricing, ceilings, and cache namespace bind configuration/run/cache identity.
 9. **Lifecycle tests:** the focused suite now exercises the synthetic optimize/interruption/resume
    lifecycle, real tracked production candidate adapter with an injected fake client, all CLI
    lifecycle commands, split/reference tampering, budget boundaries and interruption, stale attempts,
@@ -131,6 +133,34 @@ Two end-to-end synthetic pilot regressions exercise the exact false-positive sha
 The existing positive continuation test remains unchanged and passes when a single candidate is no
 worse on all three components.
 
+## Vertex proposer route amendment
+
+- **Strict credential contract:** the selected profile is Google Vertex AI
+  `vertex_ai/gemini-3.1-pro-preview`, `vertex-adc`, `global`. Tracked YAML contains the names
+  `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `VERTEXAI_PROJECT`, `VERTEXAI_LOCATION`, and
+  `GOOGLE_GENAI_USE_VERTEXAI`, but no project value, API key, token, credential file, or private path.
+  Literal project-like strings and extra credential fields fail strict validation. Missing runtime
+  project/location variables, disagreement, non-global location, a false enable flag, or unavailable
+  ADC fail with value-free errors.
+- **Injected-client proof:** a network-free fake received the exact LiteLLM model, transient synthetic
+  project, `global` location, ADC mode, temperature zero, reasoning `none`, 120-second timeout, one
+  infrastructure retry, cache disabled, concurrency one, 8,000-token per-call allowance, pricing,
+  and total ceilings. It received no API-key argument. Anthropic API-key-environment compatibility is
+  retained in a separate injected-only regression.
+- **Identity:** configuration, authorization/result proposer authority, and cache identities bind the
+  full non-secret profile. Changing a valid declared location-variable name changes all three. Runtime
+  environment values and ADC material are excluded.
+- **Budget:** 12.5 million input tokens at US$2/million plus 2 million output tokens at
+  US$12/million is exactly US$49 under the US$50 hard cap. Separately reported reasoning tokens are
+  conservatively added to output usage. A full-envelope reservation is accepted, and the next
+  call/token/cost operation is rejected before invocation; interrupted reservations retain the
+  already accepted fail-closed behavior.
+- **Methodological limitation:** the optimizer proposer and later fixed judge are both Gemini 3.1
+  Pro. The fixed judge remains outside the loop, and neither its score nor rationale is exposed to
+  BootstrapFewShot or GEPA. This same-family evaluation-bias risk must appear in the completion report
+  and any article; deterministic schema, evidence, reliability, runtime, and cost results remain
+  separately valid measurements.
+
 ## Synthetic end-to-end lifecycle evidence
 
 The synthetic run uses ten generated conversations and forty generated references. It contains no
@@ -188,9 +218,9 @@ transfer, read a credential, invoke a provider/model, or allocate paid compute.
   retry, zero semantic retries, and no output repair.
 - Pilot: at most 12 GEPA candidates and four compute hours; full ceilings remain 40 candidates, 3,000
   task invocations, and 12 compute hours.
-- Recommended proposer: Anthropic first-party `claude-sonnet-5`, global processing, temporary
-  `OPTIMIZER_PROPOSER_API_KEY`, at most 250 calls, 12.5 million input tokens, 2 million output tokens,
-  and a US$50 hard proposer cap. This remains a recommendation, not authorization.
+- Selected proposer: Google Vertex AI `vertex_ai/gemini-3.1-pro-preview`, `global`, ADC-only, at most
+  250 calls, 12.5 million input tokens, 2 million output tokens including reasoning, US$49 calculated
+  maximum, and a US$50 hard proposer cap. This selection is not pilot authorization.
 - Paid compute: retain no more than the separately confirmed RunPod cap; owner must confirm console
   GPU/storage rates before allocation. No allocation was made here.
 
@@ -200,8 +230,8 @@ transfer, read a credential, invoke a provider/model, or allocate paid compute.
 > and four-validation development conversations. The owner-controlled RunPod Pod
 > may receive their selected source chat text, corresponding FABLE reference
 > fields, accepted schemas/contracts, current prompt candidates, Qwen/Phi
-> candidate outputs, and structured deterministic diagnostics. Anthropic
-> `claude-sonnet-5` through the global first-party API may receive only the
+> candidate outputs, and structured deterministic diagnostics. Google Vertex AI
+> `vertex_ai/gemini-3.1-pro-preview` through the global route and ADC may receive only the
 > selected development source text, current prompts, candidate outputs, relevant
 > FABLE reference fields, schemas/contracts, and bounded diagnostics required by
 > BootstrapFewShot or GEPA. No holdout content or identity, unrelated history,
@@ -217,29 +247,35 @@ checkpoint.
 
 ## Validation at repeat checkpoint
 
-- `poetry run pytest tests/test_bench_optimization.py -q`: **50 passed**.
-- `poetry run pytest`: **524 passed, 1 skipped**.
-- Focused Ruff format/check over optimizer code and tests: passed.
-- `poetry run ruff check .`, `poetry check`, and `git diff --check`: passed; Git emitted only the
-  existing CRLF/LF worktree notice for `poetry.lock`.
+- `poetry run pytest tests/test_bench_optimization.py -q`: **68 passed**.
+- `poetry run pytest`: **542 passed, 1 skipped** in 203.86 seconds. An earlier invocation reached its
+  runner timeout without a reported failure; the complete rerun used a sufficient timeout and passed.
+- `poetry run pytest tests/test_bench_optimization.py -q -k "cli or lifecycle or
+  ordinary_and_optimization_extra_imports"`: **4 passed**.
+- `poetry run ruff format --check bench/optimization tests/test_bench_optimization.py`,
+  `poetry run ruff check .`, `poetry check`, and `git diff --check`: passed.
 - Synthetic CLI coverage exercised `preflight`, `dry-run`, `optimize`, `resume`, `inspect`, `verify`,
   `package`, and `export-shortlist`; both provider-facing commands also reject every missing-gate
   invocation.
-- No test used private content, network access, provider/model inference, a credential, paid compute,
-  or holdout data.
+- Credential-signature scanning of non-report tracked code/config found no private-key block, Google
+  API-key shape, client secret, refresh/access token, or ADC credential path. The diff contains only
+  the approved environment-variable names and explicit synthetic markers. No files are staged and no
+  untracked run artifact exists.
+- No test used private content, network access, provider/model inference, ADC or another credential,
+  paid compute, or holdout data.
 
-## Intended unstaged files
+## Intended unstaged files for this amendment
 
-- `bench/__main__.py`
 - `bench/optimization.default.yaml`
-- `bench/optimization/` (tracked optimizer implementation modules)
+- `bench/optimization/dspy_bridge.py`
+- `bench/optimization/execution.py`
+- `bench/optimization/models.py`
+- `bench/optimization/operations.py`
+- `bench/optimization/production.py`
 - `tests/test_bench_optimization.py`
-- `pyproject.toml`
-- `poetry.lock`
 - `docs/development-optimization.md`
 - `md/development-ledger.md`
 - `md/handoffs/reports/WP-5.2B3B.1-execution-progress.md`
-- `md/handoffs/reports/WP-5.2B3B.1-gate1-validation-review.md` (manager-supplied review retained
-  unchanged)
+- `md/handoffs/reports/WP-5.2B3B.1-gate1-validation-review.md`
 
 All remain unstaged and uncommitted for repeat manager validation.
