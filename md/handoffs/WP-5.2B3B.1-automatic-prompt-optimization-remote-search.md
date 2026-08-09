@@ -342,6 +342,17 @@ accepted WP-5.2C1 service pattern. An RTX 4090 24 GB is an allowed availability
 fallback only if the same artifacts, context, runtime behavior, and validation
 gates pass.
 
+Operate RunPod CLI-first. Use the installed RunPod CLI/API for supported discovery,
+allocation, lifecycle, status, and transfer operations. Use standard SSH/SCP tooling
+where the installed CLI has no equivalent; use a custom script only when no supported
+CLI path exists and record why. Immediately after allocation, the owner must run the
+provider-issued SSH command and establish an interactive shell. Do not classify the
+Pod as inaccessible or change its lifecycle state until that owner SSH check completes.
+
+Before allocation, agree with the owner whether the repository, model cache, private
+bundle, and results require a persistent network volume. Keep recoverable state on the
+approved persistent store when the owner may later release compute but retain data.
+
 At allocation time record privately:
 
 - provider, region, instance/Pod identity, GPU model and VRAM;
@@ -352,8 +363,8 @@ At allocation time record privately:
 - allocation, start, stop, and deletion times;
 - actual final billing.
 
-Do not claim a physical CPU model unless it was directly captured. Do not keep a
-stopped paid volume after returned artifacts verify locally.
+Do not claim a physical CPU model unless it was directly captured. Report stopped-volume
+costs to the owner, but do not delete a Pod or volume without explicit owner direction.
 
 ## Remote Transfer
 
@@ -372,9 +383,11 @@ Do not transfer the twenty-conversation holdout, live database, unrelated
 conversation history, historical candidate packages not needed as controls, or
 fixed-judge credentials.
 
-Use encrypted transfer. Generate source and destination manifests and verify
-hashes before private execution. Return packages and traces in checksummed
-archives. Verify locally before deleting remote data.
+Use encrypted transfer. Prefer supported RunPod CLI transfer operations when available,
+then standard `scp` or `rsync`; do not default to owner-executed Python transfer scripts.
+Generate source and destination manifests and verify hashes before private execution.
+Return packages and traces in checksummed archives. Verify locally before asking the
+owner whether remote data should be retained or deleted.
 
 ## Proposer Model And Credential Boundary
 
@@ -445,7 +458,9 @@ provider differ materially from the approved checkpoint.
 The first paid phase is a maximum four-hour pilot. It must include:
 
 - remote environment and artifact verification;
-- one synthetic four-task gate per candidate model;
+- one synthetic four-task route/schema/finish/usage gate per candidate model; an unexpected
+  schema-valid semantic label is recorded as model-quality evidence and does not by itself block
+  private execution;
 - P0 reproduction on the four optimizer-validation conversations;
 - the single BootstrapFewShot baseline;
 - no more than 12 GEPA candidate packages;
@@ -517,9 +532,10 @@ After remote execution:
    provider calls;
 5. prove P0/P1/P2, frozen/live DBs, and holdout artifacts are unchanged;
 6. retain a verified ignored local backup;
-7. delete the Pod, attached volume, transferred private bundle, and temporary
-   secrets;
-8. verify ongoing RunPod spend is zero and record final billing.
+7. present the owner with explicit preserve, stop-compute/retain-data, and delete options, including
+   ongoing compute/storage cost and recoverability;
+8. perform no Pod or volume deletion unless the owner explicitly selects it in the current activity;
+9. after the owner-selected lifecycle action, verify the resulting spend and record billing.
 
 Do not run B3B.2 local candidate generation or Gemini portability testing in this
 handoff.

@@ -72,6 +72,27 @@ completed candidates, results, or attempt authorities. Continuation stops on opt
 the 40-candidate maximum, or before the first complete candidate/proposer/evaluation operation that
 would exceed the 3,000-task, 12-hour, proposer-call/token/cost, or compute-cost ceilings.
 
+## RunPod Operator Boundary
+
+RunPod work is CLI-first. Use supported RunPod CLI/API operations for allocation, inventory,
+lifecycle state, pricing metadata, and transfer where available; use standard SSH/SCP when the
+installed CLI lacks the operation. Do not substitute a custom Python operator script for a supported
+CLI command.
+
+Immediately after allocation, the owner runs the provider-issued SSH command and confirms an
+interactive shell. Do not declare a Pod inaccessible or change its lifecycle state before that check.
+Decide before allocation whether recoverable state belongs on a persistent volume, especially when
+the owner may release compute while retaining the repository, model cache, private bundle, and
+results.
+
+A failed check freezes further experimental calls but does not authorize teardown. The executor must
+not stop, restart, release, delete, resize, or detach a Pod or volume without explicit owner direction
+for that action. Report state, spend, storage location, and reversible options first. In particular,
+never infer deletion authority from task completion, cleanup text, cost guidance, or a semantic model
+miss. Persist response metadata and usage before semantic assertions; an unexpected schema-valid
+label is model-quality evidence rather than an infrastructure failure unless the experiment contract
+explicitly says otherwise.
+
 BootstrapFewShot explicitly uses the candidate model as teacher, so those task calls are reserved and
 accounted as candidate-model disclosure. The selected GEPA proposer is Google Vertex AI
 `vertex_ai/gemini-3.1-pro-preview` in `global`, authenticated only with Application Default

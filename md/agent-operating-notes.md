@@ -115,3 +115,43 @@ Future plans and executor handoffs should:
 The owner accepting more privacy exposure for development is not blanket authorization to upload
 the full corpus or use arbitrary providers. Handoffs must still define a bounded disclosure scope,
 but should make that authorization broad enough to complete a practical integration cycle.
+
+## RunPod And Scarce Cloud Resource Protocol
+
+These rules apply to every executor working with RunPod or another scarce owner-funded cloud
+resource. They override any generic instruction to clean up resources automatically.
+
+1. **Use supported CLI operations first.** Prefer the RunPod CLI/API for discovery, allocation,
+   lifecycle status, pricing metadata, and supported transfer operations. Prefer standard `ssh`,
+   `scp`, or `rsync` for remote execution and file transfer when the installed RunPod CLI does not
+   expose the required operation. Do not give the owner ad hoc Python scripts when a supported CLI
+   command can perform the operation. A script is a last resort and must be justified.
+2. **Establish SSH immediately.** After an approved Pod is allocated, the first owner-assisted action
+   is to run the provider-issued SSH command and establish an interactive shell. Control-plane
+   readiness metadata is not enough to declare the Pod inaccessible when the owner can verify SSH.
+   Wait for the owner's connection result before diagnosing access or changing resource state.
+3. **Deletion belongs to the owner.** Never delete a Pod, attached volume, network volume, or remote
+   workspace unless the owner explicitly instructs deletion in the current activity. Do not infer
+   deletion authority from a gate failure, task completion, cleanup requirement, cost guidance,
+   inactivity, or a previous authorization.
+4. **Do not silently stop or restart resources.** Freeze further calls and report the issue first.
+   Stop, restart, release, or resize compute only with explicit owner direction, unless an exact
+   lifecycle action was separately preauthorized for a named resource and condition.
+5. **Preserve scarce capacity during diagnosis.** A failure means stop new experimental calls, retain
+   evidence, and collaborate with the owner. It does not mean destroy the environment. Maintain a
+   bounded cost monitor and report remaining time/cost while waiting.
+6. **Plan persistence before allocation.** Confirm whether the owner wants a persistent network
+   volume or another recoverable store for the repository, model artifacts, private inputs, and
+   results. Explain the storage-cost tradeoff. Pod-local ephemeral storage must not be treated as a
+   restart strategy.
+7. **Separate compute release from data deletion.** The owner may release expensive compute while
+   retaining a persistent volume, repository checkout, model cache, and results to accelerate a
+   later restart. Verify returned artifacts before any owner-directed destructive operation.
+8. **Report before lifecycle action.** When blocked, report Pod state, SSH state, spend rate,
+   accumulated estimate, data location, and reversible options. Ask the owner to choose preserve,
+   stop while retaining data, or delete.
+9. **Record semantic misses as results.** A schema-valid response with an unexpected label is a model
+   quality observation, not an infrastructure failure, unless the handoff explicitly defines that
+   exact semantic label as a blocking gate.
+10. **Persist evidence before assertions.** Record response status, finish metadata, usage, latency,
+    and sanitized output authority before applying semantic assertions.
