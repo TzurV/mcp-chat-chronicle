@@ -18,6 +18,11 @@ from bench.models import TASK_ORDER
 from bench.optimization.authority import verify_authority
 from bench.optimization.budget import BudgetLedger, UsageCounters
 from bench.optimization.compat import EXPECTED_RESULT_FIELDS, verify_compatibility
+from bench.optimization.diagnostics import (
+    application_stack_frames,
+    failure_boundary,
+    sanitized_exception_message,
+)
 from bench.optimization.dspy_bridge import build_program, load_state_only, prompts_from_program
 from bench.optimization.execution import (
     AdapterReservation,
@@ -852,6 +857,38 @@ def test_vertex_budget_arithmetic_reasoning_and_pre_call_rejection(tmp_path: Pat
     )
     assert usage.output_tokens == 27
 
+    from dspy.core.types import (
+        LMHistoryEntry,
+        LMMessage,
+        LMOutput,
+        LMRequest,
+        LMResponse,
+        LMTextPart,
+        LMUsage,
+    )
+
+    typed_entry = LMHistoryEntry(
+        request=LMRequest(
+            model="synthetic-model",
+            messages=[LMMessage(role="user", parts=[LMTextPart(text="synthetic")])],
+        ),
+        response=LMResponse(
+            model="synthetic-model",
+            outputs=[LMOutput(parts=[LMTextPart(text="synthetic-result")])],
+            usage=LMUsage(prompt_tokens=10, completion_tokens=20, reasoning_tokens=7),
+        ),
+        timestamp="2026-08-09T00:00:00+00:00",
+        uuid="synthetic-history-entry",
+    )
+    typed_usage = _history_usage(
+        [type("TypedLM", (), {"history": [typed_entry]})()],
+        [0],
+        proposer_index=0,
+    )
+    assert typed_usage.proposer_calls == 1
+    assert typed_usage.input_tokens == 10
+    assert typed_usage.output_tokens == 27
+
     ledger = BudgetLedger(tmp_path, config, pilot=False)
     ledger.initialize()
     ledger.reserve(
@@ -872,6 +909,50 @@ def test_vertex_budget_arithmetic_reasoning_and_pre_call_rejection(tmp_path: Pat
             proposer_output_tokens=1,
         )
     )
+
+
+def test_synthetic_gate_diagnostics_are_boundary_aware_and_privacy_safe() -> None:
+    class LMHistoryEntry:
+        pass
+
+    try:
+        LMHistoryEntry().get("usage")  # type: ignore[attr-defined]
+    except AttributeError as exc:
+        message = sanitized_exception_message(exc)
+        frames = application_stack_frames(exc, Path(__file__).parents[1])
+    else:
+        raise AssertionError("synthetic typed-history reproduction did not fail")
+
+    assert message == "'LMHistoryEntry' object has no attribute 'get'"
+    assert frames
+    assert frames[-1]["file"] == "tests/test_bench_optimization.py"
+    assert frames[-1]["function"] == (
+        "test_synthetic_gate_diagnostics_are_boundary_aware_and_privacy_safe"
+    )
+    assert failure_boundary(request_started=False, response_finished=False) == (
+        "before-request-submission"
+    )
+    assert failure_boundary(request_started=True, response_finished=False) == "during-provider-call"
+    assert failure_boundary(request_started=True, response_finished=True) == (
+        "adapting-provider-response"
+    )
+    assert sanitized_exception_message(ValueError("secret-bearing provider detail")) == (
+        "external or value-bearing exception details redacted"
+    )
+    private_filename = Path(__file__).parents[1] / ".chronicle" / "private" / "gate.py"
+    try:
+        exec(
+            compile(
+                "raise AttributeError(\"'LMHistoryEntry' object has no attribute 'get'\")",
+                str(private_filename),
+                "exec",
+            )
+        )
+    except AttributeError as exc:
+        private_frames = application_stack_frames(exc, Path(__file__).parents[1])
+    else:
+        raise AssertionError("synthetic private-path traceback did not fail")
+    assert private_frames[-1]["file"] == "<private-artifact>/gate.py"
 
 
 def test_optional_import_boundary_does_not_import_dspy() -> None:

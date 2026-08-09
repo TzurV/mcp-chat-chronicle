@@ -405,3 +405,21 @@ executor's complete suite reported `542 passed, 1 skipped`. The amendment is acc
 This acceptance grants no authority to access ADC, call Vertex or Anthropic, transfer private data,
 allocate paid resources, spend money, or access holdout data. Those actions remain subject to the
 owner's explicit bounded disclosure and cost authorization.
+
+## Synthetic production-route repair — 2026-08-09
+
+The first authorized synthetic Vertex gate returned a provider response, then failed while adapting
+DSPy 3.3 usage history. DSPy stores typed `LMHistoryEntry` values; the application incorrectly used
+the legacy mapping-only `.get(...)` contract. The repair accepts both legacy mappings and typed DSPy
+history while reading usage metadata only. Privacy-safe boundary diagnostics and regressions were
+added without changing provider, model, prompt, schema, retry, budget, or optimization behavior.
+
+The manager independently reran the focused optimizer suite (`69 passed`), Ruff, Poetry validation,
+and diff checks. The executor's complete suite reported `543 passed, 1 skipped`. The generic repair
+is accepted for commit. The original attempt remains conservatively charged as 2 calls, 100,000 input
+tokens, 16,000 output/reasoning tokens, and US$0.392 because the exact provider attempt count cannot
+be proven. No private development data, holdout data, RunPod action, or provider rerun occurred.
+
+Only one corrected synthetic production-route gate, plus its configured infrastructure retry, is
+authorized after this repair commit. Private-pilot execution remains blocked until that gate passes
+and the manager explicitly releases it.

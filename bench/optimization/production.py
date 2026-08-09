@@ -560,7 +560,7 @@ def _history_usage(
     for index, (lm, start) in enumerate(zip(lms, before, strict=True)):
         for item in getattr(lm, "history", [])[start:]:
             calls += 1
-            usage = item.get("usage") or {}
+            usage = _history_entry_usage(item)
             if index == proposer_index:
                 proposer_calls += 1
                 input_tokens += int(usage.get("prompt_tokens", 0) or 0)
@@ -582,3 +582,20 @@ def _history_usage(
         output_tokens=output_tokens,
         latency_ms=0,
     )
+
+
+def _history_entry_usage(item: Any) -> dict[str, Any]:
+    """Normalize legacy mapping and DSPy 3.3 typed history usage without payload access."""
+    if isinstance(item, Mapping):
+        value = item.get("usage") or {}
+    else:
+        response = getattr(item, "response", None)
+        value = getattr(response, "usage", None) or {}
+    if isinstance(value, Mapping):
+        return dict(value)
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump(mode="python", exclude_none=True)
+        if isinstance(dumped, Mapping):
+            return dict(dumped)
+    raise TypeError("unsupported DSPy history usage contract")
