@@ -60,6 +60,21 @@ class AdapterUsage(AdapterReservation):
     latency_ms: StrictInt = Field(default=0, ge=0)
 
 
+class OptimizerOperationError(RuntimeError):
+    """Optimizer failure carrying measured usage across adaptation boundaries."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        usage: AdapterUsage,
+        failure_category: str,
+    ) -> None:
+        self.usage = usage
+        self.failure_category = failure_category
+        super().__init__(message)
+
+
 class CaseOutcome(StrictModel):
     alias: str
     task: str
@@ -217,6 +232,7 @@ class ProposedCandidate:
     candidate: CandidatePackage | None
     optimizer_latency_ms: int
     search_exhausted: bool
+    optimizer_usage: AdapterUsage
 
 
 def run_optimization(
@@ -328,6 +344,7 @@ def run_optimization(
             bootstrap_result,
             ledger,
             proposed.optimizer_latency_ms,
+            proposed.optimizer_usage,
         )
         state = _write_state(
             root,
@@ -455,7 +472,13 @@ def _run_gepa_phase(
             optimizer_latency_ms=proposed.optimizer_latency_ms,
         )
         _complete_proposal_trial(
-            root, "gepa", ordinal, result, ledger, proposed.optimizer_latency_ms
+            root,
+            "gepa",
+            ordinal,
+            result,
+            ledger,
+            proposed.optimizer_latency_ms,
+            proposed.optimizer_usage,
         )
         state = _write_state(
             root,
@@ -649,26 +672,29 @@ def _propose(
         elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
         if candidate_reservation is not None:
             ledger.reconcile(candidate_reservation.reservation_id, UsageCounters())
+        measured_usage = None
+        failure_category = type(exc).__name__
+        if isinstance(exc, OptimizerOperationError):
+            measured_usage = _with_optimizer_timing(exc.usage, requested, config, elapsed_ms)
+            ledger.reconcile(
+                reservation.reservation_id,
+                _usage_counters(measured_usage),
+                interrupted=True,
+            )
+            failure_category = exc.failure_category
         TrialStore(root).append(
             f"proposal-{optimizer}-{ordinal:04d}",
             "interrupted",
-            ledger.load().counters.model_dump(mode="json"),
+            _proposal_accounting(ledger, measured_usage),
             candidate_id=parent.candidate_id,
-            failure_category=type(exc).__name__,
+            failure_category=failure_category,
             optimizer_wall_ms=elapsed_ms,
         )
-        ledger.reconcile(reservation.reservation_id, None, interrupted=True)
+        if measured_usage is None:
+            ledger.reconcile(reservation.reservation_id, None, interrupted=True)
         raise
     elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
-    elapsed_hours = elapsed_ms / 3_600_000
-    timing_update = {"latency_ms": elapsed_ms}
-    if requested.compute_hours:
-        timing_update.update(
-            compute_hours=elapsed_hours,
-            compute_cost_usd=elapsed_hours
-            * (config.budget.compute_cost_usd / config.budget.total_compute_hours),
-        )
-    measured_usage = proposal.usage.model_copy(update=timing_update)
+    measured_usage = _with_optimizer_timing(proposal.usage, requested, config, elapsed_ms)
     ledger.reconcile(reservation.reservation_id, _usage_counters(measured_usage))
     if proposal.search_exhausted:
         if candidate_reservation is not None:
@@ -676,12 +702,12 @@ def _propose(
         TrialStore(root).append(
             f"proposal-{optimizer}-{ordinal:04d}",
             "failed",
-            ledger.load().counters.model_dump(mode="json"),
+            _proposal_accounting(ledger, measured_usage),
             candidate_id=parent.candidate_id,
             failure_category="search-exhausted",
             optimizer_wall_ms=elapsed_ms,
         )
-        return ProposedCandidate(None, elapsed_ms, True)
+        return ProposedCandidate(None, elapsed_ms, True, measured_usage)
     if candidate_reservation is not None:
         ledger.reconcile(candidate_reservation.reservation_id, candidate_reservation.reserved)
     candidate = mutate_package(
@@ -694,7 +720,31 @@ def _propose(
         demonstrations=proposal.demonstrations,
     )
     write_package(root / "candidates" / f"{candidate.candidate_id}.json", candidate)
-    return ProposedCandidate(candidate, elapsed_ms, False)
+    return ProposedCandidate(candidate, elapsed_ms, False, measured_usage)
+
+
+def _with_optimizer_timing(
+    usage: AdapterUsage,
+    requested: AdapterReservation,
+    config: OptimizationConfig,
+    elapsed_ms: int,
+) -> AdapterUsage:
+    timing_update: dict[str, int | float] = {"latency_ms": elapsed_ms}
+    if requested.compute_hours:
+        elapsed_hours = elapsed_ms / 3_600_000
+        timing_update.update(
+            compute_hours=elapsed_hours,
+            compute_cost_usd=elapsed_hours
+            * (config.budget.compute_cost_usd / config.budget.total_compute_hours),
+        )
+    return usage.model_copy(update=timing_update)
+
+
+def _proposal_accounting(ledger: BudgetLedger, usage: AdapterUsage | None) -> dict[str, object]:
+    accounting: dict[str, object] = ledger.load().counters.model_dump(mode="json")
+    if usage is not None:
+        accounting["optimizer_usage"] = usage.model_dump(mode="json")
+    return accounting
 
 
 def _evaluate(
@@ -933,12 +983,13 @@ def _complete_proposal_trial(
     result: CandidateResult,
     ledger: BudgetLedger,
     optimizer_wall_ms: int,
+    optimizer_usage: AdapterUsage,
 ) -> None:
     """Close the append-only proposal trace after its evaluated result is durable."""
     TrialStore(root).append(
         f"proposal-{optimizer}-{ordinal:04d}",
         "complete",
-        ledger.load().counters.model_dump(mode="json"),
+        _proposal_accounting(ledger, optimizer_usage),
         candidate_id=result.candidate_id,
         result_id=result.result_id,
         optimizer_wall_ms=optimizer_wall_ms,

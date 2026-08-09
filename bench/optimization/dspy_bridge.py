@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,16 @@ from .package import (
     demonstration_value,
     mutate_package,
 )
+
+
+@dataclass(frozen=True)
+class DemoAuthority:
+    """Trusted compile provenance kept outside DSPy's generated demo fields."""
+
+    task: str
+    model_id: str
+    selected_input_sha256: str
+    response_json_sha256: str
 
 
 def build_program(package: CandidatePackage, lms: dict[str, Any] | None = None) -> Any:
@@ -69,25 +81,32 @@ def demonstrations_from_program(
 ) -> list[CandidateDemonstration]:
     """Extract bounded DSPy demos and bind each input to frozen train authority."""
     predictor = getattr(program, f"task_{TASK_ORDER.index(task)}")
+    provenance = getattr(program, "_chronicle_demo_authority", {})
     result: list[CandidateDemonstration] = []
     for demo in getattr(predictor, "demos", []):
         value = demo.toDict() if hasattr(demo, "toDict") else dict(demo)
-        demo_task = value.get("task")
-        model_id = value.get("model_id")
         selected_input = value.get("selected_input")
         response_json = value.get("response_json")
-        if demo_task != task or model_id not in {"qwen", "phi"}:
+        trusted = provenance.get(id(demo))
+        if not isinstance(trusted, DemoAuthority):
+            raise ValueError("BootstrapFewShot demonstration provenance is missing or ambiguous")
+        if trusted.task != task or trusted.model_id not in {"qwen", "phi"}:
             raise ValueError("BootstrapFewShot demonstration task/model authority mismatch")
         if not isinstance(selected_input, str) or not isinstance(response_json, str):
             raise ValueError("BootstrapFewShot demonstration fields are incomplete")
-        key = (task, model_id, selected_input)
+        if (
+            hashlib.sha256(selected_input.encode()).hexdigest() != trusted.selected_input_sha256
+            or hashlib.sha256(response_json.encode()).hexdigest() != trusted.response_json_sha256
+        ):
+            raise ValueError("BootstrapFewShot demonstration compile provenance mismatch")
+        key = (task, trusted.model_id, selected_input)
         if key not in authorized:
             raise ValueError("BootstrapFewShot demonstration input is outside train authority")
         result.append(
             demonstration_value(
                 kind="bootstrapped" if value.get("augmented") is True else "labeled",
                 case_alias=authorized[key],
-                model_id=model_id,
+                model_id=trusted.model_id,
                 selected_input=selected_input,
                 response_json=response_json,
             )
@@ -164,17 +183,102 @@ def compile_bootstrap(
     program: Any,
     trainset: list[Any],
     metric: Callable[..., Any],
+    *,
+    task: str,
+    history_sink: Callable[[list[Any]], None] | None = None,
 ) -> Any:
     verify_compatibility()
     import dspy
 
+    if task not in TASK_ORDER:
+        raise ValueError("unknown BootstrapFewShot task authority")
+
+    trusted_examples: dict[int, DemoAuthority] = {}
+    for example in trainset:
+        value = example.toDict() if hasattr(example, "toDict") else dict(example)
+        selected_input = value.get("selected_input")
+        response_json = value.get("response_json")
+        if value.get("task") != task or value.get("model_id") not in {"qwen", "phi"}:
+            raise ValueError("BootstrapFewShot train example provenance is invalid")
+        if not isinstance(selected_input, str) or not isinstance(response_json, str):
+            raise ValueError("BootstrapFewShot train example fields are incomplete")
+        trusted_examples[id(example)] = DemoAuthority(
+            task=task,
+            model_id=value["model_id"],
+            selected_input_sha256=hashlib.sha256(selected_input.encode()).hexdigest(),
+            response_json_sha256=hashlib.sha256(response_json.encode()).hexdigest(),
+        )
+
+    trace_authority: dict[tuple[str, str], set[DemoAuthority]] = {}
+
+    def traced_metric(gold: Any, pred: Any, trace: Any = None, **kwargs: Any) -> Any:
+        score = metric(gold, pred, trace, **kwargs)
+        authority = trusted_examples.get(id(gold))
+        if authority is None:
+            raise ValueError("BootstrapFewShot metric provenance is outside train authority")
+        for _, inputs, outputs in trace or []:
+            selected_input = (
+                inputs.get("selected_input")
+                if isinstance(inputs, dict)
+                else getattr(inputs, "selected_input", None)
+            )
+            response_json = (
+                outputs.get("response_json")
+                if isinstance(outputs, dict)
+                else getattr(outputs, "response_json", None)
+            )
+            if not isinstance(selected_input, str) or not isinstance(response_json, str):
+                raise ValueError("BootstrapFewShot generated trace fields are incomplete")
+            captured = DemoAuthority(
+                task=authority.task,
+                model_id=authority.model_id,
+                selected_input_sha256=hashlib.sha256(selected_input.encode()).hexdigest(),
+                response_json_sha256=hashlib.sha256(response_json.encode()).hexdigest(),
+            )
+            key = (captured.selected_input_sha256, captured.response_json_sha256)
+            trace_authority.setdefault(key, set()).add(captured)
+        return score
+
     optimizer = dspy.BootstrapFewShot(
-        metric=metric,
+        metric=traced_metric,
         max_bootstrapped_demos=1,
         max_labeled_demos=1,
         max_rounds=1,
     )
-    return optimizer.compile(program, trainset=trainset)
+    try:
+        compiled = optimizer.compile(program, trainset=trainset)
+    finally:
+        teacher = getattr(optimizer, "teacher", None)
+        teacher_lms = getattr(teacher, "_chronicle_lms", {})
+        if history_sink is not None:
+            history_sink(list(teacher_lms.values()))
+    compiled_authority: dict[int, DemoAuthority] = {}
+    predictor = getattr(compiled, f"task_{TASK_ORDER.index(task)}")
+    for demo in getattr(predictor, "demos", []):
+        value = demo.toDict() if hasattr(demo, "toDict") else dict(demo)
+        selected_input = value.get("selected_input")
+        response_json = value.get("response_json")
+        if not isinstance(selected_input, str) or not isinstance(response_json, str):
+            raise ValueError("BootstrapFewShot compiled demonstration fields are incomplete")
+        selected_hash = hashlib.sha256(selected_input.encode()).hexdigest()
+        response_hash = hashlib.sha256(response_json.encode()).hexdigest()
+        if value.get("augmented") is True:
+            matches = trace_authority.get((selected_hash, response_hash), set())
+        else:
+            matches = {
+                authority
+                for example_id, authority in trusted_examples.items()
+                if example_id == id(demo)
+                and authority.task == value.get("task")
+                and authority.model_id == value.get("model_id")
+                and authority.selected_input_sha256 == selected_hash
+                and authority.response_json_sha256 == response_hash
+            }
+        if len(matches) != 1:
+            raise ValueError("BootstrapFewShot compiled provenance is missing or ambiguous")
+        compiled_authority[id(demo)] = next(iter(matches))
+    compiled._chronicle_demo_authority = compiled_authority
+    return compiled
 
 
 def compile_gepa(

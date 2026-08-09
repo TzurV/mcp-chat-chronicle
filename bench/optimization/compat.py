@@ -57,6 +57,9 @@ def verify_compatibility() -> dict[str, object]:
         raise RuntimeError("pinned DSPy GEPA constructor API is incompatible")
     if not required_bootstrap <= bootstrap_parameters:
         raise RuntimeError("pinned DSPy BootstrapFewShot API is incompatible")
+    bootstrap_compile = set(inspect.signature(dspy.BootstrapFewShot.compile).parameters)
+    if not {"student", "teacher", "trainset"} <= bootstrap_compile:
+        raise RuntimeError("pinned DSPy BootstrapFewShot compile API is incompatible")
     if result_fields != EXPECTED_RESULT_FIELDS:
         raise RuntimeError("pinned DSPy GEPA result schema is incompatible")
     if "allow_pickle" not in inspect.signature(dspy.Module.load).parameters:

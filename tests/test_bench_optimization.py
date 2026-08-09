@@ -23,13 +23,21 @@ from bench.optimization.diagnostics import (
     failure_boundary,
     sanitized_exception_message,
 )
-from bench.optimization.dspy_bridge import build_program, load_state_only, prompts_from_program
+from bench.optimization.dspy_bridge import (
+    DemoAuthority,
+    build_program,
+    compile_bootstrap,
+    demonstrations_from_program,
+    load_state_only,
+    prompts_from_program,
+)
 from bench.optimization.execution import (
     AdapterReservation,
     AdapterUsage,
     CaseOutcome,
     EvaluationBatch,
     ExecutionAdapters,
+    OptimizerOperationError,
     Proposal,
     run_optimization,
 )
@@ -58,6 +66,7 @@ from bench.optimization.package import (
     ResultAuthority,
     baseline_package,
     candidate_identity,
+    demonstration_value,
     mutate_package,
     read_package,
     result_identity,
@@ -70,7 +79,10 @@ from bench.optimization.production import (
     _history_usage,
     build_proposer_client,
 )
-from bench.optimization.request_envelope import estimate_request_envelope
+from bench.optimization.request_envelope import (
+    estimate_request_envelope,
+    verify_demonstration_authority,
+)
 from bench.optimization.split import OptimizationSplitManifest, freeze_split
 from bench.optimization.trials import TrialStore
 from pydantic import ValidationError
@@ -482,6 +494,31 @@ class FakeOptimizerAdapter:
             },
             strategy=f"synthetic-gepa-{ordinal}",
             usage=AdapterUsage(proposer_calls=1, input_tokens=40, output_tokens=10),
+        )
+
+
+class MeasuredBootstrapFailureAdapter(FakeOptimizerAdapter):
+    def reservation(self, optimizer: str) -> AdapterReservation:
+        if optimizer == "bootstrap-few-shot":
+            return AdapterReservation(
+                task_calls=3,
+                retries=1,
+                compute_hours=0.01,
+                compute_cost_usd=0.01,
+            )
+        return super().reservation(optimizer)
+
+    def bootstrap(self, parent: CandidatePackage, authority) -> Proposal:
+        del parent, authority
+        raise OptimizerOperationError(
+            "synthetic post-compile adaptation failure",
+            usage=AdapterUsage(
+                task_calls=2,
+                retries=1,
+                input_tokens=17,
+                output_tokens=9,
+            ),
+            failure_category="ValueError",
         )
 
 
@@ -1168,6 +1205,49 @@ def test_production_candidate_adapter_is_networkless_injected_and_identity_bound
         mismatched.evaluate(candidate, "validation", "qwen", authority)
 
 
+def test_bootstrap_post_compile_failure_carries_measured_history_usage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import dspy
+    from bench.optimization import production
+
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    baseline = baseline_package(tmp_path / "tasks.yaml")
+    optimizer = object.__new__(DspyOptimizerAdapter)
+    optimizer.config = config
+    optimizer.config_path = config_path
+    optimizer.authority = authority
+    optimizer.tasks = load_task_catalog(tmp_path / "tasks.yaml")
+    optimizer.candidate_lms = {
+        "qwen": dspy.utils.DummyLM([{"response_json": "{}"}] * 20),
+        "phi": dspy.utils.DummyLM([{"response_json": "{}"}] * 20),
+    }
+    optimizer._metric = lambda *args, **kwargs: True
+
+    def fail_extraction(*args, **kwargs):
+        del args, kwargs
+        raise ValueError("synthetic post-compile extraction failure")
+
+    def measured_history(lms, before, proposer_index=None):
+        assert proposer_index is None
+        assert sum(len(lm.history) - start for lm, start in zip(lms, before, strict=True)) > 0
+        return AdapterUsage(task_calls=2, retries=1, input_tokens=17, output_tokens=9)
+
+    monkeypatch.setattr(production, "demonstrations_from_program", fail_extraction)
+    monkeypatch.setattr(production, "_history_usage", measured_history)
+    with pytest.raises(OptimizerOperationError) as captured:
+        optimizer.bootstrap(baseline, authority)
+    assert captured.value.failure_category == "ValueError"
+    assert captured.value.usage == AdapterUsage(
+        task_calls=2,
+        retries=1,
+        input_tokens=17,
+        output_tokens=9,
+    )
+
+
 def test_real_dspy_bootstrap_demos_are_packaged_and_replayed_without_network(
     tmp_path: Path,
 ) -> None:
@@ -1217,6 +1297,7 @@ def test_real_dspy_bootstrap_demos_are_packaged_and_replayed_without_network(
     path = tmp_path / "bootstrap-candidate.json"
     write_package(path, candidate)
     assert read_package(path) == candidate
+    verify_demonstration_authority(candidate, optimizer.tasks, authority)
 
     client = FakeLiteLLMClient()
     batch = LiteLLMCandidateAdapter(config, config_path, client=client).evaluate(
@@ -1230,6 +1311,174 @@ def test_real_dspy_bootstrap_demos_are_packaged_and_replayed_without_network(
             "assistant",
             "user",
         ]
+
+
+@pytest.mark.parametrize("trusted_model", ["qwen", "phi"])
+def test_real_dspy_omits_metadata_but_compile_provenance_binds_duplicate_inputs(
+    trusted_model: str,
+) -> None:
+    import dspy
+
+    task = TASK_ORDER[0]
+    duplicate_input = "Synthetic duplicate input shared by both candidate models."
+    response_json = json.dumps(synthetic_outputs(1)[task], sort_keys=True)
+    model_order = [trusted_model, "phi" if trusted_model == "qwen" else "qwen"]
+    examples = [
+        dspy.Example(
+            task=task,
+            model_id=model_id,
+            selected_input=duplicate_input,
+            response_json=response_json,
+        ).with_inputs("task", "model_id", "selected_input")
+        for model_id in model_order
+    ]
+    answer = {"response_json": response_json}
+    program = build_program(
+        baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml"),
+        {
+            "qwen": dspy.utils.DummyLM([answer] * 4),
+            "phi": dspy.utils.DummyLM([answer] * 4),
+        },
+    )
+    compiled = compile_bootstrap(program, examples, lambda *args, **kwargs: True, task=task)
+    raw_demo = compiled.task_0.demos[0]
+    raw = raw_demo.toDict()
+    assert set(raw) == {"selected_input", "response_json", "augmented"}
+    assert "task" not in raw and "model_id" not in raw
+
+    authorized = {
+        (task, "qwen", duplicate_input): f"c001--{task}",
+        (task, "phi", duplicate_input): f"c002--{task}",
+    }
+    demonstrations = demonstrations_from_program(compiled, task, authorized)
+    assert len(demonstrations) == 1
+    assert demonstrations[0].model_id == trusted_model
+    assert demonstrations[0].case_alias == authorized[(task, trusted_model, duplicate_input)]
+
+
+def test_bootstrap_demo_provenance_fails_closed_for_missing_ambiguous_or_foreign() -> None:
+    import dspy
+
+    task = TASK_ORDER[0]
+    selected_input = "Synthetic trusted input."
+    response_json = json.dumps(synthetic_outputs(1)[task], sort_keys=True)
+    example = dspy.Example(
+        task=task,
+        model_id="qwen",
+        selected_input=selected_input,
+        response_json=response_json,
+    ).with_inputs("task", "model_id", "selected_input")
+    program = build_program(
+        baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml"),
+        {
+            "qwen": dspy.utils.DummyLM([{"response_json": response_json}] * 2),
+            "phi": dspy.utils.DummyLM([{"response_json": response_json}] * 2),
+        },
+    )
+    compiled = compile_bootstrap(program, [example], lambda *args, **kwargs: True, task=task)
+    demo = compiled.task_0.demos[0]
+    authorized = {(task, "qwen", selected_input): f"c001--{task}"}
+    trusted = compiled._chronicle_demo_authority[id(demo)]
+
+    compiled._chronicle_demo_authority[id(demo)] = [trusted, trusted]
+    with pytest.raises(ValueError, match="missing or ambiguous"):
+        demonstrations_from_program(compiled, task, authorized)
+    compiled._chronicle_demo_authority[id(demo)] = DemoAuthority(
+        task=task,
+        model_id="foreign",
+        selected_input_sha256=trusted.selected_input_sha256,
+        response_json_sha256=trusted.response_json_sha256,
+    )
+    with pytest.raises(ValueError, match="task/model"):
+        demonstrations_from_program(compiled, task, authorized)
+    compiled._chronicle_demo_authority[id(demo)] = DemoAuthority(
+        task=TASK_ORDER[1],
+        model_id="qwen",
+        selected_input_sha256=trusted.selected_input_sha256,
+        response_json_sha256=trusted.response_json_sha256,
+    )
+    with pytest.raises(ValueError, match="task/model"):
+        demonstrations_from_program(compiled, task, authorized)
+
+
+@pytest.mark.parametrize("field", ["selected_input", "response_json"])
+def test_bootstrap_demo_content_is_bound_to_compile_and_train_authority(field: str) -> None:
+    import dspy
+
+    task = TASK_ORDER[0]
+    selected_input = "Synthetic trusted input."
+    response_json = json.dumps(synthetic_outputs(1)[task], sort_keys=True)
+    example = dspy.Example(
+        task=task,
+        model_id="qwen",
+        selected_input=selected_input,
+        response_json=response_json,
+    ).with_inputs("task", "model_id", "selected_input")
+    program = build_program(
+        baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml"),
+        {
+            "qwen": dspy.utils.DummyLM([{"response_json": response_json}] * 2),
+            "phi": dspy.utils.DummyLM([{"response_json": response_json}] * 2),
+        },
+    )
+    compiled = compile_bootstrap(program, [example], lambda *args, **kwargs: True, task=task)
+    predictor = compiled.task_0
+    original = predictor.demos[0]
+    trusted = compiled._chronicle_demo_authority[id(original)]
+    values = original.toDict()
+    values[field] = "foreign"
+    replacement = dspy.Example(**values)
+    predictor.demos = [replacement]
+    compiled._chronicle_demo_authority[id(replacement)] = trusted
+    with pytest.raises(ValueError, match="compile provenance"):
+        demonstrations_from_program(
+            compiled,
+            task,
+            {(task, "qwen", selected_input): f"c001--{task}"},
+        )
+
+    predictor.demos = [original]
+    with pytest.raises(ValueError, match="outside train authority"):
+        demonstrations_from_program(compiled, task, {})
+
+
+def test_bootstrap_demonstrations_round_trip_and_change_candidate_identity(
+    tmp_path: Path,
+) -> None:
+    task = TASK_ORDER[0]
+    baseline = baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml")
+    first_demo = demonstration_value(
+        kind="bootstrapped",
+        case_alias=f"c001--{task}",
+        model_id="qwen",
+        selected_input="Synthetic selected input.",
+        response_json='{"value": 1}',
+    )
+    second_demo = demonstration_value(
+        kind="bootstrapped",
+        case_alias=f"c001--{task}",
+        model_id="qwen",
+        selected_input="Synthetic selected input.",
+        response_json='{"value": 2}',
+    )
+
+    def candidate_with(demo):
+        return mutate_package(
+            baseline,
+            {name: baseline.prompts[name].text for name in TASK_ORDER},
+            optimizer="bootstrap-few-shot",
+            proposer_id=None,
+            mutation_ordinal=1,
+            strategy="synthetic-authority-test",
+            demonstrations={name: [demo] if name == task else [] for name in TASK_ORDER},
+        )
+
+    first = candidate_with(first_demo)
+    second = candidate_with(second_demo)
+    assert first.candidate_id != second.candidate_id
+    path = tmp_path / "bootstrap-round-trip.json"
+    write_package(path, first)
+    assert read_package(path) == first
 
 
 def test_four_component_program_and_safe_state_boundary() -> None:
@@ -1388,6 +1637,73 @@ def test_budget_retains_interrupted_and_missing_usage_reservation(tmp_path: Path
     state = ledger.load()
     assert state.counters.task_invocations == 1
     assert state.reservations[-1].status == "interrupted"
+
+
+def test_measured_bootstrap_failure_and_fresh_attempt_remain_append_only(
+    tmp_path: Path,
+) -> None:
+    config_path = synthetic_workspace(
+        tmp_path, pilot_candidates=1, total_candidates=1, task_invocations=500
+    )
+    candidate = FakeCandidateAdapter()
+    clock = StepClock()
+    with pytest.raises(OptimizerOperationError, match="post-compile"):
+        run_optimization(
+            config_path,
+            ExecutionAdapters(candidate, MeasuredBootstrapFailureAdapter()),
+            resume=False,
+            identity_probe=clean_identity,
+            monotonic_ns=clock,
+        )
+
+    root = tmp_path / "private" / "run"
+    state_before = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    p0_result_id = state_before["baseline_result_id"]
+    attempt_path = root / "trials" / "proposal-bootstrap-few-shot-0001" / "attempts" / "0001.json"
+    first_attempt_bytes = attempt_path.read_bytes()
+    first = TrialStore(root).current("proposal-bootstrap-few-shot-0001")
+    assert first is not None
+    assert first.status == "interrupted"
+    assert first.failure_category == "ValueError"
+    assert first.accounting["optimizer_usage"] == {
+        "task_calls": 2,
+        "proposer_calls": 0,
+        "input_tokens": 17,
+        "output_tokens": 9,
+        "compute_hours": 7 / 3_600_000,
+        "compute_cost_usd": (7 / 3_600_000) * (12.05 / 12),
+        "retries": 1,
+        "latency_ms": 7,
+    }
+    budget = BudgetLedger(root, load_optimization_config(config_path)).load()
+    failed_reservations = [
+        reservation for reservation in budget.reservations if reservation.status == "interrupted"
+    ]
+    assert len(failed_reservations) == 1
+    assert failed_reservations[0].reserved.task_invocations == 3
+    assert failed_reservations[0].actual is not None
+    assert failed_reservations[0].actual.task_invocations == 2
+    assert failed_reservations[0].actual.infrastructure_retries == 1
+
+    result = run_optimization(
+        config_path,
+        ExecutionAdapters(candidate, FakeOptimizerAdapter(max_gepa=0)),
+        resume=True,
+        identity_probe=clean_identity,
+        monotonic_ns=clock,
+    )
+    assert result["status"] == "pilot-no-improvement"
+    assert attempt_path.read_bytes() == first_attempt_bytes
+    attempts = TrialStore(root).attempts("proposal-bootstrap-few-shot-0001")
+    assert len(attempts) == 2
+    assert attempts[0] == first
+    assert attempts[1].status == "complete"
+    assert "optimizer_usage" in attempts[1].accounting
+    state_after = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    assert state_after["baseline_result_id"] == p0_result_id
+    assert len(state_after["bootstrap_result_ids"]) == 1
+    retained = BudgetLedger(root, load_optimization_config(config_path)).load().reservations
+    assert failed_reservations[0] in retained
 
 
 @pytest.mark.parametrize("mode", ["missing", "dangling", "stale", "hash"])

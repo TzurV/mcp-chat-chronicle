@@ -32,6 +32,7 @@ from .execution import (
     EvaluationBatch,
     ExecutionAdapters,
     OptimizerAdapter,
+    OptimizerOperationError,
     Proposal,
 )
 from .feedback import Diagnostic, render_feedback
@@ -323,25 +324,43 @@ class DspyOptimizerAdapter(OptimizerAdapter):
 
     def bootstrap(self, parent: CandidatePackage, authority: VerifiedAuthority) -> Proposal:
         examples = self._examples(authority, "train")
-        before = _history_counts([*self.candidate_lms.values()])
         authorized = {
             (example.task, example.model_id, example.selected_input): example.case_alias
             for example in examples
         }
         prompts = {task: parent.prompts[task].text for task in TASK_ORDER}
         demonstrations = {task: [] for task in TASK_ORDER}
+        observed_lms: list[Any] = []
         for task in TASK_ORDER:
             program = build_program(parent, self.candidate_lms)
             task_examples = [example for example in examples if example.task == task]
-            compiled = compile_bootstrap(program, task_examples, self._metric)
-            prompts[task] = prompts_from_program(compiled)[task]
-            demonstrations[task] = demonstrations_from_program(compiled, task, authorized)
+            compile_completed = False
+            try:
+                compiled = compile_bootstrap(
+                    program,
+                    task_examples,
+                    self._metric,
+                    task=task,
+                    history_sink=observed_lms.extend,
+                )
+                compile_completed = True
+                prompts[task] = prompts_from_program(compiled)[task]
+                demonstrations[task] = demonstrations_from_program(compiled, task, authorized)
+            except Exception as exc:
+                if not compile_completed:
+                    raise
+                usage = _history_usage(observed_lms, [0] * len(observed_lms))
+                raise OptimizerOperationError(
+                    "BootstrapFewShot compile adaptation failed",
+                    usage=usage,
+                    failure_category=type(exc).__name__,
+                ) from exc
         verify_demonstration_authority(
             parent.model_copy(update={"demonstrations": demonstrations}),
             self.tasks,
             authority,
         )
-        usage = _history_usage([*self.candidate_lms.values()], before)
+        usage = _history_usage(observed_lms, [0] * len(observed_lms))
         return Proposal(
             prompts=prompts,
             demonstrations=demonstrations,
@@ -561,13 +580,14 @@ def _history_usage(
         for item in getattr(lm, "history", [])[start:]:
             calls += 1
             prompt_tokens, completion_tokens, reasoning_tokens = _history_entry_usage(item)
-            if index == proposer_index:
-                proposer_calls += 1
+            if proposer_index is None or index == proposer_index:
                 input_tokens += prompt_tokens
                 # Fail closed: separately reported reasoning is charged as output even when a
                 # provider's completion-token semantics are ambiguous. Top-level and nested
                 # reports are aliases, so reasoning is included once through their maximum.
                 output_tokens += completion_tokens + reasoning_tokens
+            if index == proposer_index:
+                proposer_calls += 1
             # DSPy history does not provide a portable latency field. The orchestrator records
             # one monotonic wall-clock duration around the complete optimizer attempt.
     return AdapterUsage(
