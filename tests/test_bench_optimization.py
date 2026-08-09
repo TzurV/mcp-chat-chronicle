@@ -911,6 +911,155 @@ def test_vertex_budget_arithmetic_reasoning_and_pre_call_rejection(tmp_path: Pat
     )
 
 
+@pytest.mark.parametrize("top_level_reasoning", [None, 7])
+def test_complete_dspy_typed_post_response_usage_adaptation_path(
+    top_level_reasoning: int | None,
+) -> None:
+    from dspy.core.types import (
+        LMHistoryEntry,
+        LMMessage,
+        LMOutput,
+        LMRequest,
+        LMResponse,
+        LMTextPart,
+        LMUsage,
+    )
+    from litellm.types.utils import CompletionTokensDetailsWrapper
+
+    details = CompletionTokensDetailsWrapper(reasoning_tokens=7)
+    typed_usage = LMUsage(
+        input_tokens=10,
+        output_tokens=20,
+        reasoning_tokens=top_level_reasoning,
+        completion_tokens_details=details,
+    )
+    assert isinstance(typed_usage.completion_tokens_details, CompletionTokensDetailsWrapper)
+    entry = LMHistoryEntry(
+        request=LMRequest(
+            model="synthetic-model",
+            messages=[LMMessage(role="user", parts=[LMTextPart(text="synthetic")])],
+        ),
+        response=LMResponse(
+            model="synthetic-model",
+            outputs=[LMOutput(parts=[LMTextPart(text="synthetic-result")])],
+            usage=typed_usage,
+        ),
+        timestamp="2026-08-09T00:00:00+00:00",
+        uuid="synthetic-nested-history-entry",
+    )
+
+    usage = _history_usage(
+        [type("TypedLM", (), {"history": [entry]})()],
+        [0],
+        proposer_index=0,
+    )
+
+    assert usage.proposer_calls == 1
+    assert usage.input_tokens == 10
+    assert usage.output_tokens == 27
+
+
+@pytest.mark.parametrize(
+    ("reported_usage", "expected_input", "expected_output"),
+    [
+        ({"prompt_tokens": 10, "completion_tokens": 20}, 10, 20),
+        (
+            {
+                "prompt_tokens": 10,
+                "input_tokens": 11,
+                "completion_tokens": 20,
+                "output_tokens": 21,
+                "completion_tokens_details": None,
+            },
+            11,
+            21,
+        ),
+        ({"prompt_tokens": 10, "completion_tokens": 20, "reasoning_tokens": 7}, 10, 27),
+        (
+            {
+                "prompt_tokens": 10,
+                "completion_tokens": 20,
+                "completion_tokens_details": {"reasoning_tokens": 7},
+            },
+            10,
+            27,
+        ),
+        (
+            {
+                "prompt_tokens": 10,
+                "completion_tokens": 20,
+                "reasoning_tokens": 7,
+                "completion_tokens_details": {"reasoning_tokens": 7},
+            },
+            10,
+            27,
+        ),
+        (
+            {
+                "prompt_tokens": 10,
+                "completion_tokens": 20,
+                "reasoning_tokens": 5,
+                "completion_tokens_details": {"reasoning_tokens": 7},
+            },
+            10,
+            27,
+        ),
+    ],
+)
+def test_legacy_usage_shapes_and_reasoning_aliases_are_accounted_once(
+    reported_usage: dict[str, object], expected_input: int, expected_output: int
+) -> None:
+    usage = _history_usage(
+        [type("LegacyLM", (), {"history": [{"usage": reported_usage}]})()],
+        [0],
+        proposer_index=0,
+    )
+
+    assert usage.input_tokens == expected_input
+    assert usage.output_tokens == expected_output
+
+
+def test_model_dump_only_usage_shape_is_supported() -> None:
+    class DumpOnlyUsage:
+        def model_dump(self, **_kwargs: object) -> dict[str, object]:
+            return {
+                "prompt_tokens": 10,
+                "completion_tokens": 20,
+                "completion_tokens_details": {"reasoning_tokens": 7},
+            }
+
+    usage = _history_usage(
+        [type("DumpLM", (), {"history": [{"usage": DumpOnlyUsage()}]})()],
+        [0],
+        proposer_index=0,
+    )
+
+    assert usage.input_tokens == 10
+    assert usage.output_tokens == 27
+
+
+@pytest.mark.parametrize(
+    "reported_usage",
+    [
+        {"unknown_populated_usage": 1},
+        {
+            "prompt_tokens": 10,
+            "completion_tokens": 20,
+            "completion_tokens_details": object(),
+        },
+    ],
+)
+def test_unsupported_populated_usage_structure_fails_closed(
+    reported_usage: dict[str, object],
+) -> None:
+    with pytest.raises(TypeError, match="unsupported populated DSPy usage structure"):
+        _history_usage(
+            [type("UnsupportedLM", (), {"history": [{"usage": reported_usage}]})()],
+            [0],
+            proposer_index=0,
+        )
+
+
 def test_synthetic_gate_diagnostics_are_boundary_aware_and_privacy_safe() -> None:
     class LMHistoryEntry:
         pass

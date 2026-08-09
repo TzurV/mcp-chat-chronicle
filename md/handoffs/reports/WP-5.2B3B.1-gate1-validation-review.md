@@ -423,3 +423,25 @@ be proven. No private development data, holdout data, RunPod action, or provider
 Only one corrected synthetic production-route gate, plus its configured infrastructure retry, is
 authorized after this repair commit. Private-pilot execution remains blocked until that gate passes
 and the manager explicitly releases it.
+
+## Generalized typed-usage repair — 2026-08-09
+
+The corrected synthetic gate returned a provider response but exposed a nested DSPy/LiteLLM typed
+`CompletionTokensDetailsWrapper` that the first compatibility repair did not normalize. The second
+repair replaces field-specific mapping assumptions with one bounded accessor for mappings, typed
+attributes, and model-dump-compatible objects. It covers prompt/input and completion/output aliases,
+top-level and nested reasoning, missing optional values, and fail-closed unsupported populated
+structures. Duplicate reasoning reports are included once through their maximum.
+
+The ignored gate runner's Windows pointer-update failure was separate from production persistence.
+Production already uses bounded atomic replacement for Windows sharing violations; the ignored runner
+now reuses that implementation. Append-only attempt evidence remains authoritative.
+
+The manager independently reran the focused optimizer suite (`80 passed`), Ruff, Poetry validation,
+and diff checks. The executor's complete suite reported `554 passed, 1 skipped`. The generalized
+repair is accepted for commit. Cumulative conservative accounting remains 4 calls, 200,000 input
+tokens, 32,000 output/reasoning tokens, and US$0.784. No provider call, ADC access, private-data or
+holdout access, RunPod action, or pilot activity occurred during this repair.
+
+One post-commit synthetic production-route gate, plus its configured infrastructure retry, remains
+authorized. Private-pilot execution remains blocked until the gate passes and the manager releases it.

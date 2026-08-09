@@ -560,19 +560,14 @@ def _history_usage(
     for index, (lm, start) in enumerate(zip(lms, before, strict=True)):
         for item in getattr(lm, "history", [])[start:]:
             calls += 1
-            usage = _history_entry_usage(item)
+            prompt_tokens, completion_tokens, reasoning_tokens = _history_entry_usage(item)
             if index == proposer_index:
                 proposer_calls += 1
-                input_tokens += int(usage.get("prompt_tokens", 0) or 0)
-                completion_tokens = int(usage.get("completion_tokens", 0) or 0)
-                details = usage.get("completion_tokens_details") or {}
-                separately_reported_reasoning = max(
-                    int(usage.get("reasoning_tokens", 0) or 0),
-                    int(details.get("reasoning_tokens", 0) or 0),
-                )
+                input_tokens += prompt_tokens
                 # Fail closed: separately reported reasoning is charged as output even when a
-                # provider's completion-token semantics are ambiguous.
-                output_tokens += completion_tokens + separately_reported_reasoning
+                # provider's completion-token semantics are ambiguous. Top-level and nested
+                # reports are aliases, so reasoning is included once through their maximum.
+                output_tokens += completion_tokens + reasoning_tokens
             # DSPy history does not provide a portable latency field. The orchestrator records
             # one monotonic wall-clock duration around the complete optimizer attempt.
     return AdapterUsage(
@@ -584,18 +579,115 @@ def _history_usage(
     )
 
 
-def _history_entry_usage(item: Any) -> dict[str, Any]:
-    """Normalize legacy mapping and DSPy 3.3 typed history usage without payload access."""
-    if isinstance(item, Mapping):
-        value = item.get("usage") or {}
-    else:
-        response = getattr(item, "response", None)
-        value = getattr(response, "usage", None) or {}
-    if isinstance(value, Mapping):
-        return dict(value)
+def _usage_field(value: Any, *names: str) -> tuple[bool, Any]:
+    """Read one bounded usage field from mappings, models, or typed wrappers."""
+    if value is None:
+        return False, None
+    mapping: Mapping[str, Any] | None = value if isinstance(value, Mapping) else None
+    saw_field = False
+    for name in names:
+        if mapping is not None and name in mapping:
+            saw_field = True
+            candidate = mapping[name]
+        elif hasattr(value, name):
+            saw_field = True
+            candidate = getattr(value, name)
+        else:
+            continue
+        if candidate is not None:
+            return True, candidate
+    if saw_field:
+        return True, None
+    if mapping is not None:
+        return False, None
     model_dump = getattr(value, "model_dump", None)
     if callable(model_dump):
-        dumped = model_dump(mode="python", exclude_none=True)
-        if isinstance(dumped, Mapping):
-            return dict(dumped)
-    raise TypeError("unsupported DSPy history usage contract")
+        try:
+            dumped = model_dump(mode="python", exclude_none=False)
+        except TypeError:
+            dumped = model_dump()
+        if not isinstance(dumped, Mapping):
+            raise TypeError("unsupported populated DSPy usage structure")
+        return _usage_field(dumped, *names)
+    raise TypeError("unsupported populated DSPy usage structure")
+
+
+def _token_count(value: Any, field: str) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise TypeError(f"invalid DSPy usage token field: {field}")
+    return value
+
+
+def _meaningfully_populated(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, Mapping):
+        return any(item not in (None, {}, [], ()) for item in value.values())
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        try:
+            dumped = model_dump(mode="python", exclude_none=True)
+        except TypeError:
+            dumped = model_dump()
+        return isinstance(dumped, Mapping) and _meaningfully_populated(dumped)
+    return True
+
+
+def _history_entry_usage(item: Any) -> tuple[int, int, int]:
+    """Extract conservative token counts from the complete DSPy 3.3 history shape."""
+    has_response, response = _usage_field(item, "response")
+    if has_response:
+        has_usage, usage = _usage_field(response, "usage")
+    else:
+        has_usage, usage = _usage_field(item, "usage")
+    if not has_usage or usage is None:
+        return 0, 0, 0
+
+    has_prompt, prompt = _usage_field(usage, "prompt_tokens")
+    has_input, input_value = _usage_field(usage, "input_tokens")
+    has_completion, completion = _usage_field(usage, "completion_tokens")
+    has_output, output_value = _usage_field(usage, "output_tokens")
+    has_top_reasoning, top_reasoning = _usage_field(usage, "reasoning_tokens")
+    has_details, details = _usage_field(usage, "completion_tokens_details")
+    if not has_details:
+        has_general_details, general_details = _usage_field(usage, "details")
+        if has_general_details and general_details:
+            has_nested_details, nested_details = _usage_field(
+                general_details, "completion_tokens_details"
+            )
+            details = nested_details if has_nested_details else general_details
+            has_details = True
+    has_nested_reasoning = False
+    nested_reasoning = None
+    if details is not None:
+        has_nested_reasoning, nested_reasoning = _usage_field(details, "reasoning_tokens")
+
+    supported = any(
+        (
+            has_prompt,
+            has_input,
+            has_completion,
+            has_output,
+            has_top_reasoning,
+            has_details,
+            has_nested_reasoning,
+        )
+    )
+    if not supported and _meaningfully_populated(usage):
+        raise TypeError("unsupported populated DSPy usage structure")
+
+    prompt_tokens = max(
+        _token_count(prompt, "prompt"),
+        _token_count(input_value, "input"),
+    )
+    completion_tokens = max(
+        _token_count(completion, "completion"),
+        _token_count(output_value, "output"),
+    )
+    reasoning_tokens = max(
+        _token_count(top_reasoning, "reasoning"),
+        _token_count(nested_reasoning, "completion details reasoning"),
+    )
+    return prompt_tokens, completion_tokens, reasoning_tokens
