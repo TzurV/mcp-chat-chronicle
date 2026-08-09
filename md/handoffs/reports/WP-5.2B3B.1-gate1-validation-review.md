@@ -445,3 +445,21 @@ holdout access, RunPod action, or pilot activity occurred during this repair.
 
 One post-commit synthetic production-route gate, plus its configured infrastructure retry, remains
 authorized. Private-pilot execution remains blocked until the gate passes and the manager releases it.
+
+## Corrected synthetic production-route gate — 2026-08-09
+
+The post-repair synthetic Vertex gate passed at application commit `5b5a946`. It produced one valid
+semantic result from one logical provider call, with 23 measured input tokens, 271 measured
+output/reasoning tokens, and 9,828 ms latency. The typed adapter did not expose transport retry or
+finish-reason metadata, so accounting conservatively charges the full authorized gate envelope rather
+than treating unobserved retries as zero.
+
+Cumulative conservative accounting is therefore 6 calls, 250,023 input tokens, 40,271
+output/reasoning tokens, and US$0.983298. Remaining proposer authorization is 244 calls, 12,249,977
+input tokens, 1,959,729 output/reasoning tokens, and US$49.016702. Environment values were
+process-scoped and cleared. No private data, holdout data, RunPod resource, or private-pilot activity
+was used by the gate.
+
+The synthetic production-route gate is accepted. The bounded four-hour private development pilot may
+proceed under the existing disclosure authorization, RunPod availability waiting rules, US$12.05
+compute/storage ceiling, retry policy, continuation criteria, and absolute holdout exclusion.
