@@ -281,9 +281,10 @@ the issue collaboratively.
 6. Before a fresh allocation, the executor must present a persistence choice. If the owner may
    release compute but retain the environment, repository, model cache, private bundle, and results
    must be placed on an approved persistent volume whose price fits the remaining ceiling.
-7. The private pilot remains incomplete. Fresh allocation and any new semantic calls require the
-   owner's next explicit continuation message; no authorization is inferred from this incident
-   acceptance.
+7. The private pilot remains incomplete. The owner subsequently authorized a fresh allocation, a
+   cumulative US$20 RunPod ceiling including prior spend, direct continuation to the frozen real 6/4
+   development pilot without repeated synthetic gates, and compute release after two hours without
+   owner response while retaining persistent data. The active handoff records the exact boundary.
 
 ## Evidence retained locally
 

@@ -455,6 +455,35 @@ provider differ materially from the approved checkpoint.
 
 ## Pilot And Continuation Rule
 
+### Owner restart override — 2026-08-09
+
+This section supersedes the resumed-run synthetic and lifecycle details below without changing the
+frozen split, prompts, models, context, metrics, proposer limits, holdout prohibition, or continuation
+criteria.
+
+- The cumulative RunPod compute/storage ceiling is increased to **US$20**, including the previously
+  charged US$1.364883 estimate. The remaining RunPod allowance before reallocation is therefore
+  **US$18.635117**.
+- Do not repeat the synthetic local-model gates. The prior Qwen/Phi gate established both routes; its
+  Phi semantic mismatch is accepted model-quality evidence. After metadata, model-load, listener,
+  and SSH checks, continue directly with the frozen real-data six-train/four-validation pilot.
+- Do not transfer the live database, complete frozen database, or holdout. Prepare locally and
+  transfer only the already-authorized selected real development bundle and reference fields.
+- Operate CLI-first. After allocation, the first owner-assisted action is the provider-issued
+  interactive SSH command. Wait for the owner to confirm that shell before remote setup or declaring
+  the Pod inaccessible.
+- Use an approved persistent network volume for the repository checkout, model cache, selected private
+  bundle, checkpoints, and results. Verify its price fits the remaining ceiling before allocation.
+- Owner messages reset a two-hour inactivity timer while compute is allocated. If the owner provides
+  no response for two hours, stop new work, persist and verify the latest checkpoint on the network
+  volume, then release paid GPU compute using the supported RunPod CLI lifecycle operation.
+- If RunPod exposes compute release only as Pod termination/deletion, this exact two-hour condition
+  authorizes termination of the **compute Pod only**, after persistence verification. It never
+  authorizes deletion or detachment of the persistent network volume or its data.
+- After automatic compute release, verify zero GPU-compute spend, retain the persistent volume, record
+  its ongoing storage rate, and report the restart command/state. Do not delete the retained data or
+  volume without a new explicit owner instruction.
+
 The first paid phase is a maximum four-hour pilot. It must include:
 
 - remote environment and artifact verification;
