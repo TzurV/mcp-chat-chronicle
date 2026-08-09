@@ -2,7 +2,7 @@
 
 **Repo:** first public source release under `mcp-chat-chronicle`; later rename/PyPI candidate `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** Chat Chronicle v0.2.0 source/tag, real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and the published LP-4.1/LP-4.2/LP-5 material are accepted · the public GitHub release page remains an administrative publication gate · WP-5.2B3A accepted common 8K after local 16K recovered no prior context failures · WP-5.2B3B is accepted as a controlled manual-prompt experiment: unchanged P0 remained best at 62/80 pooled local usable cases while P1/P2 each produced 58/80, portability regressed, P3 was not triggered, and holdout access stayed zero · the WP-5.2B3B.1 optimizer foundation and Vertex ADC proposer route are accepted; after its documented RunPod teardown incident, a corrected CLI-first/SSH-first/persistent-volume restart is authorized to proceed directly with the frozen real 6/4 development pilot under a cumulative US$20 RunPod ceiling and a two-hour owner-inactivity compute-release rule · local finalist transfer validation and one-shot holdout evaluation remain later gated work · Chrome Gemini Nano, Edge Aion, and Phi Silica remain preliminary research/planning only · the later independent untouched evaluation set remains TBD · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, controlled context/prompt studies, remote hardware comparison, and established automatic prompt optimization)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-08-09
+**Status:** Chat Chronicle v0.2.0 source/tag, real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and the published LP-4.1/LP-4.2/LP-5 material are accepted · the public GitHub release page remains an administrative publication gate · WP-5.2B3A accepted common 8K after local 16K recovered no prior context failures · WP-5.2B3B is accepted as a controlled manual-prompt experiment: unchanged P0 remained best at 62/80 pooled local usable cases while P1/P2 each produced 58/80, portability regressed, P3 was not triggered, and holdout access stayed zero · WP-5.2B3B.1 has frozen P0 at 11/32 valid on its private 6/4 pilot and accepted the DSPy BootstrapFewShot compatibility/accounting repair in `addd760`; end-of-day compute release is authorized after restart-state verification while its persistent network volume is retained · the next run resumes from that volume, runs one fresh BootstrapFewShot attempt without rerunning P0, and uses temporary RAM-backed Vertex ADC for GEPA only after Bootstrap passes · local finalist transfer validation and one-shot holdout evaluation remain later gated work · Chrome Gemini Nano, Edge Aion, and Phi Silica remain preliminary research/planning only · the later independent untouched evaluation set remains TBD · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, controlled context/prompt studies, remote hardware comparison, and established automatic prompt optimization)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-08-09
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Release update (2026-07-28):** v0.2.0 release content is committed on
@@ -637,8 +637,8 @@ conversation development result, not a general claim that explicit or few-shot
 prompts are inferior.
 
 **WP-5.2B3B.1 Established automatic prompt optimization and remote search.**
-*(Gate 1 generic optimizer foundation accepted; private/paid pilot pending
-explicit owner authorization; handoff:
+*(Gate 1 foundation, Vertex route, P0 checkpoint, and Bootstrap compatibility
+repair accepted; remote pilot paused with persistent state retained; handoff:
 `md/handoffs/WP-5.2B3B.1-automatic-prompt-optimization-remote-search.md`)*
 *Objective:* Test the potential of established prompt-improvement methods rather
 than adding further manually invented variants.
@@ -663,21 +663,25 @@ preflight. Capture actual console price, region, host resources, storage, API
 usage, and final billing because availability and rates can change.
 
 Only the frozen development bundle may be transferred. Use encrypted transfer,
-fresh run identities, append-only traces, and remote deletion after returned
-artifacts verify locally. Candidate-model inference and optimizer control may run
-remotely. If reflective proposal calls originate on the Pod, inject only a
-temporary least-privilege provider credential through RunPod secrets or process
-environment; never copy it into YAML, bundles, images, logs, shell history, or
-Git. Revoke or rotate it after teardown. Keep fixed-judge credentials local and
-run final judging after candidate artifacts return unless a later authorization
-explicitly changes that boundary.
+fresh run identities, append-only traces, and hash-verified persistent
+checkpoints. Candidate-model inference and optimizer control may run remotely.
+For GEPA, use the temporary user Vertex ADC procedure in
+`docs/runpod-vertex-adc.md`: keep ADC only under `/dev/shm`, never copy it into
+YAML, bundles, images, logs, shell history, Git, or the persistent volume, and
+revoke it before compute release. No Gemini API key or RunPod environment
+restart is required. Keep fixed-judge credentials local and run final judging
+after candidate artifacts return unless a later authorization explicitly
+changes that boundary. Release compute after verified return or an approved
+pause, but retain the persistent network volume until the owner explicitly
+authorizes its deletion.
 
 *AC:* Optimizer/version/configuration, proposer identity, seed, candidate budget,
 feedback, Pareto/search trace, every prompt candidate, metric, failure, latency,
 token count, API call, and cost are reproducible; no holdout input or outcome is
-opened; no key or private artifact is tracked; remote resources and private data
-are deleted after verified return; and a bounded shortlist, not a hand-selected
-single prompt, is delivered for local transfer testing.
+opened; no key or private artifact is tracked; remote compute is released after
+verified return or pause; persistent private state is retained or deleted only
+under the current explicit owner instruction; and a bounded shortlist, not a
+hand-selected single prompt, is delivered for local transfer testing.
 
 **WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
 gated by B3B.1 shortlist)*
@@ -870,7 +874,7 @@ the checked Chronicle Claude Code project were represented in the database.
 
 In rough priority order: **Gemini Takeout/My Activity importer** (chat text lives under My Activity filtered to Gemini Apps, not necessarily the plain Gemini product checkbox) · **Claude Code/OpenAI Codex warning-taxonomy hardening and ingest-error summary** · **Codex cross-client workspace-association spike** (RS-3: determine whether VS Code/Codex Desktop visibility is keyed by path, repository identity, local metadata, or service association before changing project grouping) · **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **optional host-model work after WP-5.2A2/A3**, including Edge Aion and any future browser resident model, each requiring its own feasibility and adapter approval; Phi Silica remains WP-5.4/Windows App SDK scope · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **Microsoft GraphRAG spike after V2-1** (small private subset; retain only if graph retrieval beats simpler baselines for cross-conversation questions at acceptable indexing and update cost) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
 
-**Sequencing & calendar** (~6 focused hrs/week): the archive, real-history prototype, configurable AI tasks, evaluation harness, five-local-model plus Gemini development study, MCP recall, v0.2.0 source/tag, and published LP-4.1/LP-4.2/LP-5 material are accepted. WP-5.2C1 remote Qwen hardware/context execution, B3A common-8K decision, and B3B controlled manual-prompt experiment are accepted. B3B selected unchanged P0 after the manually authored schema-first and few-shot variants reduced pooled reliability while the holdout remained untouched. The active AI sequence is B3B.1 established BootstrapFewShot/GEPA search on RunPod using only development data → B3B.2 local finalist transfer qualification and winner freeze → B3C one-shot holdout evaluation → LP-4.3 prompt-optimization-potential article. Accepted baseline packages must not be overwritten. Remote search timing is not local deployment evidence; only local finalist reruns can establish transfer. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. Chrome Gemini Nano, Edge Aion, and Phi Silica have survey/planning evidence but no executed feasibility spike or adapter. A later independent untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later unless explicitly reprioritized.
+**Sequencing & calendar** (~6 focused hrs/week): the archive, real-history prototype, configurable AI tasks, evaluation harness, five-local-model plus Gemini development study, MCP recall, v0.2.0 source/tag, and published LP-4.1/LP-4.2/LP-5 material are accepted. WP-5.2C1 remote Qwen hardware/context execution, B3A common-8K decision, and B3B controlled manual-prompt experiment are accepted. B3B selected unchanged P0 after the manually authored schema-first and few-shot variants reduced pooled reliability while the holdout remained untouched. The active AI sequence is B3B.1 established BootstrapFewShot/GEPA search on RunPod using only development data → B3B.2 local finalist transfer qualification and winner freeze → B3C one-shot holdout evaluation → LP-4.3 prompt-optimization-potential article. B3B.1 is paused after frozen P0 and the accepted Bootstrap repair; resume from the retained network volume, run one fresh Bootstrap attempt, then configure temporary RAM-backed Vertex ADC for GEPA. Accepted baseline packages must not be overwritten. Remote search timing is not local deployment evidence; only local finalist reruns can establish transfer. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. Chrome Gemini Nano, Edge Aion, and Phi Silica have survey/planning evidence but no executed feasibility spike or adapter. A later independent untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later unless explicitly reprioritized.
 
 ---
 

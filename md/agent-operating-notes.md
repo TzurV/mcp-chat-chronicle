@@ -155,3 +155,7 @@ resource. They override any generic instruction to clean up resources automatica
    exact semantic label as a blocking gate.
 10. **Persist evidence before assertions.** Record response status, finish metadata, usage, latency,
     and sanitized output authority before applying semantic assertions.
+11. **Use RAM-backed ADC for the accepted Vertex route.** For RunPod GEPA work, follow
+    `docs/runpod-vertex-adc.md`. Use temporary user ADC under `/dev/shm`; do not request a Gemini API
+    key, persist credentials on the network volume, or restart the Pod to attach a secret unless a
+    documented failure and new owner approval explicitly select that fallback.

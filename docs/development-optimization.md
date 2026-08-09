@@ -110,6 +110,11 @@ loop, and no fixed-judge score or rationale reaches BootstrapFewShot or GEPA. Th
 creates evaluation-bias risk and must be disclosed in the completion report and any article; it does
 not invalidate deterministic schema, evidence, reliability, runtime, or cost measurements.
 
+For RunPod GEPA execution, use the accepted temporary user ADC procedure in
+[`runpod-vertex-adc.md`](runpod-vertex-adc.md). It stores ADC only under
+`/dev/shm`, requires no Gemini API key or Pod restart, and defines the cleanup
+and persistent-volume boundary.
+
 BootstrapFewShot is fixed at one labeled demo, one bootstrapped demo, and one round. Its package is
 private and ineligible unless the same promotion scanner passes. The production candidate adapter
 replays packaged examples as ordered user/assistant messages before the current user request; they are
