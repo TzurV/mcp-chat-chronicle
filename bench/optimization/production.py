@@ -334,7 +334,6 @@ class DspyOptimizerAdapter(OptimizerAdapter):
         for task in TASK_ORDER:
             program = build_program(parent, self.candidate_lms)
             task_examples = [example for example in examples if example.task == task]
-            compile_completed = False
             try:
                 compiled = compile_bootstrap(
                     program,
@@ -343,30 +342,44 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                     task=task,
                     history_sink=observed_lms.extend,
                 )
-                compile_completed = True
                 prompts[task] = prompts_from_program(compiled)[task]
                 demonstrations[task] = demonstrations_from_program(compiled, task, authorized)
+            except OptimizerOperationError:
+                raise
             except Exception as exc:
-                if not compile_completed:
+                usage = _bootstrap_observed_usage(observed_lms)
+                if usage is None:
                     raise
-                usage = _history_usage(observed_lms, [0] * len(observed_lms))
                 raise OptimizerOperationError(
-                    "BootstrapFewShot compile adaptation failed",
+                    "BootstrapFewShot post-inference adaptation failed",
                     usage=usage,
                     failure_category=type(exc).__name__,
                 ) from exc
-        verify_demonstration_authority(
-            parent.model_copy(update={"demonstrations": demonstrations}),
-            self.tasks,
-            authority,
-        )
-        usage = _history_usage(observed_lms, [0] * len(observed_lms))
-        return Proposal(
-            prompts=prompts,
-            demonstrations=demonstrations,
-            strategy="bootstrap-one-labeled-one-bootstrapped-candidate-teacher",
-            usage=usage,
-        )
+        usage = _bootstrap_observed_usage(observed_lms)
+        try:
+            verify_demonstration_authority(
+                parent.model_copy(update={"demonstrations": demonstrations}),
+                self.tasks,
+                authority,
+            )
+            if usage is None:
+                raise ValueError("BootstrapFewShot copied-teacher usage history is missing")
+            return Proposal(
+                prompts=prompts,
+                demonstrations=demonstrations,
+                strategy="bootstrap-one-labeled-one-bootstrapped-candidate-teacher",
+                usage=usage,
+            )
+        except OptimizerOperationError:
+            raise
+        except Exception as exc:
+            if usage is None:
+                raise
+            raise OptimizerOperationError(
+                "BootstrapFewShot post-inference authority validation failed",
+                usage=usage,
+                failure_category=type(exc).__name__,
+            ) from exc
 
     def gepa(
         self,
@@ -569,6 +582,14 @@ def _compute_hourly_cost(config: OptimizationConfig) -> float:
 
 def _history_counts(lms: list[Any]) -> list[int]:
     return [len(getattr(lm, "history", [])) for lm in lms]
+
+
+def _bootstrap_observed_usage(lms: list[Any]) -> AdapterUsage | None:
+    """Return usage only when copied teacher history proves an inference occurred."""
+    counts = _history_counts(lms)
+    if not any(counts):
+        return None
+    return _history_usage(lms, [0] * len(lms))
 
 
 def _history_usage(

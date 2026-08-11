@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +29,20 @@ class DemoAuthority:
     model_id: str
     selected_input_sha256: str
     response_json_sha256: str
+
+
+BOOTSTRAP_ACCEPTANCE_THRESHOLD = 0.999
+
+
+def bootstrap_metric_acceptance(value: Any) -> bool:
+    """Convert a Bootstrap metric result to DSPy's literal acceptance boolean."""
+    score = getattr(value, "score", value)
+    if not isinstance(score, Real):
+        raise TypeError("BootstrapFewShot metric score must be numeric")
+    normalized = float(score)
+    if not math.isfinite(normalized):
+        raise ValueError("BootstrapFewShot metric score must be finite")
+    return normalized >= BOOTSTRAP_ACCEPTANCE_THRESHOLD
 
 
 def build_program(package: CandidatePackage, lms: dict[str, Any] | None = None) -> Any:
@@ -211,8 +227,10 @@ def compile_bootstrap(
 
     trace_authority: dict[tuple[str, str], set[DemoAuthority]] = {}
 
-    def traced_metric(gold: Any, pred: Any, trace: Any = None, **kwargs: Any) -> Any:
-        score = metric(gold, pred, trace, **kwargs)
+    def traced_metric(gold: Any, pred: Any, trace: Any = None, **kwargs: Any) -> bool:
+        accepted = bootstrap_metric_acceptance(metric(gold, pred, trace, **kwargs))
+        if not accepted:
+            return False
         authority = trusted_examples.get(id(gold))
         if authority is None:
             raise ValueError("BootstrapFewShot metric provenance is outside train authority")
@@ -237,7 +255,7 @@ def compile_bootstrap(
             )
             key = (captured.selected_input_sha256, captured.response_json_sha256)
             trace_authority.setdefault(key, set()).add(captured)
-        return score
+        return True
 
     optimizer = dspy.BootstrapFewShot(
         metric=traced_metric,

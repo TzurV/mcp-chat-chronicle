@@ -25,6 +25,7 @@ from bench.optimization.diagnostics import (
 )
 from bench.optimization.dspy_bridge import (
     DemoAuthority,
+    bootstrap_metric_acceptance,
     build_program,
     compile_bootstrap,
     demonstrations_from_program,
@@ -1246,6 +1247,184 @@ def test_bootstrap_post_compile_failure_carries_measured_history_usage(
         input_tokens=17,
         output_tokens=9,
     )
+
+
+@pytest.mark.parametrize(
+    ("score", "accepted"),
+    [
+        (False, False),
+        (0, False),
+        (0.998999999, False),
+        (0.999, True),
+        (1, True),
+        (True, True),
+    ],
+)
+def test_bootstrap_metric_acceptance_returns_literal_boolean(score, accepted: bool) -> None:
+    result = bootstrap_metric_acceptance(score)
+    assert result is accepted
+
+
+def test_bootstrap_metric_acceptance_reads_rich_prediction_without_mutating_it() -> None:
+    import dspy
+
+    prediction = dspy.Prediction(score=0.999, feedback="Synthetic deterministic feedback.")
+    assert bootstrap_metric_acceptance(prediction) is True
+    assert prediction.score == 0.999
+    assert prediction.feedback == "Synthetic deterministic feedback."
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, "0.999", object(), complex(0.999, 0), float("nan"), float("inf")],
+)
+def test_bootstrap_metric_acceptance_fails_closed_for_unsupported_scores(value) -> None:
+    with pytest.raises((TypeError, ValueError), match="metric score"):
+        bootstrap_metric_acceptance(value)
+
+
+def test_real_dspy_rejects_invalid_rich_metric_demo_without_retry_or_repair() -> None:
+    import dspy
+
+    task = TASK_ORDER[0]
+    selected_input = "Synthetic Bootstrap input."
+    response_json = json.dumps(synthetic_outputs(1)[task], sort_keys=True)
+    example = dspy.Example(
+        task=task,
+        model_id="qwen",
+        selected_input=selected_input,
+        response_json=response_json,
+    ).with_inputs("task", "model_id", "selected_input")
+    observed_lms = []
+    program = build_program(
+        baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml"),
+        {"qwen": dspy.utils.DummyLM([{"response_json": "{malformed"}])},
+    )
+
+    compiled = compile_bootstrap(
+        program,
+        [example],
+        lambda *args, **kwargs: dspy.Prediction(score=0.0, feedback="invalid"),
+        task=task,
+        history_sink=observed_lms.extend,
+    )
+
+    demos = compiled.task_0.demos
+    assert len(demos) == 1
+    assert demos[0].get("augmented") is not True
+    assert len(compiled._chronicle_demo_authority) == 1
+    assert next(iter(compiled._chronicle_demo_authority.values())).response_json_sha256 == (
+        hashlib.sha256(response_json.encode()).hexdigest()
+    )
+    assert sum(len(lm.history) for lm in observed_lms) == 1
+
+
+def test_real_dspy_accepts_valid_rich_metric_demo_and_binds_provenance() -> None:
+    import dspy
+
+    task = TASK_ORDER[0]
+    selected_input = "Synthetic accepted Bootstrap input."
+    response_json = json.dumps(synthetic_outputs(1)[task], sort_keys=True)
+    example = dspy.Example(
+        task=task,
+        model_id="qwen",
+        selected_input=selected_input,
+        response_json=response_json,
+    ).with_inputs("task", "model_id", "selected_input")
+    program = build_program(
+        baseline_package(Path(__file__).parents[1] / "ai-tasks.default.yaml"),
+        {"qwen": dspy.utils.DummyLM([{"response_json": response_json}])},
+    )
+
+    compiled = compile_bootstrap(
+        program,
+        [example],
+        lambda *args, **kwargs: dspy.Prediction(score=0.999, feedback="valid"),
+        task=task,
+    )
+
+    augmented = [demo for demo in compiled.task_0.demos if demo.get("augmented") is True]
+    assert len(augmented) == 1
+    assert id(augmented[0]) in compiled._chronicle_demo_authority
+
+
+def test_bootstrap_compiled_provenance_failure_carries_measured_history_usage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bench.optimization import production
+
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    baseline = baseline_package(tmp_path / "tasks.yaml")
+    optimizer = object.__new__(DspyOptimizerAdapter)
+    optimizer.config = config
+    optimizer.config_path = config_path
+    optimizer.authority = authority
+    optimizer.tasks = load_task_catalog(tmp_path / "tasks.yaml")
+    optimizer.candidate_lms = {}
+
+    def fail_provenance(*args, history_sink, **kwargs):
+        del args, kwargs
+        history_sink(
+            [
+                type(
+                    "CopiedTeacherLM",
+                    (),
+                    {"history": [{"usage": {"prompt_tokens": 17, "completion_tokens": 9}}]},
+                )()
+            ]
+        )
+        raise ValueError("synthetic compiled provenance extraction failure")
+
+    monkeypatch.setattr(production, "compile_bootstrap", fail_provenance)
+    with pytest.raises(OptimizerOperationError, match="post-inference") as captured:
+        optimizer.bootstrap(baseline, authority)
+    assert captured.value.failure_category == "ValueError"
+    assert captured.value.usage == AdapterUsage(task_calls=1, input_tokens=17, output_tokens=9)
+
+
+def test_bootstrap_final_authority_failure_carries_measured_history_usage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bench.optimization import production
+
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    baseline = baseline_package(tmp_path / "tasks.yaml")
+    optimizer = object.__new__(DspyOptimizerAdapter)
+    optimizer.config = config
+    optimizer.config_path = config_path
+    optimizer.authority = authority
+    optimizer.tasks = load_task_catalog(tmp_path / "tasks.yaml")
+    optimizer.candidate_lms = {}
+
+    def compile_with_history(program, *args, history_sink, **kwargs):
+        del args, kwargs
+        history_sink(
+            [
+                type(
+                    "CopiedTeacherLM",
+                    (),
+                    {"history": [{"usage": {"prompt_tokens": 5, "completion_tokens": 3}}]},
+                )()
+            ]
+        )
+        return program
+
+    monkeypatch.setattr(production, "compile_bootstrap", compile_with_history)
+    monkeypatch.setattr(
+        production,
+        "verify_demonstration_authority",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            ValueError("synthetic final authority failure")
+        ),
+    )
+    with pytest.raises(OptimizerOperationError, match="authority validation") as captured:
+        optimizer.bootstrap(baseline, authority)
+    assert captured.value.failure_category == "ValueError"
+    assert captured.value.usage == AdapterUsage(task_calls=4, input_tokens=20, output_tokens=12)
 
 
 def test_real_dspy_bootstrap_demos_are_packaged_and_replayed_without_network(
