@@ -3,6 +3,11 @@
 This guide records the accepted authentication method for running the GEPA
 proposer on a RunPod Pod while calling Gemini through Google Vertex AI.
 
+For Vertex calls made locally from Windows, VS Code, or Codex, use
+[`windows-vertex-adc.md`](windows-vertex-adc.md) instead. Local Codex commands
+have a distinct fresh-process inheritance boundary that this RunPod guide does
+not address.
+
 ## Decision
 
 Use temporary user Application Default Credentials (ADC) stored only in the

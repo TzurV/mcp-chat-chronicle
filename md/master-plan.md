@@ -710,6 +710,15 @@ and no train or holdout file was opened. The semantic direction agrees with the
 reliability-first decision to retain P0, but the sample is too small for a
 statistical or general prompt-optimization claim.
 
+**WP-5.2B3B.1B Checkpoint recovery and GEPA readiness.** *(planned; handoff:
+`md/handoffs/WP-5.2B3B.1B-checkpoint-recovery-gepa-readiness.md`)*
+*Objective:* Repair the historical-result/current-application authority boundary
+without model or provider calls, register the completed Bootstrap result without
+rerunning it, and produce an idempotent readiness checkpoint that selects P0 as
+the GEPA parent. The executor must stop once for the manager to commit the
+generic patch before applying it to private state. GEPA, RunPod, ADC, candidate
+inference, judging, and holdout access remain outside this package.
+
 **WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
 gated by B3B.1 shortlist)*
 *Objective:* Determine whether gains found on the remote GPU transfer to the

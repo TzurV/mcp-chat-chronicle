@@ -115,6 +115,16 @@ For RunPod GEPA execution, use the accepted temporary user ADC procedure in
 `/dev/shm`, requires no Gemini API key or Pod restart, and defines the cleanup
 and persistent-volume boundary.
 
+For local Windows scoring, diagnostics, or proposer work launched from VS Code
+or Codex, use [`windows-vertex-adc.md`](windows-vertex-adc.md). It resolves ADC
+from the active `CLOUDSDK_CONFIG`, prevents a stale explicit credential path
+from winning, and requires the environment bootstrap and Python command to run
+inside the same process boundary.
+
+Future handoffs that authorize a local Vertex call must cite that guide and
+name the same-process environment bootstrap as a precondition. Do not rediscover
+the VS Code/Codex inheritance boundary through repeated provider probes.
+
 BootstrapFewShot is fixed at one labeled demo, one bootstrapped demo, and one round. Its package is
 private and ineligible unless the same promotion scanner passes. The production candidate adapter
 replays packaged examples as ordered user/assistant messages before the current user request; they are

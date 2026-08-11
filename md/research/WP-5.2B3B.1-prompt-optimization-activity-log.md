@@ -124,6 +124,139 @@ The planned implementation:
 GEPA has not yet made a private proposer call. No GEPA result should be implied
 from this log.
 
+### 4.4 Why these three methods were selected
+
+This is a three-stage method program, not three completed optimizer results.
+Manual global prompting and BootstrapFewShot are complete; GEPA is selected and
+implemented but has not run on private development data.
+
+The methods were chosen to increase automation and search power one step at a
+time while keeping the experiment interpretable:
+
+1. **Manual global variants** are the transparent control. They test whether a
+   human-authored schema-first instruction or a bounded fictional few-shot
+   package can improve both local models without introducing model-specific
+   branches. They are cheap, inspectable, and establish whether more detailed
+   prompting helps before adding an optimizer.
+2. **BootstrapFewShot** is the smallest established DSPy compilation step that
+   can exploit the existing labeled development cases. It tests a distinct
+   mechanism: teaching by examples rather than rewriting the instruction. Its
+   one-round, one-labeled/one-bootstrapped limits bound overfitting, context
+   growth, privacy exposure, and compute.
+3. **GEPA** is the planned instruction-search method. It can consume structured
+   failure feedback and ask a stronger proposer to reflect on failure patterns,
+   while Chronicle restricts mutation to the four system prompts. It is a good
+   fit for this experiment because a deployable result need not contain private
+   demonstrations.
+
+This sequence also creates useful negative evidence. Manual elaboration showed
+that clearer-looking instructions can reduce reliability. Bootstrap showed that
+few-shot examples can exceed the context and privacy boundaries without
+improving aggregate validity. GEPA now tests whether instruction-only reflective
+search can avoid both failure modes.
+
+### 4.5 Alternatives deliberately deferred
+
+- **MIPROv2** jointly searches instructions and few-shot examples and uses a
+  more involved optimization procedure. That is potentially useful, but it
+  combines the two mutation types Chronicle first wants to understand
+  separately and reintroduces the private-demonstration/context risks already
+  exposed by Bootstrap.
+- **BootstrapFewShotWithRandomSearch** would search more demonstration sets.
+  The first bounded package was already non-promotable on privacy and context,
+  so spending more calls on demonstration selection is not the next informative
+  experiment.
+- **Fine-tuning or reinforcement learning** changes model weights rather than
+  only the external task definitions. It would require a different artifact,
+  deployment, privacy, and evaluation boundary and is outside this prompt-only
+  learning exercise.
+
+The deferred methods remain possible follow-ups. The present choice is about
+experimental clarity and bounded cost, not a claim that these are the only or
+universally best prompt-optimization techniques.
+
+### 4.6 Development data and FABLE references
+
+#### 4.6.1 Corpus structure
+
+The private development corpus contains 30 frozen conversations with four task
+cases per conversation, for 120 reference cases in total. Selection happened
+before content inspection. B3B/B3B.1 uses only ten conversations:
+
+- six optimizer-training conversations, or 24 task cases;
+- four optimizer-validation conversations, or 16 task cases per candidate
+  model and 32 model/task positions across Qwen and Phi;
+- twenty unopened holdout conversations, or 80 task cases reserved for a
+  one-shot later evaluation.
+
+Each case binds a conversation alias, task name, task-selected input, allowed
+message evidence IDs, output schema, and hashes for the frozen source,
+selection, task catalog, input, and reference. Conversation summary, work mode,
+and title assessment use the conversation-overview selector. Last activity uses
+the recent-meaningful-turn selector.
+
+#### 4.6.2 Reference record structure
+
+FABLE directly created one schema-valid reference for every frozen task case:
+
+| Task | Main reference fields |
+|---|---|
+| Conversation summary | Summary, exact start date, exact last-active date, evidence message IDs |
+| Work-mode classification | Manager/executor/one-off/mixed/unknown label, confidence, reason, evidence IDs |
+| Last activity | Recent work, status, blockers, next action and basis, evidence IDs |
+| Title assessment | Title-fit boolean, confidence, reason, optional replacement title, evidence IDs |
+
+The references use the same application-owned output contracts expected from a
+candidate. Evidence IDs must belong to the selected input; dates and cross-field
+relationships are checked mechanically. Reference files are private and remain
+outside Git.
+
+These are **silver development references**, not human-adjudicated gold labels.
+One strong teacher, FABLE, produced the semantic judgments directly from each
+frozen selected input. There was no second-teacher consolidation and no human
+review. Mechanical validation rejected malformed records, but it did not change
+their meaning; FABLE rewrote the few invalid drafts from the same frozen input.
+
+#### 4.6.3 How optimization feedback is produced
+
+Chronicle evaluates a candidate in layers:
+
+1. Did the call terminate and return parseable JSON?
+2. Does the result satisfy the strict task schema and cross-field rules?
+3. Are evidence IDs, dates, labels, and selected-input authority valid?
+4. How does the valid result agree with the frozen FABLE reference?
+5. Does the complete prompt fit 8,192 tokens and pass the privacy scanner?
+
+Reliability is lexicographically primary: semantic improvement cannot compensate
+for losing valid outputs, weakening the worst model, or weakening the minimum
+task. Bootstrap uses a dedicated literal-boolean acceptance boundary derived
+from these checks. GEPA is designed to receive structured facts and bounded
+reference-backed feedback, such as an invalid enum, evidence mismatch, date
+mismatch, label mismatch, timeout, or context failure.
+
+#### 4.6.4 Why the fixed judge is outside optimization
+
+The fixed Gemini judge is a post-hoc evaluator, not the optimizer's teacher.
+Keeping it outside Bootstrap and the future GEPA loop provides several benefits:
+
+- avoids tuning prompts directly to one judge's preferences or rationale style;
+- keeps the search metric deterministic, reproducible, and cacheable;
+- avoids a remote judge call for every candidate position;
+- preserves an external comparison after the optimizer has stopped;
+- limits same-family bias because the planned GEPA proposer and fixed judge are
+  both Gemini 3.1 Pro, even though that risk cannot be removed completely.
+
+For Bootstrap, the acceptance metric only decides whether a generated example
+is trustworthy enough to package; the fixed judge is not consulted. For GEPA,
+the planned feedback is deterministic and FABLE-reference-backed; no judge score
+or rationale will enter proposal generation. Only after a candidate is frozen
+may the fixed judge compare eligible outputs as a separate semantic reference.
+
+This does not make the FABLE references independent human truth, nor does it
+make the fixed judge authoritative. They serve different roles: FABLE supplies
+frozen development targets for search and deterministic comparison; the fixed
+judge supplies a consistent post-hoc semantic lens for valid outputs.
+
 ## 5. Controlled Manual Prompt Result
 
 | Candidate | Pooled local valid | Qwen | Phi | Gemini portability |
@@ -230,9 +363,10 @@ These are optimizer/candidate accounting figures, not the full RunPod invoice.
 
 ## 8. Fixed-Judge Reference
 
-The fixed judge was intentionally excluded from Bootstrap and GEPA feedback. It
-was run afterward as an optional local reference against only schema-valid
-validation outputs.
+The fixed judge was intentionally excluded from Bootstrap feedback and is
+contractually excluded from any future GEPA feedback. GEPA has not run yet. The
+judge was run afterward as an optional local reference against only schema-valid
+P0 and Bootstrap validation outputs.
 
 ### Scope and result
 
@@ -535,8 +669,12 @@ Do not claim:
 - `md/handoffs/reports/WP-5.2B3B.1-runpod-teardown-incident-report.md`
 - `docs/development-optimization.md`
 - `docs/runpod-vertex-adc.md`
+- `docs/windows-vertex-adc.md`
 - `md/handoffs/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference.md`
 - `md/handoffs/reports/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference-completion-report.md`
+- [DSPy BootstrapFewShot API](https://dspy.ai/api/optimizers/BootstrapFewShot/)
+- [DSPy GEPA API](https://dspy.ai/api/optimizers/GEPA/overview/)
+- [DSPy MIPROv2 API](https://dspy.ai/api/optimizers/MIPROv2/)
 
 Private raw inputs, FABLE references, candidate responses, prompt packages,
 provider payloads, rationales, credentials, resource identifiers, and billing
