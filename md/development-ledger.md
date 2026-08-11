@@ -6,11 +6,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 
 | Field | Status |
 | --- | --- |
-| Date | 2026-08-09 |
-| Phase | WP-5.2B3B accepted; WP-5.2B3B.1 P0 frozen and DSPy BootstrapFewShot compatibility repair accepted; RunPod compute stopped with verified persistent restart state retained |
-| Last accepted delivery | WP-5.2B3B controlled manual global-prompt experiment and unchanged P0 selection |
+| Date | 2026-08-11 |
+| Phase | WP-5.2B3B accepted; WP-5.2B3B.1 P0 and BootstrapFewShot comparator complete; local fixed-judge reference confirms no Bootstrap gain; GEPA not started |
+| Last accepted delivery | WP-5.2B3B.1A validation-only P0-versus-Bootstrap fixed-judge reference |
 | Current milestone state | M0/M1/M2 core and real-history prototype accepted; the configurable AI-task/evaluation stack and six aligned complete development arms are accepted; WP-4.1 read-only MCP recall is accepted; v0.2.0 is committed and remotely tagged; the primary v0.2.0 LinkedIn progress post and LP-5 MCP-on-Windows article/feed post are owner-reported published; the public GitHub release page remains pending verification |
-| Next action | Reallocate compatible RTX 5090 compute in the retained volume's data center, attach the verified persistent volume, establish SSH immediately, synchronize clean commit `addd760`, run one fresh BootstrapFewShot attempt without rerunning P0, then use temporary RAM-backed Vertex ADC for GEPA after Bootstrap passes |
+| Next action | Repair the network-free historical-P0/current-Bootstrap checkpoint authorization boundary, register the existing Bootstrap result without rerunning it, retain P0 as GEPA parent, then authorize and resume the bounded GEPA pilot |
 | Current branch | `main` after merging the accepted B3B branch |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -65,7 +65,8 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.2B3 | Controlled context and prompt-optimization program | In progress; B3A and B3B accepted | See WP-5.2B3A/B/B.1/B.2/C | B3A and B3B accepted; automated optimization, transfer, and holdout pending | See child reviews | Common 8K remains the controlled context. Manual P1/P2 did not beat P0. Next use established optimizers on the frozen ten-conversation development scope, validate finalists locally, then evaluate one frozen winner on the untouched twenty-conversation holdout. |
 | WP-5.2B3A | Full local 8K/16K context comparison | Accepted | `md/handoffs/WP-5.2B3A-full-context-comparison.md` | `md/handoffs/reports/WP-5.2B3A-completion-report.md`; article brief: `md/handoffs/reports/WP-5.2B3A-context-comparison-article-brief.md` | `md/handoffs/reports/WP-5.2B3A-validation-review.md` | Qwen remained 84/120 valid; Phi fell from 77/120 to 69/120; no prior context failure recovered; combined validity fell from 161/240 to 153/240. Fixed-Pro/cache evidence passed. Common 8K is frozen for B3B. |
 | WP-5.2B3B | Controlled manual global-prompt experiment | Accepted | `md/handoffs/WP-5.2B3B-global-prompt-development.md` | `md/handoffs/reports/WP-5.2B3B-completion-report.md`; evidence: `md/handoffs/reports/WP-5.2B3B-prompt-development-evidence-brief.md`; progress: `md/handoffs/reports/WP-5.2B3B-execution-progress.md`; decision: `md/handoffs/reports/WP-5.2B3B-manager-decision-report.md` | `md/handoffs/reports/WP-5.2B3B-validation-review.md` | Controlled experiment result: P0 pooled local reliability was 62/80; P1 and P2 each produced 58/80. Qwen fell 30/40 to 26/40, Phi stayed 32/40, and Gemini fell 38/40 to 32/40 for P1 and 36/40 for P2. P0 was selected and its tracked copy matches both default catalogs; P3 was not triggered; 240/240 candidates were terminal; 182 judge results completed with two retained failures; cache replay made zero calls; holdout access remained zero. Treat observations as ten-conversation development evidence, not a general prompt claim. |
-| WP-5.2B3B.1 | Established automatic prompt optimization and remote search | Paused after accepted Bootstrap compatibility repair; RunPod compute stopped and persistent restart state verified | `md/handoffs/WP-5.2B3B.1-automatic-prompt-optimization-remote-search.md` | Progress: `md/handoffs/reports/WP-5.2B3B.1-execution-progress.md`; incident: `md/handoffs/reports/WP-5.2B3B.1-runpod-teardown-incident-report.md`; ADC operations: `docs/runpod-vertex-adc.md`; completion report, optimizer trace, cost report, and article evidence remain required | `md/handoffs/reports/WP-5.2B3B.1-gate1-validation-review.md` | P0 is frozen at 11/32 valid, Qwen 5/16 and Phi 6/16, checkpoint `3636bc57eec2e7f6a512e182e1148953da7e5ad01b5a819a6a3da0853113f5e3`; it must not be rerun. The DSPy 3.3 authority/accounting repair is accepted in `addd760`. The Pod stopped normally at zero GPU spend; the 30 GB persistent network volume remains available at approximately US$0.003/hour. Restart verification covered 19,697 critical files and 96/96 P0 checkpoint artifacts with zero hash failures; no persistent credential material was found. Next allocate compatible compute in the retained volume's data center, attach that volume, establish SSH first, verify restart hashes, synchronize `addd760`, and run one fresh BootstrapFewShot attempt. Configure temporary user Vertex ADC under `/dev/shm` only after Bootstrap succeeds; no Gemini API key or Pod restart is required. |
+| WP-5.2B3B.1 | Established automatic prompt optimization and remote search | In progress; P0 and Bootstrap complete, GEPA pending | `md/handoffs/WP-5.2B3B.1-automatic-prompt-optimization-remote-search.md` | Progress: `md/handoffs/reports/WP-5.2B3B.1-execution-progress.md`; activity evidence: `md/research/WP-5.2B3B.1-prompt-optimization-activity-log.md`; incident: `md/handoffs/reports/WP-5.2B3B.1-runpod-teardown-incident-report.md`; ADC operations: `docs/runpod-vertex-adc.md`; completion report, GEPA trace, total cost report, and final article evidence remain required | `md/handoffs/reports/WP-5.2B3B.1-gate1-validation-review.md` | P0 remains frozen at 11/32 valid, Qwen 5/16 and Phi 6/16. Bootstrap attempt `0003` completed at 11/32 valid but reduced semantic agreement, failed context/privacy gates, and is non-promotable. Its local fixed-judge comparison also slightly favored P0. The durable Bootstrap result is not yet registered in the canonical phase checkpoint because historical P0 and current application identities were compared incorrectly. Repair that bookkeeping boundary without model calls or artifact rewrites, close Bootstrap, and begin GEPA from P0. Compute remains released/stopped and private persistent evidence remains retained. |
+| WP-5.2B3B.1A | Bootstrap local fixed-judge reference | Accepted | `md/handoffs/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference.md` | `md/handoffs/reports/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference-completion-report.md` | Manager validation in this documentation commit | Retrieved and hash-verified the immutable validation evidence, then judged all 22 schema-valid outputs locally through the fixed Gemini Pro route. Across ten paired cases P0 scored 3.1600 versus Bootstrap 3.1450; across eleven unpaired cases per arm P0 scored 3.2364 versus 3.2227. Work-mode improved while title assessment declined. Cache-only replay made zero calls, measured Vertex cost was US$0.224496, and train/holdout access remained zero. This descriptive, validity-filtered sample confirms the no-promotion decision but is not statistically conclusive. |
 | WP-5.2B3B.2 | Local transfer qualification and winner freeze | Planned; gated by B3B.1 shortlist | Pending | Completion report and remote-to-local transfer evidence required | Pending | Rerun P0 and the top three to five immutable optimizer candidates on the local machine. Select one complete package using a predeclared reliability-first rule, or retain P0 explicitly. Keep judging credentials and final scoring local; do not treat RunPod timing as laptop evidence. |
 | WP-5.2B3C | One-shot prompt holdout evaluation | Planned; gated by B3B.2 winner freeze | Pending | Completion and publication evidence brief required | Pending | Run one frozen optimizer-selected package once over 80 holdout cases each for Qwen, Phi, and Gemini; compare with accepted P0 evidence and report generalization, transfer, reliability, failure taxonomy, cost, and chart-ready data without holdout-driven prompt changes. |
 | LP-4.3 | Established prompt optimization potential article | Planned; gated by automatic search and local transfer, preferably B3C | Pending | Analysis brief, article draft, figures, and publication record required | Pending | Compare the controlled manual P0/P1/P2 result with BootstrapFewShot/GEPA search, RunPod cost and speed, remote-to-local transfer, and holdout behavior. Separate prompt, model, context, compute, and judge effects and publish negative results and full denominators. |
@@ -183,18 +184,20 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Execute WP-5.2B3B.1 Gate 0/Gate 1 and review the single consolidated generic
-   implementation, proposer, disclosure, and budget checkpoint.
-2. Run a four-hour RunPod pilot, review optimizer behavior/cost, then permit at
-   most the approved twelve-hour initial search ceiling.
-3. Return a frozen shortlist and validate P0 plus the top three to five
+1. Repair the WP-5.2B3B.1 application-identity checkpoint boundary locally and
+   register the existing Bootstrap result without rerunning P0 or Bootstrap.
+2. Close Bootstrap as a non-promotable negative comparator and retain P0 as the
+   GEPA starting package.
+3. Resume the bounded GEPA pilot on compatible retained-volume compute, using
+   temporary RAM-backed Vertex ADC and the existing owner authorization rules.
+4. Return a frozen shortlist and validate P0 plus the top three to five
    candidates locally under WP-5.2B3B.2.
-4. Freeze one complete winner, or explicitly retain P0, before any holdout
+5. Freeze one complete winner, or explicitly retain P0, before any holdout
    access.
-5. Run WP-5.2B3C once on the untouched twenty-conversation holdout and do not
+6. Run WP-5.2B3C once on the untouched twenty-conversation holdout and do not
    revise prompts afterward.
-6. Close REL-0.2.0 separately by publishing and verifying the GitHub release
+7. Close REL-0.2.0 separately by publishing and verifying the GitHub release
    page for the existing `v0.2.0` tag; no rebuild or retag is required.
-7. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
-8. Continue treating the 120 FABLE-reference cases as private silver
+8. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
+9. Continue treating the 120 FABLE-reference cases as private silver
    development data, not an untouched final evaluation set.

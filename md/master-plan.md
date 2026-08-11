@@ -2,7 +2,7 @@
 
 **Repo:** first public source release under `mcp-chat-chronicle`; later rename/PyPI candidate `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** Chat Chronicle v0.2.0 source/tag, real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and the published LP-4.1/LP-4.2/LP-5 material are accepted · the public GitHub release page remains an administrative publication gate · WP-5.2B3A accepted common 8K after local 16K recovered no prior context failures · WP-5.2B3B is accepted as a controlled manual-prompt experiment: unchanged P0 remained best at 62/80 pooled local usable cases while P1/P2 each produced 58/80, portability regressed, P3 was not triggered, and holdout access stayed zero · WP-5.2B3B.1 has frozen P0 at 11/32 valid on its private 6/4 pilot and accepted the DSPy BootstrapFewShot compatibility/accounting repair in `addd760`; RunPod compute is stopped at zero GPU spend after full restart-state verification, while its persistent network volume remains retained at storage-only cost · the next run resumes from that volume, runs one fresh BootstrapFewShot attempt without rerunning P0, and uses temporary RAM-backed Vertex ADC for GEPA only after Bootstrap passes · local finalist transfer validation and one-shot holdout evaluation remain later gated work · Chrome Gemini Nano, Edge Aion, and Phi Silica remain preliminary research/planning only · the later independent untouched evaluation set remains TBD · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, controlled context/prompt studies, remote hardware comparison, and established automatic prompt optimization)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-08-09
+**Status:** Chat Chronicle v0.2.0 source/tag, real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and the published LP-4.1/LP-4.2/LP-5 material are accepted · the public GitHub release page remains an administrative publication gate · WP-5.2B3A accepted common 8K after local 16K recovered no prior context failures · WP-5.2B3B is accepted as a controlled manual-prompt experiment: unchanged P0 remained best at 62/80 pooled local usable cases while P1/P2 each produced 58/80, portability regressed, P3 was not triggered, and holdout access stayed zero · WP-5.2B3B.1 has frozen P0 at 11/32 valid on its private 6/4 pilot and completed the DSPy BootstrapFewShot comparator at the same 11/32 validity but lower semantic agreement; Bootstrap failed context/privacy promotion gates and a local fixed-judge reference slightly favored P0 on both paired and unpaired valid cases · the remaining pre-GEPA blocker is a network-free historical-P0/current-Bootstrap checkpoint-identity repair, after which GEPA starts from P0 without rerunning either candidate · compute is released/stopped while private persistent evidence remains retained · local finalist transfer validation and one-shot holdout evaluation remain later gated work · Chrome Gemini Nano, Edge Aion, and Phi Silica remain preliminary research/planning only · the later independent untouched evaluation set remains TBD · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, controlled context/prompt studies, remote hardware comparison, and established automatic prompt optimization)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-08-11
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Release update (2026-07-28):** v0.2.0 release content is committed on
@@ -637,8 +637,8 @@ conversation development result, not a general claim that explicit or few-shot
 prompts are inferior.
 
 **WP-5.2B3B.1 Established automatic prompt optimization and remote search.**
-*(Gate 1 foundation, Vertex route, P0 checkpoint, and Bootstrap compatibility
-repair accepted; remote pilot paused with persistent state retained; handoff:
+*(Gate 1 foundation, Vertex route, P0, and Bootstrap comparator complete;
+GEPA pending after local checkpoint recovery; handoff:
 `md/handoffs/WP-5.2B3B.1-automatic-prompt-optimization-remote-search.md`)*
 *Objective:* Test the potential of established prompt-improvement methods rather
 than adding further manually invented variants.
@@ -682,6 +682,33 @@ opened; no key or private artifact is tracked; remote compute is released after
 verified return or pause; persistent private state is retained or deleted only
 under the current explicit owner instruction; and a bounded shortlist, not a
 hand-selected single prompt, is delivered for local transfer testing.
+
+**Accepted progress through WP-5.2B3B.1A (2026-08-11):** P0 remains frozen at
+11/32 valid on the four-conversation validation split. One append-only
+BootstrapFewShot attempt completed with four labeled demonstrations and no
+accepted generated demonstration. It also produced 11/32 valid outputs, shifted
+one valid case from Phi to Qwen, reduced semantic agreement from 0.1266 to
+0.0922, exceeded the accepted request envelope, and failed the prompt privacy
+gate. A separate local fixed-judge reference completed 22/22 eligible outputs:
+P0 scored 3.1600 versus Bootstrap 3.1450 over ten paired valid positions and
+3.2364 versus 3.2227 over eleven unpaired valid positions per arm. These small,
+validity-filtered results are descriptive only. Bootstrap is closed as a
+non-promotable research comparator; P0 remains the GEPA parent. Before GEPA, a
+network-free repair must bind historical P0 and current Bootstrap results to
+their own approved execution authorizations and create the missing canonical
+Bootstrap phase checkpoint without rewriting or rerunning either result. The
+ongoing article evidence log is
+`md/research/WP-5.2B3B.1-prompt-optimization-activity-log.md`.
+
+**WP-5.2B3B.1A Bootstrap local fixed-judge reference.** *(accepted; handoff:
+`md/handoffs/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference.md`; report:
+`md/handoffs/reports/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference-completion-report.md`)*
+*Outcome:* Immutable validation evidence was retrieved and verified locally.
+The fixed Gemini Pro judge completed all 22 schema-valid P0/Bootstrap outputs,
+cache-only replay made zero calls, known measured Vertex cost was US$0.224496,
+and no train or holdout file was opened. The semantic direction agrees with the
+reliability-first decision to retain P0, but the sample is too small for a
+statistical or general prompt-optimization claim.
 
 **WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
 gated by B3B.1 shortlist)*
