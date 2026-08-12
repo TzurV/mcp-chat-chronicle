@@ -6195,8 +6195,7 @@ db path: <REPOSITORY_ROOT>\.chronicle\chronicle.db
 ┃  ID ┃ Date                        ┃ Provider     ┃ Title                                                           ┃ URL                                                            ┃
 ┡━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
 │ 673 │ 2026-07-13T17:52:41.531000Z │ openai_codex │ chat_chronicle Manager                                          │ local:                                                         │
-│     │                             │              │                                                                 │ rollout-2026-07-09T16-22-17-019f4778-e308-77b3-bcd7-58fb6340dd │
-│     │                             │              │                                                                 │ 1e.jsonl
+│     │                             │              │                                                                 │ rollout-2026-07-09T16-22-17-<REDACTED-SESSION-ID>.jsonl         │
 
 ...
 Questions:

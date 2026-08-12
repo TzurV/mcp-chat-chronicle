@@ -5,9 +5,22 @@
 *.sqlite
 *.sqlite3
 
-# Real chat exports and drop folders
+# Real chat exports, transcripts, and drop folders
 exports/
 *.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.jsonl
+*.jsonl.zst
+*.ndjson
+*.zst
+
+# Downloaded model and inference artifacts
+*.gguf
+*.safetensors
+*.onnx
 
 # Project-local development database directory
 .chronicle/
@@ -18,6 +31,13 @@ exports/
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+application_default_credentials.json
+*service-account*.json
+*service_account*.json
+credentials.db
+access_tokens.db
 
 # Python
 __pycache__/

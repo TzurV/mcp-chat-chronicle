@@ -23,6 +23,35 @@ commit request made to the PM, a commit request for an earlier work package, or 
 message adjacent to a handoff is not authorization for the executor to commit.
 Executor delivery status is `Ready for PM validation`, never `Accepted`.
 
+## Public Repository Security Gate
+
+This repository is public. Every tracked file and every Git commit must be treated
+as immediately publishable and permanently recoverable. The PM/manager owns the
+final security review before staging, committing, tagging, or pushing.
+
+Apply the complete gate in `docs/public-repository-security.md` to every delivery.
+At minimum:
+
+1. inspect every staged filename and the complete staged diff;
+2. confirm that no database, raw transcript/export, private evaluation artifact,
+   model binary, credential file, token, private path, cloud resource identifier,
+   or private artifact hash is staged;
+3. allow only synthetic fixtures, placeholders, public model/application
+   provenance, aggregate metrics, and deliberately curated publication material;
+4. treat manager-chat exports, completion reports, articles, screenshots, and
+   generated images as high-review publication artifacts rather than harmless
+   documentation;
+5. run the repository privacy checks and pre-commit hooks before committing;
+6. never bypass a secret-scanning or private-key warning merely to complete a
+   delivery;
+7. keep all real databases, inputs, responses, credentials, cloud state, and
+   evaluation packages under ignored local storage such as `.chronicle/`.
+
+External-provider disclosure authorization is not GitHub publication
+authorization. Real data approved for a bounded model call remains private and
+must not be committed unless the owner separately and explicitly approves its
+publication.
+
 ## Poetry Virtualenv Preflight
 
 Poetry can accidentally install this project's dependencies into another project's virtualenv if the shell has an active `VIRTUAL_ENV`. This already happened once on this machine when Poetry saw a `VIRTUAL_ENV` from another repo.
