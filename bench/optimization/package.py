@@ -151,6 +151,11 @@ class ResultAuthority(StrictModel):
     model_artifact_sha256: dict[str, str]
     proposer_identity_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     optimizer_identity_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    execution_authority_sha256: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        exclude_if=lambda value: value is None,
+    )
 
 
 class CandidateResult(StrictModel):

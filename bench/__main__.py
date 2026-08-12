@@ -64,6 +64,7 @@ _SAFE_ERRORS = (
     "deterministic artifact mismatch:",
     "judged scoring manifest is inconsistent",
     "optimizer execution requires all remote disclosure and budget flags",
+    "optimizer recovery requires the pinned clean application commit",
 )
 
 
@@ -266,6 +267,17 @@ def optimization_inspect(config: Path = typer.Option(...)) -> None:
         from .optimization.operations import inspect_run
 
         emit(inspect_run(config.resolve()))
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        fail(exc)
+
+
+@app.command("recover-gepa-readiness")
+def optimization_recover_gepa_readiness(config: Path = typer.Option(...)) -> None:
+    """Recover historical P0/Bootstrap authority without calls and stop before GEPA."""
+    try:
+        from .optimization.recovery import recover_gepa_readiness
+
+        emit(recover_gepa_readiness(config.resolve()))
     except (OSError, ValueError, KeyError, RuntimeError) as exc:
         fail(exc)
 

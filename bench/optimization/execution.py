@@ -917,6 +917,7 @@ def _build_result(
         model_artifact_sha256=execution_authority.model_artifact_sha256,
         proposer_identity_sha256=execution_authority.proposer_identity_sha256,
         optimizer_identity_sha256=execution_authority.optimizer_identity_sha256,
+        execution_authority_sha256=execution_authority.authority_sha256,
     )
     payload = {
         "format_version": 1,

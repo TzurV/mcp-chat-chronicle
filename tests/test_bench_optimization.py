@@ -80,6 +80,11 @@ from bench.optimization.production import (
     _history_usage,
     build_proposer_client,
 )
+from bench.optimization.recovery import (
+    RecoveryReadiness,
+    recover_gepa_readiness,
+    resolve_result_authorization,
+)
 from bench.optimization.request_envelope import (
     estimate_request_envelope,
     verify_demonstration_authority,
@@ -93,6 +98,8 @@ from chat_chronicle.ai import CompletionResponse, canonical_hash
 from chat_chronicle.ai_config import load_task_catalog
 
 APPLICATION_COMMIT = "a" * 40
+SECOND_APPLICATION_COMMIT = "b" * 40
+THIRD_APPLICATION_COMMIT = "c" * 40
 PROVIDERS = ["chatgpt"] * 3 + ["openai_codex"] * 3 + ["claude"] * 2 + ["claude_code"] * 2
 LENGTHS = ["short", "medium", "long", "short", "medium", "long", "short", "medium", "long", "short"]
 
@@ -563,6 +570,14 @@ def clean_identity() -> ImplementationIdentity:
     return ImplementationIdentity(APPLICATION_COMMIT, False, None)
 
 
+def recovery_identity() -> ImplementationIdentity:
+    return ImplementationIdentity(THIRD_APPLICATION_COMMIT, False, None)
+
+
+def recover_synthetic(config_path: Path) -> dict[str, object]:
+    return recover_gepa_readiness(config_path, identity_probe=recovery_identity)
+
+
 def finish_synthetic_run(
     config_path: Path,
     adapters: ExecutionAdapters,
@@ -576,6 +591,461 @@ def finish_synthetic_run(
     if result["status"] == "pilot-complete":
         result = run_optimization(config_path, adapters, resume=True, **kwargs)
     return result
+
+
+class FailingBootstrapAdapter(FakeOptimizerAdapter):
+    def bootstrap(self, parent: CandidatePackage, authority) -> Proposal:
+        del parent, authority
+        raise RuntimeError("synthetic bootstrap interruption")
+
+
+def historical_recovery_workspace(tmp_path: Path) -> Path:
+    """Create three append-only Bootstrap attempts across three clean commits."""
+
+    config_path = synthetic_workspace(
+        tmp_path, pilot_candidates=1, total_candidates=1, task_invocations=170
+    )
+    candidate = FakeCandidateAdapter()
+
+    def identity(commit: str):
+        return lambda: ImplementationIdentity(commit, False, None)
+
+    with pytest.raises(ValueError, match="usage is missing"):
+        run_optimization(
+            config_path,
+            ExecutionAdapters(candidate, FailingBootstrapAdapter()),
+            resume=False,
+            identity_probe=identity(APPLICATION_COMMIT),
+        )
+    for commit in (SECOND_APPLICATION_COMMIT, THIRD_APPLICATION_COMMIT):
+        value = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        value["application_commit"] = commit
+        config_path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
+        if commit == SECOND_APPLICATION_COMMIT:
+            with pytest.raises(ValueError, match="usage is missing"):
+                run_optimization(
+                    config_path,
+                    ExecutionAdapters(candidate, FailingBootstrapAdapter()),
+                    resume=True,
+                    identity_probe=identity(commit),
+                )
+        else:
+            finished = run_optimization(
+                config_path,
+                ExecutionAdapters(candidate, FakeOptimizerAdapter(max_gepa=0)),
+                resume=True,
+                identity_probe=identity(commit),
+            )
+            assert finished["status"] == "pilot-no-improvement"
+
+    root = tmp_path / "private" / "run"
+    state_path = root / "run-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert len(state["bootstrap_result_ids"]) == 1
+    state.update(
+        status="in-progress",
+        bootstrap_result_ids=[],
+        pilot_checkpoint=None,
+        stop_reason=None,
+    )
+    state["state_sha256"] = digest(
+        {key: item for key, item in state.items() if key != "state_sha256"}
+    )
+    write_json(state_path, state)
+    return config_path
+
+
+def recovery_artifacts(
+    config_path: Path,
+) -> tuple[Path, CandidateResult, CandidateResult, CandidatePackage, CandidatePackage]:
+    root = config_path.parent / "private" / "run"
+    by_role = {}
+    for path in (root / "results").glob("*.json"):
+        result = CandidateResult.model_validate_json(path.read_text(encoding="utf-8"))
+        package = read_package(root / "candidates" / f"{result.candidate_id}.json")
+        by_role[package.lineage.optimizer] = (result, package)
+    p0, p0_package = by_role["p0"]
+    bootstrap, bootstrap_package = by_role["bootstrap-few-shot"]
+    return root, p0, bootstrap, p0_package, bootstrap_package
+
+
+def rewrite_state(root: Path, update: dict[str, object]) -> None:
+    path = root / "run-state.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    value.update(update)
+    value["state_sha256"] = digest(
+        {key: item for key, item in value.items() if key != "state_sha256"}
+    )
+    write_json(path, value)
+
+
+def test_recovery_accepts_historical_commits_registers_bootstrap_and_selects_p0(
+    tmp_path: Path,
+) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    root, p0, bootstrap, _p0_package, bootstrap_package = recovery_artifacts(config_path)
+    preserved_paths = sorted(
+        path
+        for directory in (
+            "authorizations",
+            "consumed-authorizations",
+            "candidates",
+            "results",
+            "trials",
+        )
+        for path in (root / directory).rglob("*.json")
+    ) + [root / "budget.json"]
+    preserved = {path: path.read_bytes() for path in preserved_paths}
+
+    recovered = recover_synthetic(config_path)
+
+    assert recovered == {
+        "status": "gepa-ready",
+        "p0_results": 1,
+        "bootstrap_results": 1,
+        "gepa_results": 0,
+        "gepa_attempts": 0,
+        "gepa_parent": "p0",
+        "bootstrap_disposition": "complete-non-promotable",
+        "bootstrap_disposition_basis": "manager-policy",
+        "historical_authorizations": 3,
+        "recovery_sha256": recovered["recovery_sha256"],
+        "recovery_provider_calls": 0,
+    }
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    assert state["baseline_result_id"] == p0.result_id
+    assert state["bootstrap_result_ids"] == [bootstrap.result_id]
+    readiness = RecoveryReadiness.model_validate_json(
+        (root / "checkpoints" / "gepa-readiness.json").read_text(encoding="utf-8")
+    )
+    assert readiness.gepa_parent_result_id == p0.result_id
+    assert readiness.bootstrap_disposition_basis == "manager-policy"
+    assert readiness.bootstrap_disposition_result_id == bootstrap.result_id
+    assert readiness.results[0].execution_authority_sha256 != (
+        readiness.results[1].execution_authority_sha256
+    )
+    assert p0.authority.application_commit == APPLICATION_COMMIT
+    assert bootstrap.authority.application_commit == THIRD_APPLICATION_COMMIT
+    legacy_payload = p0.model_dump(mode="json", exclude={"result_id"})
+    legacy_payload["authority"].pop("execution_authority_sha256")
+    legacy = CandidateResult(result_id=result_identity(legacy_payload), **legacy_payload)
+    assert (
+        resolve_result_authorization(
+            root, legacy, load_optimization_config(config_path)
+        ).application_commit
+        == APPLICATION_COMMIT
+    )
+    assert all(path.read_bytes() == value for path, value in preserved.items())
+
+    verified = verify_candidate(
+        config_path, root / "candidates" / f"{bootstrap_package.candidate_id}.json"
+    )
+    assert verified["valid"] is True
+    assert inspect_run(config_path)["provider_calls"] == 0
+
+
+def test_recovery_is_idempotent_and_preserves_attempts_and_current_pointer(
+    tmp_path: Path,
+) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    root, *_ = recovery_artifacts(config_path)
+    attempts = root / "trials" / "proposal-bootstrap-few-shot-0001"
+    before = {path: path.read_bytes() for path in sorted(attempts.rglob("*.json"))}
+
+    first = recover_synthetic(config_path)
+    first_state = (root / "run-state.json").read_bytes()
+    first_readiness = (root / "checkpoints" / "gepa-readiness.json").read_bytes()
+    second = recover_synthetic(config_path)
+
+    assert first == second
+    assert (root / "run-state.json").read_bytes() == first_state
+    assert (root / "checkpoints" / "gepa-readiness.json").read_bytes() == first_readiness
+    assert {path: path.read_bytes() for path in sorted(attempts.rglob("*.json"))} == before
+    assert [item.status for item in TrialStore(root).attempts(attempts.name)] == [
+        "interrupted",
+        "interrupted",
+        "complete",
+    ]
+
+
+def test_recovery_requires_exact_clean_pinned_commit(tmp_path: Path) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    assert (
+        recover_gepa_readiness(config_path, identity_probe=recovery_identity)["status"]
+        == "gepa-ready"
+    )
+
+
+@pytest.mark.parametrize(
+    ("identity", "description"),
+    [
+        (ImplementationIdentity(THIRD_APPLICATION_COMMIT, True, "dirty"), "dirty"),
+        (ImplementationIdentity("d" * 40, False, None), "wrong-commit"),
+    ],
+)
+def test_recovery_rejects_unpinned_checkout_before_run_state_access(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    identity: ImplementationIdentity,
+    description: str,
+) -> None:
+    del description
+    config_path = historical_recovery_workspace(tmp_path)
+    root, *_ = recovery_artifacts(config_path)
+    state_before = (root / "run-state.json").read_bytes()
+    monkeypatch.setattr(
+        "bench.optimization.recovery._load_state",
+        lambda _root: pytest.fail("run state was accessed before implementation verification"),
+    )
+    with pytest.raises(ValueError, match="pinned clean application commit"):
+        recover_gepa_readiness(config_path, identity_probe=lambda: identity)
+    assert (root / "run-state.json").read_bytes() == state_before
+    assert not (root / "checkpoints" / "gepa-readiness.json").exists()
+
+
+def test_recovery_does_not_relax_current_clean_commit_for_new_execution(
+    tmp_path: Path,
+) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    recover_synthetic(config_path)
+    with pytest.raises(ValueError, match="pinned clean application commit"):
+        run_optimization(
+            config_path,
+            ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter()),
+            resume=True,
+            identity_probe=lambda: ImplementationIdentity("d" * 40, False, None),
+        )
+
+
+@pytest.mark.parametrize(
+    "mode", ["missing", "dangling", "duplicate", "stale", "foreign-run", "hash-invalid"]
+)
+def test_recovery_rejects_invalid_authorization_history(tmp_path: Path, mode: str) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    root, *_ = recovery_artifacts(config_path)
+    authorization_paths = sorted((root / "authorizations").glob("*.json"))
+    consumed_paths = sorted((root / "consumed-authorizations").glob("*.json"))
+    if mode == "missing":
+        consumed_paths[0].unlink()
+    elif mode == "dangling":
+        write_json(
+            root / "consumed-authorizations" / f"{'f' * 64}.json",
+            {"authority_sha256": "f" * 64, "run_id": "synthetic-run"},
+        )
+    elif mode == "duplicate":
+        state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+        rewrite_state(
+            root,
+            {
+                "authorization_ids": [
+                    *state["authorization_ids"],
+                    state["authorization_ids"][0],
+                ]
+            },
+        )
+    elif mode == "stale":
+        state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+        rewrite_state(root, {"authorization_ids": list(reversed(state["authorization_ids"]))})
+    elif mode == "foreign-run":
+        value = json.loads(consumed_paths[0].read_text(encoding="utf-8"))
+        value["run_id"] = "foreign-run"
+        write_json(consumed_paths[0], value)
+    else:
+        value = json.loads(authorization_paths[0].read_text(encoding="utf-8"))
+        value["authority_sha256"] = "0" * 64
+        write_json(authorization_paths[0], value)
+    with pytest.raises((ValueError, ValidationError), match="authorization|hash"):
+        recover_synthetic(config_path)
+
+
+def test_recovery_rejects_immutable_experiment_change(tmp_path: Path) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    value = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    value["seed"] += 1
+    config_path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
+    with pytest.raises(ValueError, match="immutable experiment"):
+        recover_synthetic(config_path)
+
+
+def test_application_commit_change_without_consumed_authorization_fails(
+    tmp_path: Path,
+) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    root, p0, *_ = recovery_artifacts(config_path)
+    config = load_optimization_config(config_path)
+    payload = p0.model_dump(mode="json", exclude={"result_id"})
+    payload["authority"]["application_commit"] = "d" * 40
+    payload["authority"]["config_sha256"] = optimization_config_identity(
+        config.model_copy(update={"application_commit": "d" * 40})
+    )
+    changed = CandidateResult(result_id=result_identity(payload), **payload)
+    with pytest.raises(ValueError, match="application identity"):
+        resolve_result_authorization(root, changed, config)
+
+
+@pytest.mark.parametrize("kind", ["candidate", "result", "trial", "authorization"])
+def test_recovery_identity_mismatches_fail_with_actionable_diagnostics(
+    tmp_path: Path, kind: str
+) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    root, _p0, bootstrap, _p0_package, bootstrap_package = recovery_artifacts(config_path)
+    if kind == "candidate":
+        path = root / "candidates" / f"{bootstrap_package.candidate_id}.json"
+        value = json.loads(path.read_text(encoding="utf-8"))
+        value["candidate_id"] = "0" * 64
+        write_json(path, value)
+    elif kind == "result":
+        path = root / "results" / f"{bootstrap.result_id}.json"
+        value = json.loads(path.read_text(encoding="utf-8"))
+        value["result_id"] = "0" * 64
+        write_json(path, value)
+    elif kind == "trial":
+        path = root / "trials" / "proposal-bootstrap-few-shot-0001" / "current.json"
+        value = json.loads(path.read_text(encoding="utf-8"))
+        value["attempt_sha256"] = "0" * 64
+        write_json(path, value)
+    else:
+        path = sorted((root / "authorizations").glob("*.json"))[0]
+        value = json.loads(path.read_text(encoding="utf-8"))
+        value["authority_sha256"] = "0" * 64
+        write_json(path, value)
+    with pytest.raises((ValueError, ValidationError), match="identity|authority|hash|mismatch"):
+        recover_synthetic(config_path)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "attempt",
+        "state-result",
+        "current-only",
+        "empty-directory",
+        "candidate-only",
+        "malformed-pointer",
+    ],
+)
+def test_existing_gepa_evidence_blocks_recovery(tmp_path: Path, kind: str) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    root, _p0, _bootstrap, p0_package, _bootstrap_package = recovery_artifacts(config_path)
+    if kind == "attempt":
+        TrialStore(root).append("proposal-gepa-0001", "failed", {"provider_calls": 0})
+    elif kind == "state-result":
+        rewrite_state(root, {"gepa_result_ids": ["f" * 64]})
+    elif kind == "candidate-only":
+        candidate = mutate_package(
+            p0_package,
+            {task: p0_package.prompts[task].text + "\nSynthetic GEPA." for task in TASK_ORDER},
+            optimizer="gepa",
+            proposer_id="synthetic",
+            mutation_ordinal=1,
+        )
+        write_package(root / "candidates" / f"{candidate.candidate_id}.json", candidate)
+    else:
+        trial = root / "trials" / "proposal-gepa-0001"
+        trial.mkdir(parents=True)
+        if kind == "current-only":
+            write_json(
+                trial / "current.json",
+                {
+                    "format_version": 1,
+                    "trial_id": "proposal-gepa-0001",
+                    "current_attempt": 1,
+                    "attempt_sha256": "f" * 64,
+                },
+            )
+        elif kind == "malformed-pointer":
+            write_json(trial / "current.json", {"malformed": True})
+    with pytest.raises(ValueError, match="existing GEPA evidence"):
+        recover_synthetic(config_path)
+
+
+def test_recovery_atomic_writes_retry_windows_sharing_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    import os
+
+    real_replace = os.replace
+    calls = 0
+    retried: set[str] = set()
+
+    def sharing_violation_once(source: str, destination: Path) -> None:
+        nonlocal calls
+        calls += 1
+        name = Path(destination).name
+        if name in {"run-state.json", "gepa-readiness.json"} and name not in retried:
+            retried.add(name)
+            error = PermissionError("synthetic sharing violation")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        real_replace(source, destination)
+
+    monkeypatch.setattr("bench.io.os.replace", sharing_violation_once)
+    monkeypatch.setattr("bench.io.time.sleep", lambda _seconds: None)
+    assert recover_synthetic(config_path)["status"] == "gepa-ready"
+    assert retried == {"run-state.json", "gepa-readiness.json"}
+    assert calls >= 4
+
+
+def test_recovery_rerun_repairs_failure_between_atomic_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = historical_recovery_workspace(tmp_path)
+    root, *_ = recovery_artifacts(config_path)
+    state_before = (root / "run-state.json").read_bytes()
+    from bench.io import atomic_json as real_atomic_json
+
+    failed = False
+
+    def fail_readiness_once(path: Path, value: object) -> None:
+        nonlocal failed
+        if path.name == "gepa-readiness.json" and not failed:
+            failed = True
+            raise OSError("synthetic interruption between recovery writes")
+        real_atomic_json(path, value)
+
+    with monkeypatch.context() as context:
+        context.setattr("bench.optimization.recovery.atomic_json", fail_readiness_once)
+        with pytest.raises(OSError, match="between recovery writes"):
+            recover_synthetic(config_path)
+
+    recovered_state = (root / "run-state.json").read_bytes()
+    assert recovered_state != state_before
+    assert not (root / "checkpoints" / "gepa-readiness.json").exists()
+    first_complete = recover_synthetic(config_path)
+    state_after = (root / "run-state.json").read_bytes()
+    readiness_after = (root / "checkpoints" / "gepa-readiness.json").read_bytes()
+    second_complete = recover_synthetic(config_path)
+    assert first_complete == second_complete
+    assert state_after == recovered_state == (root / "run-state.json").read_bytes()
+    assert readiness_after == (root / "checkpoints" / "gepa-readiness.json").read_bytes()
+
+
+def test_recovery_imports_no_provider_or_credential_clients() -> None:
+    code = """
+import sys
+from bench.optimization import recovery
+forbidden = (
+    'bench.optimization.production',
+    'dspy',
+    'litellm',
+    'google.auth',
+    'google.cloud.aiplatform',
+)
+loaded = [name for name in forbidden if name in sys.modules]
+if loaded:
+    raise SystemExit('forbidden imports: ' + ','.join(loaded))
+print(recovery.__name__)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(__file__).parents[1],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == "bench.optimization.recovery"
 
 
 def metric(**updates: object) -> MetricVector:

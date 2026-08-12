@@ -18,7 +18,6 @@ from .execution import RunState
 from .models import (
     load_optimization_config,
     optimization_config_identity,
-    proposer_identity,
     resolve_config_path,
 )
 from .package import (
@@ -30,6 +29,7 @@ from .package import (
     write_package,
 )
 from .privacy import SCANNER_VERSION
+from .recovery import resolve_result_authorization
 from .request_envelope import estimate_request_envelope, verify_demonstration_authority
 from .trials import TrialStore
 
@@ -327,31 +327,8 @@ def _load_run_state(root: Path) -> RunState:
 
 def _read_verified_result(root: Path, result_id: str, config) -> CandidateResult:
     result = read_result(root / "results" / f"{result_id}.json")
-    if result.authority.run_id != config.run_id:
-        raise ValueError("optimizer result run identity mismatch")
-    if result.authority.application_commit != config.application_commit:
-        raise ValueError("optimizer result application identity mismatch")
-    if result.authority.config_sha256 != optimization_config_identity(config):
-        raise ValueError("optimizer result configuration identity mismatch")
-    if result.authority.train_manifest_sha256 != config.train_manifest.sha256:
-        raise ValueError("optimizer result train split identity mismatch")
-    if result.authority.validation_manifest_sha256 != config.validation_manifest.sha256:
-        raise ValueError("optimizer result validation split identity mismatch")
-    if result.authority.model_artifact_sha256 != {
-        model.id: model.artifact_sha256 for model in config.candidate_models
-    }:
-        raise ValueError("optimizer result model artifact identity mismatch")
-    if result.authority.proposer_identity_sha256 != proposer_identity(config.proposer):
-        raise ValueError("optimizer result proposer identity mismatch")
-    if result.authority.optimizer_identity_sha256 != digest(
-        {
-            "versions": config.versions.model_dump(mode="json"),
-            "seed": config.seed,
-            "bootstrap_teacher": config.bootstrap_teacher,
-            "gepa_instruction_only": config.gepa_instruction_only,
-        }
-    ):
-        raise ValueError("optimizer result framework identity mismatch")
+    state = _load_run_state(root)
+    resolve_result_authorization(root, result, config, authorization_ids=state.authorization_ids)
     if result.privacy.scanner_version != SCANNER_VERSION:
         raise ValueError("optimizer result privacy scanner identity mismatch")
     return result
