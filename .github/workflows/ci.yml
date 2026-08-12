@@ -27,7 +27,7 @@ jobs:
         run: pipx install poetry
 
       - name: Install dependencies
-        run: poetry install -E mcp
+        run: poetry install -E mcp -E optimization
 
       - name: Lint
         run: poetry run ruff check .
