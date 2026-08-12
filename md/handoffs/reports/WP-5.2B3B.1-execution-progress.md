@@ -2,11 +2,44 @@
 
 ## Status
 
-**Ready for Vertex proposer route PM validation.** The accepted Gate 1 implementation remains intact.
-This unstaged, uncommitted amendment replaces the selected proposer route with Google Vertex AI
-`vertex_ai/gemini-3.1-pro-preview`, `global`, authenticated through ADC.
-Work remains stopped before private transfer, provider/model calls, credential use, paid allocation,
-and holdout access.
+**WP-5.2B3B.1B Gate 2/3 was accepted by PM validation on 2026-08-12.** The
+no-call checkpoint recovery is complete from clean manager commit
+`96d9fca9fed965e72f3e1182b72d0a9b3e3d618b`. P0 is the explicit future GEPA
+parent; Bootstrap attempt `0003` is registered as a completed manager-policy
+non-promotable comparator. GEPA remains unstarted.
+
+## 2026-08-12 checkpoint recovery and readiness update
+
+- A separately authorized retrieval-only RunPod session returned the missing
+  canonical metadata/evidence from the retained private network volume. Seven
+  terminal hashes and the accepted P0 logical checkpoint verified locally; no
+  training payload or holdout file was retrieved.
+- The ignored private optimization config changed only at
+  `application_commit`; parsed comparison proved all other fields unchanged.
+- `recover-gepa-readiness` ran twice locally. Both runs returned the same stable
+  recovery identity, and the second run left the canonical state and readiness
+  bytes unchanged.
+- The recovered state contains one P0 result, one Bootstrap result, all three
+  consumed historical authorizations, and zero GEPA attempts/results.
+- Attempts `0001`/`0002`/`0003`, current pointers, candidates, results,
+  authorizations, budget/accounting, fixed-judge evidence, response hash
+  evidence, and manifests remained unchanged.
+- P0 remains the GEPA parent. Bootstrap is recorded as
+  `complete-non-promotable` with basis `manager-policy`.
+- New reservations, proposer calls, recovery provider calls, credential access,
+  judging, candidate inference, and holdout access were zero.
+- Retrieval compute ran for about 24 minutes at US$0.99/hour (approximately
+  US$0.40 under the separate US$5 cap), then stopped. Ongoing GPU spend is
+  US$0/hour; the Pod and retained private volume remain preserved.
+- GEPA still requires a fresh explicit owner authorization. This readiness
+  checkpoint authorizes no compute allocation, ADC activity, or provider call.
+
+The older sections below preserve the historical Vertex-route and Gate 1
+observations rather than rewriting them.
+The historical statement below that work was stopped before private transfer
+applied at its original Gate 1 checkpoint; the later retrieval-only exception
+is recorded above. Work remains stopped before provider/model calls, credential
+use, GEPA, and holdout access.
 
 The clean starting authority is `main` commit
 `97c204ddc6d2dd48b70927888667c91562ffd936`. The manager-created commit containing this patch must

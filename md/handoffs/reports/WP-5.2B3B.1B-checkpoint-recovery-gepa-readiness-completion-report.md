@@ -1,16 +1,72 @@
-# WP-5.2B3B.1B checkpoint recovery and GEPA readiness — Gate 1 report
+# WP-5.2B3B.1B checkpoint recovery and GEPA readiness completion report
 
 ## Status
 
-Gate 0 and Gate 1 are complete from manager commit
-`be33ee986554a2482e3a3287358b3449f678fcb0`. This delivery is stopped at the
-mandatory manager checkpoint. Gate 2 private recovery and Gate 3 private
-readiness evidence have not been run.
+**Accepted by PM validation on 2026-08-12.** Gate 2 and Gate 3 are complete from the clean manager commit
+`96d9fca9fed965e72f3e1182b72d0a9b3e3d618b`. The private no-call recovery ran
+exactly twice: once to recover/verify readiness and once to prove idempotency.
+Both invocations returned the same stable recovery identity, and the canonical
+state and readiness files were byte-identical after the second invocation.
 
-The first manager review required three bounded corrections. All three findings
-and the additional evidence requirements are now addressed. All tracked changes
-remain unstaged and uncommitted, so the manager's Gate 1 commit identity is
-still pending.
+P0 is the explicit GEPA parent. Bootstrap attempt `0003` is registered as the
+completed, manager-policy, non-promotable comparator. GEPA attempts, results,
+proposer calls, and recovery provider calls remain zero. No P0, Bootstrap,
+candidate, judge, or provider execution occurred. The delivery passed PM
+validation; GEPA remains a separately authorized next activity.
+
+The private canonical files required by Gate 2 were absent locally, so the owner
+separately authorized a retrieval-only operation against the retained private
+network volume. Compatible compute was available after a bounded capacity wait.
+The archive was constrained to canonical metadata/evidence, verified locally,
+and excluded train conversation payloads and all holdout files. Compute was then
+stopped, with the Pod and retained volume preserved. The approximately 24-minute
+retrieval cost was about US$0.40 at US$0.99/hour, below the separate US$5 cap;
+ongoing GPU spend is US$0/hour.
+
+## Gate 2 private no-call recovery
+
+- The ignored private configuration was changed only at `application_commit`,
+  from the Bootstrap execution commit to the manager Gate 1 commit. Parsed
+  before/after comparison proved every other configuration field identical.
+- Seven terminal-manifest authority hashes verified before recovery. The
+  accepted P0 logical checkpoint remained byte-identical.
+- The frozen development manifests remained bound to six train and four
+  optimizer-validation conversations; conversation payloads were not retrieved
+  or inspected.
+- The recovered state contains one P0 result, one Bootstrap result from attempt
+  `0003`, three historical consumed authorizations, zero GEPA attempts/results,
+  and no new reservation or usage.
+- Attempts `0001`, `0002`, and `0003` and the current Bootstrap proposal pointer
+  remain append-only and unchanged.
+- Thirty-one retrieved historical optimizer/manifest files and 35 local
+  fixed-judge files rehashed identically after both recovery invocations. The
+  retained 200 provider-response records were represented by a remotely
+  generated checksum index; response content was neither copied nor modified.
+- Aggregate inspect succeeded without adapters or calls. It reported the
+  historical 316 task invocations, 40 infrastructure retries, 0.871324 compute
+  hours, and US$1.353101 compute cost unchanged; proposer usage remained zero.
+
+## Gate 3 GEPA-readiness evidence
+
+The ignored readiness checkpoint binds the recovered canonical-state identity,
+immutable experiment identity, budget identity, all three consumed execution
+authorizations, the P0 and Bootstrap result resolutions, the Bootstrap manager
+policy disposition, and P0 parent selection. It records literal zeros for GEPA
+attempts, GEPA results, proposer calls, and recovery provider calls.
+
+The configured remaining proposer capacity is unchanged at 244 calls,
+12,249,977 input tokens, 1,959,729 output/reasoning tokens, and US$49.016702.
+The configured total compute envelope remains 12 hours and US$18.635117; after
+the retained optimizer accounting, 11.128676 hours and US$17.282016 remain in
+that configuration. These are readiness limits, not permission to spend.
+
+Starting GEPA still requires a new explicit owner authorization. Local Vertex
+execution must follow `docs/windows-vertex-adc.md`; remote execution must follow
+`docs/runpod-vertex-adc.md` and keep ADC in RAM-backed temporary storage. The
+next authorized execution must update only the ignored configuration's current
+application commit, reverify immutable evidence, allocate compatible compute if
+approved, and begin GEPA from P0. Bootstrap must not be promoted or used as the
+parent.
 
 ## Executive summary
 
@@ -69,16 +125,21 @@ response accounting are neither rewritten nor reinterpreted.
 ## Gate 0 evidence
 
 - Branch: `main`.
-- Starting HEAD: `be33ee986554a2482e3a3287358b3449f678fcb0`.
+- Gate 1 starting HEAD: `be33ee986554a2482e3a3287358b3449f678fcb0`;
+  Gate 2 clean manager HEAD: `96d9fca9fed965e72f3e1182b72d0a9b3e3d618b`.
 - Starting tracked checkout: clean.
 - Poetry environment: this repository's `.venv`.
 - Ordinary `chat_chronicle` and `bench` imports loaded zero DSPy, LiteLLM,
   Google-auth, or Vertex client modules.
-- The known ignored immutable evidence index verified all 130 files.
-- Inventory: one P0 package/result, one Bootstrap package/result, Bootstrap
-  attempts `0001`/`0002`/`0003`, one current proposal pointer, three execution
-  authorizations, three corresponding consumed-authorization records, one
-  budget state, and 82 retained provider-response records.
+- The refreshed canonical inventory verified one P0 package/result, one
+  Bootstrap package/result, Bootstrap attempts `0001`/`0002`/`0003`, all current
+  terminal trial pointers, three execution authorizations, three corresponding
+  consumed-authorization records, one budget state, and a 200-record provider
+  response checksum index.
+- The bounded retrieval contained 33 files: the required canonical
+  configuration/authority/state/result/trial/manifest evidence plus the remote
+  response checksum index. It contained zero conversation input payloads and
+  zero holdout files.
 - Both historical results resolved uniquely in the metadata-only inventory.
 - The frozen train and validation manifest bindings verified as 6/4.
 - Recorded GEPA results, GEPA attempts, proposer calls, and holdout files opened:
@@ -179,7 +240,8 @@ private source or model output.
 - `bench/__main__.py` — adds `recover-gepa-readiness`.
 - `tests/test_bench_optimization.py` — required synthetic recovery and
   compatibility regressions.
-- This Gate 1 report.
+- This completion report, the execution progress report, research activity log,
+  and development ledger are updated for Gate 2/3 PM validation.
 
 ## Validation
 
@@ -197,11 +259,21 @@ private source or model output.
 - `git diff --cached --name-only` — empty.
 - `git ls-files .chronicle` — empty.
 
+Gate 2/3 repeat validation from the current working tree also passed: 132
+focused optimizer tests, the complete repository suite (606 passed, one
+skipped), Ruff, Poetry validation, both CLI help checks, `git diff --check`, the
+empty staging check, and the private-tracking check. Existing unrelated owner
+working-tree changes were preserved and excluded from this delivery's file
+list.
+
 ## Privacy and execution boundary
 
-No private recovery was executed. No P0, Bootstrap, GEPA, candidate inference,
-fixed judging, model loading, RunPod, ADC, credential, network, or provider
-operation occurred. No holdout path, identity, or content was opened. Provider
+The private operation was metadata-only recovery from the retrieved canonical
+evidence. No P0, Bootstrap, GEPA, candidate inference, fixed judging, model
+loading, ADC, credential, or provider operation occurred. The retrieval-only
+Pod never loaded a model or ran an optimizer and was stopped immediately after
+local verification. No holdout path, identity, or content was opened. Training
+and validation conversation payloads were not retrieved or inspected. Provider
 calls and new budget reservations made by recovery are zero. Historical
 candidate response records and budget accounting remain intact.
 
@@ -210,15 +282,11 @@ asserts that it does not load the production adapter, DSPy, LiteLLM,
 `google.auth`, or the Vertex client. The recovery implementation constructs no
 candidate or optimizer adapter.
 
-## Mandatory stop and next boundary
+## PM stop and next boundary
 
-The manager must review and commit this generic Gate 1 patch. Gate 2 must not be
-run from this dirty checkout. After the manager supplies the exact clean commit,
-the executor may reverify the private inventory and run the recovery command
-under the handoff's separately recorded no-call authorization. GEPA still
-requires a later explicit owner authorization; this report does not authorize
-compute allocation, credentials, or the first proposer call.
-
-The progress report, research activity log, and development ledger are not
-updated at this checkpoint because the handoff assigns those final delivery
-updates to the post-recovery Gate 2/3 report commit.
+Gate 2/3 is complete and stopped for PM validation. The manager owns the final
+documentation commit. GEPA remains unstarted and requires a new explicit owner
+authorization before compute allocation, credential setup, or the first
+proposer call. That authorization must preserve P0 as parent, the frozen 6/4
+development authority, the existing budgets, the accepted Vertex global route,
+and the no-holdout boundary.

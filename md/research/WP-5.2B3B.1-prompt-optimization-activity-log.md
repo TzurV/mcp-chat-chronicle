@@ -1,9 +1,9 @@
 # WP-5.2B3B.1 Prompt Optimization Activity Log
 
-**Status:** Ongoing evidence collection; P0 and BootstrapFewShot complete, GEPA
-not started
+**Status:** P0 and BootstrapFewShot complete; canonical no-call recovery is
+accepted and GEPA-ready with P0 as parent; GEPA not started
 
-**Evidence date:** 2026-08-11
+**Evidence date:** 2026-08-12
 
 **Purpose:** Preserve a detailed, privacy-safe record of the prompt-optimization
 work, including negative results, engineering failures, DSPy compatibility
@@ -658,7 +658,38 @@ Do not claim:
 - invalid outputs have equivalent semantic quality to valid outputs;
 - the prompt search improved the untouched holdout.
 
-## 17. Evidence Sources
+## 17. Checkpoint recovery and GEPA readiness
+
+On 2026-08-12, manager commit
+`96d9fca9fed965e72f3e1182b72d0a9b3e3d618b` supplied the accepted generic
+historical-authority repair. A separately owner-authorized retrieval-only Pod
+session returned the missing canonical metadata from the retained private
+network volume. The bounded archive excluded train conversation payloads and
+all holdout files. Local hashes matched the terminal evidence, after which the
+Pod was stopped and GPU spend returned to US$0/hour.
+
+The ignored configuration changed only at `application_commit`; every other
+parsed field remained identical. Network-free recovery ran twice from the exact
+clean manager commit. The second invocation reproduced the same stable recovery
+identity and byte-identical canonical state/readiness artifacts.
+
+Recovered evidence records:
+
+- one P0 result and one Bootstrap result from attempt `0003`;
+- three exact consumed historical execution authorizations;
+- P0 as the explicit GEPA parent;
+- Bootstrap as `complete-non-promotable` by manager policy;
+- zero GEPA attempts, results, and proposer calls;
+- zero recovery provider calls and zero new reservations; and
+- unchanged attempts `0001`/`0002`/`0003`, candidates, results, budget,
+  response hashes, fixed-judge evidence, and frozen 6/4 manifests.
+
+This is a bookkeeping/readiness result, not a prompt-quality improvement.
+Bootstrap remains a negative comparator and GEPA remains unstarted. A new owner
+authorization is required before compatible compute, ADC setup, or the first
+GEPA proposer call.
+
+## 18. Evidence Sources
 
 - `md/handoffs/WP-5.2B3B-global-prompt-development.md`
 - `md/handoffs/reports/WP-5.2B3B-completion-report.md`
@@ -672,6 +703,8 @@ Do not claim:
 - `docs/windows-vertex-adc.md`
 - `md/handoffs/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference.md`
 - `md/handoffs/reports/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference-completion-report.md`
+- `md/handoffs/WP-5.2B3B.1B-checkpoint-recovery-gepa-readiness.md`
+- `md/handoffs/reports/WP-5.2B3B.1B-checkpoint-recovery-gepa-readiness-completion-report.md`
 - [DSPy BootstrapFewShot API](https://dspy.ai/api/optimizers/BootstrapFewShot/)
 - [DSPy GEPA API](https://dspy.ai/api/optimizers/GEPA/overview/)
 - [DSPy MIPROv2 API](https://dspy.ai/api/optimizers/MIPROv2/)

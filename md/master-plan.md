@@ -638,7 +638,7 @@ prompts are inferior.
 
 **WP-5.2B3B.1 Established automatic prompt optimization and remote search.**
 *(Gate 1 foundation, Vertex route, P0, and Bootstrap comparator complete;
-GEPA pending after local checkpoint recovery; handoff:
+checkpoint recovery accepted; GEPA pending fresh authorization; handoff:
 `md/handoffs/WP-5.2B3B.1-automatic-prompt-optimization-remote-search.md`)*
 *Objective:* Test the potential of established prompt-improvement methods rather
 than adding further manually invented variants.
@@ -683,7 +683,7 @@ verified return or pause; persistent private state is retained or deleted only
 under the current explicit owner instruction; and a bounded shortlist, not a
 hand-selected single prompt, is delivered for local transfer testing.
 
-**Accepted progress through WP-5.2B3B.1A (2026-08-11):** P0 remains frozen at
+**Accepted progress through WP-5.2B3B.1B (2026-08-12):** P0 remains frozen at
 11/32 valid on the four-conversation validation split. One append-only
 BootstrapFewShot attempt completed with four labeled demonstrations and no
 accepted generated demonstration. It also produced 11/32 valid outputs, shifted
@@ -693,11 +693,13 @@ gate. A separate local fixed-judge reference completed 22/22 eligible outputs:
 P0 scored 3.1600 versus Bootstrap 3.1450 over ten paired valid positions and
 3.2364 versus 3.2227 over eleven unpaired valid positions per arm. These small,
 validity-filtered results are descriptive only. Bootstrap is closed as a
-non-promotable research comparator; P0 remains the GEPA parent. Before GEPA, a
-network-free repair must bind historical P0 and current Bootstrap results to
-their own approved execution authorizations and create the missing canonical
-Bootstrap phase checkpoint without rewriting or rerunning either result. The
-ongoing article evidence log is
+non-promotable research comparator; P0 remains the GEPA parent. The accepted
+network-free B3B.1B recovery binds historical P0 and Bootstrap results to their
+own consumed execution authorizations, registers both results canonically, and
+produces an idempotent GEPA-readiness checkpoint without rewriting or rerunning
+either result. GEPA attempts, results, proposer calls, and recovery provider
+calls remain zero. Fresh owner authorization is required before compute, ADC,
+or the first GEPA proposer call. The ongoing article evidence log is
 `md/research/WP-5.2B3B.1-prompt-optimization-activity-log.md`.
 
 **WP-5.2B3B.1A Bootstrap local fixed-judge reference.** *(accepted; handoff:
@@ -710,14 +712,16 @@ and no train or holdout file was opened. The semantic direction agrees with the
 reliability-first decision to retain P0, but the sample is too small for a
 statistical or general prompt-optimization claim.
 
-**WP-5.2B3B.1B Checkpoint recovery and GEPA readiness.** *(planned; handoff:
-`md/handoffs/WP-5.2B3B.1B-checkpoint-recovery-gepa-readiness.md`)*
-*Objective:* Repair the historical-result/current-application authority boundary
-without model or provider calls, register the completed Bootstrap result without
-rerunning it, and produce an idempotent readiness checkpoint that selects P0 as
-the GEPA parent. The executor must stop once for the manager to commit the
-generic patch before applying it to private state. GEPA, RunPod, ADC, candidate
-inference, judging, and holdout access remain outside this package.
+**WP-5.2B3B.1B Checkpoint recovery and GEPA readiness.** *(accepted; handoff:
+`md/handoffs/WP-5.2B3B.1B-checkpoint-recovery-gepa-readiness.md`; report:
+`md/handoffs/reports/WP-5.2B3B.1B-checkpoint-recovery-gepa-readiness-completion-report.md`)*
+*Outcome:* Historical P0 and Bootstrap results now resolve to their exact
+consumed execution authorizations. Network-free recovery ran twice with stable
+identity and byte-stable canonical state/readiness evidence. P0 is the explicit
+GEPA parent; Bootstrap attempt `0003` is complete and non-promotable by manager
+policy. Recovery made zero provider calls, created no reservation, opened no
+holdout content, and left all accepted evidence unchanged. GEPA remains
+unstarted and separately authorized.
 
 **WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
 gated by B3B.1 shortlist)*
