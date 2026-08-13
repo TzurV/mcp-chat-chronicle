@@ -723,17 +723,37 @@ policy. Recovery made zero provider calls, created no reservation, opened no
 holdout content, and left all accepted evidence unchanged. GEPA remains
 unstarted and separately authorized.
 
-**WP-5.2B3B.1C GEPA pilot and bounded search.** *(owner-authorized; ready for
-execution from the committed handoff:
-`md/handoffs/WP-5.2B3B.1C-gepa-pilot-and-bounded-search.md`)*
-*Objective:* Restore the accepted retained state, run GEPA from P0 over the
-frozen 6/4 development split, and return a privacy-eligible immutable shortlist
-or explicit no-improvement result. Gemini Pro is the Vertex proposer; existing
-FABLE references and deterministic checks score the optimizer loop. The fixed
-Gemini judge remains local and outside GEPA. Start with the bounded 12-candidate
-/ four-hour pilot and continue automatically only if the frozen component-wise
-reliability, privacy, context, accounting, and budget criteria pass. Holdout
-access remains prohibited.
+**WP-5.2B3B.1C GEPA pilot and bounded search.** *(diagnostic evidence accepted;
+experimental objective incomplete; handoff:
+`md/handoffs/WP-5.2B3B.1C-gepa-pilot-and-bounded-search.md`; report:
+`md/handoffs/reports/WP-5.2B3B.1C-gepa-pilot-and-bounded-search-completion-report.md`)*
+*Outcome:* Retained-state, privacy, temporary ADC, and accounting controls
+passed, but the configured Gemini 3.1 Pro proposer returned HTTP 400/model-not-
+found and the adapter surfaced a secondary `PicklingError`. The operation
+produced zero candidate prompts and zero GEPA results. This is accepted as
+diagnostic provider/runtime evidence only, not as a completed GEPA experiment
+or a no-improvement result. The fixed judge and holdout were not accessed. Paid
+compute is stopped while the Pod, 30 GB volume, models, and private state remain
+retained.
+
+**WP-5.2B3B.1D Local hosted GEPA lifecycle qualification.** *(ready for a new
+executor task; handoff:
+`md/handoffs/WP-5.2B3B.1D-local-hosted-gepa-lifecycle-qualification.md`)*
+*Objective:* Remove RunPod and local LM Studio from the diagnostic path and
+prove the complete GEPA lifecycle locally before another paid remote search.
+First repair generic provider-error propagation so the primary provider error
+cannot be hidden by serialization. Qualify Gemini 3.5 Flash as the hosted
+proposer and Gemini 3.5 Flash-Lite as the hosted surrogate candidate through the
+application-owned LiteLLM route. Then complete one synthetic lifecycle and one
+bounded real-development smoke using one frozen train and one frozen validation
+conversation across all four tasks. Existing FABLE references provide
+development feedback; the fixed judge remains outside optimization.
+*AC:* At least one proposal and one terminal candidate result are generated,
+validated, persisted, inspected, and resumed without additional calls in both
+the synthetic and real smoke; provider/model/usage/cost provenance is complete;
+no improvement is required; no RunPod state, prior C1 evidence, fixed-judge
+artifact, or holdout content is opened or changed; and no private payload,
+credential, project identifier, or prompt candidate is tracked.
 
 **WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
 gated by B3B.1 shortlist)*
@@ -926,7 +946,7 @@ the checked Chronicle Claude Code project were represented in the database.
 
 In rough priority order: **Gemini Takeout/My Activity importer** (chat text lives under My Activity filtered to Gemini Apps, not necessarily the plain Gemini product checkbox) · **Claude Code/OpenAI Codex warning-taxonomy hardening and ingest-error summary** · **Codex cross-client workspace-association spike** (RS-3: determine whether VS Code/Codex Desktop visibility is keyed by path, repository identity, local metadata, or service association before changing project grouping) · **VS Code/Copilot Chat extractor** (if practical) · **history download helper for providers that support export automation or documented export flows** · **optional host-model work after WP-5.2A2/A3**, including Edge Aion and any future browser resident model, each requiring its own feasibility and adapter approval; Phi Silica remains WP-5.4/Windows App SDK scope · **Markdown/Obsidian export** of digests + knowledge items · **local cross-encoder reranker** (e.g. bge-reranker; precision win, benchmark against V2-1) · **entity extraction** (technologies/repos/error codes → filterable facets) · **cross-provider threading** (local model links continuation chats into storylines) · **Microsoft GraphRAG spike after V2-1** (small private subset; retain only if graph retrieval beats simpler baselines for cross-conversation questions at acceptable indexing and update cost) · **temporal/intent query parsing on by default in chat** · **live logging + marker join** (the shelved Version B experiment — revisit only once the archive is proven daily-useful; still excellent article material) · **OpenTelemetry instrumentation** (inward-facing: spans per adapter run/tool call, TTFT/TPS via GenAI semantic conventions) · **Class C cache extractors** (forensic, experimental) · **browser-extension capture** (study OpenChat first).
 
-**Sequencing & calendar** (~6 focused hrs/week): the archive, real-history prototype, configurable AI tasks, evaluation harness, five-local-model plus Gemini development study, MCP recall, v0.2.0 source/tag, and published LP-4.1/LP-4.2/LP-5 material are accepted. WP-5.2C1 remote Qwen hardware/context execution, B3A common-8K decision, and B3B controlled manual-prompt experiment are accepted. B3B selected unchanged P0 after the manually authored schema-first and few-shot variants reduced pooled reliability while the holdout remained untouched. The active AI sequence is B3B.1 established BootstrapFewShot/GEPA search on RunPod using only development data → B3B.2 local finalist transfer qualification and winner freeze → B3C one-shot holdout evaluation → LP-4.3 prompt-optimization-potential article. B3B.1 is paused after frozen P0 and the accepted Bootstrap repair; resume from the retained network volume, run one fresh Bootstrap attempt, then configure temporary RAM-backed Vertex ADC for GEPA. Accepted baseline packages must not be overwritten. Remote search timing is not local deployment evidence; only local finalist reruns can establish transfer. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. Chrome Gemini Nano, Edge Aion, and Phi Silica have survey/planning evidence but no executed feasibility spike or adapter. A later independent untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later unless explicitly reprioritized.
+**Sequencing & calendar** (~6 focused hrs/week): the archive, real-history prototype, configurable AI tasks, evaluation harness, five-local-model plus Gemini development study, MCP recall, v0.2.0 source/tag, and published LP-4.1/LP-4.2/LP-5 material are accepted. WP-5.2C1 remote Qwen hardware/context execution, B3A common-8K decision, and B3B controlled manual-prompt experiment are accepted. B3B selected unchanged P0 after the manually authored schema-first and few-shot variants reduced pooled reliability while the holdout remained untouched. B3B.1 has an accepted negative Bootstrap comparator and an accepted GEPA diagnostic stop: the first proposer route produced no candidate, so GEPA quality remains unevaluated. The active AI sequence is B3B.1D local hosted GEPA lifecycle qualification → bounded hosted-surrogate search when qualification passes → B3B.2 local Qwen/Phi finalist transfer and winner freeze → B3C one-shot holdout evaluation → LP-4.3 prompt-optimization-potential article. The retained RunPod volume remains untouched during B3B.1D and is used only after local routing and lifecycle proof. Accepted baseline packages must not be overwritten. Hosted-surrogate gains are discovery evidence, not local deployment evidence; only Qwen/Phi finalist reruns can establish transfer. Gemini 2.5 Flash remains diagnostic judge-sensitivity evidence only. Chrome Gemini Nano, Edge Aion, and Phi Silica have survey/planning evidence but no executed feasibility spike or adapter. A later independent untouched evaluation set follows only after prompts and models are frozen. Cursor, Gemini history import, WorkTrail rename, and PyPI publication remain later unless explicitly reprioritized.
 
 ---
 
