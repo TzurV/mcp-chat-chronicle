@@ -723,6 +723,18 @@ policy. Recovery made zero provider calls, created no reservation, opened no
 holdout content, and left all accepted evidence unchanged. GEPA remains
 unstarted and separately authorized.
 
+**WP-5.2B3B.1C GEPA pilot and bounded search.** *(owner-authorized; ready for
+execution from the committed handoff:
+`md/handoffs/WP-5.2B3B.1C-gepa-pilot-and-bounded-search.md`)*
+*Objective:* Restore the accepted retained state, run GEPA from P0 over the
+frozen 6/4 development split, and return a privacy-eligible immutable shortlist
+or explicit no-improvement result. Gemini Pro is the Vertex proposer; existing
+FABLE references and deterministic checks score the optimizer loop. The fixed
+Gemini judge remains local and outside GEPA. Start with the bounded 12-candidate
+/ four-hour pilot and continue automatically only if the frozen component-wise
+reliability, privacy, context, accounting, and budget criteria pass. Holdout
+access remains prohibited.
+
 **WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
 gated by B3B.1 shortlist)*
 *Objective:* Determine whether gains found on the remote GPU transfer to the

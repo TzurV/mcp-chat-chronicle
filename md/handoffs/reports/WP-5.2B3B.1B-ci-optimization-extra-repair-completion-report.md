@@ -2,10 +2,10 @@
 
 ## Status
 
-Local implementation and clean Windows/Python 3.12 validation are complete.
-Final acceptance remains pending the pushed GitHub Actions matrix on Ubuntu and
-Windows with Python 3.11 and 3.12. GEPA work must not resume until all four jobs
-are green.
+**Accepted by manager after the owner reported all four pushed GitHub Actions
+jobs green.** Local implementation and clean Windows/Python 3.12 validation are
+complete, and the Ubuntu/Windows, Python 3.11/3.12 matrix passed. GEPA may now
+proceed only under its separate owner authorization.
 
 Validation started from `main` at diagnostic baseline
 `fbe1f12a0d872902c088fce1c830cdc81b90b90a`. The handoff itself was present as
@@ -78,13 +78,13 @@ marked, suppressed, or otherwise altered.
 
 | Job | Result |
 | --- | --- |
-| Ubuntu / Python 3.11 | Pending manager commit/push |
-| Ubuntu / Python 3.12 | Pending manager commit/push |
-| Windows / Python 3.11 | Pending manager commit/push |
-| Windows / Python 3.12 | Pending manager commit/push |
+| Ubuntu / Python 3.11 | Passed; owner reported |
+| Ubuntu / Python 3.12 | Passed; owner reported |
+| Windows / Python 3.11 | Passed; owner reported |
+| Windows / Python 3.12 | Passed; owner reported |
 
-This report must be updated with the run URL, job results, and final green
-matrix before the incident is accepted as closed.
+No run URL was supplied. The owner confirmed the complete matrix succeeded;
+the incident is accepted as closed on that evidence.
 
 ## Safety and data boundary
 
