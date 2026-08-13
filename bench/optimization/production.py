@@ -16,6 +16,7 @@ from chat_chronicle.ai import CompletionRequest, LiteLLMClient, LLMError
 from chat_chronicle.ai_config import interpolate_prompt, load_task_catalog
 
 from .authority import VerifiedAuthority
+from .diagnostics import OptimizerFailureRecorder, optimizer_failure_category
 from .dspy_bridge import (
     build_program,
     compile_bootstrap,
@@ -298,8 +299,16 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                 compute_hours=hours,
                 compute_cost_usd=hours * _compute_hourly_cost(self.config),
             )
-        task_calls = self.config.gepa_max_metric_calls_per_candidate
-        proposer_calls = max(
+        validation_conversations = self.config.gepa_validation_conversation_limit or 4
+        validation_calls = validation_conversations * len(TASK_ORDER) * 2
+        proposal_calls = 2 * 3 + validation_calls
+        if self.config.gepa_max_candidate_proposals is not None:
+            task_calls = validation_calls + (
+                self.config.gepa_max_candidate_proposals * proposal_calls
+            )
+        else:
+            task_calls = self.config.gepa_max_metric_calls_per_candidate + proposal_calls
+        proposer_calls = self.config.gepa_max_candidate_proposals or max(
             1, self.config.proposer.max_calls // self.config.budget.pilot_candidates
         )
         hours = self._reserved_optimizer_hours(task_calls, proposer_calls)
@@ -394,22 +403,55 @@ class DspyOptimizerAdapter(OptimizerAdapter):
         validation = self._examples(authority, "validation")
         lms = [*self.candidate_lms.values(), self.reflection_lm]
         before = _history_counts(lms)
-        reservation = self.reservation("gepa")
-        compiled = compile_gepa(
-            program,
-            train,
-            validation,
-            self._metric,
-            self.reflection_lm,
-            seed=self.config.seed + ordinal - 1,
-            max_metric_calls=reservation.task_calls,
-            log_dir=resolve_config_path(self.config_path, self.config.paths.run_root)
-            / "dspy"
-            / self.config.proposer.cache_namespace
-            / proposer_cache_identity(self.config.proposer)[:16]
-            / f"gepa-{ordinal:04d}",
+        for lm in self.candidate_lms.values():
+            lm._chronicle_optimizer_role = "candidate"
+        self.reflection_lm._chronicle_optimizer_role = "proposer"
+        recorder = OptimizerFailureRecorder(usage_extractor=_history_entry_usage)
+        import dspy
+
+        try:
+            with dspy.context(callbacks=[recorder]):
+                compiled = compile_gepa(
+                    program,
+                    train,
+                    validation,
+                    self._metric,
+                    self.reflection_lm,
+                    seed=self.config.seed + ordinal - 1,
+                    max_metric_calls=self.config.gepa_max_metric_calls_per_candidate,
+                    max_candidate_proposals=self.config.gepa_max_candidate_proposals,
+                    log_dir=resolve_config_path(self.config_path, self.config.paths.run_root)
+                    / "dspy"
+                    / self.config.proposer.cache_namespace
+                    / proposer_cache_identity(self.config.proposer)[:16]
+                    / f"gepa-{ordinal:04d}",
+                )
+        except Exception as exc:
+            usage = (
+                AdapterUsage(
+                    task_calls=recorder.task_calls,
+                    proposer_calls=recorder.proposer_calls,
+                    input_tokens=recorder.proposer_input_tokens,
+                    output_tokens=recorder.proposer_output_tokens,
+                )
+                if recorder.task_calls or recorder.proposer_calls
+                else None
+            )
+            primary = recorder.primary_category or optimizer_failure_category(exc)
+            raise OptimizerOperationError(
+                "GEPA provider or serialization operation failed",
+                usage=usage,
+                failure_category=primary,
+                usage_complete=recorder.primary_category is None,
+            ) from exc
+        usage = _history_usage(lms, before, proposer_index=len(lms) - 1).model_copy(
+            update={
+                "task_calls": recorder.task_calls,
+                "proposer_calls": recorder.proposer_calls,
+                "input_tokens": recorder.proposer_input_tokens,
+                "output_tokens": recorder.proposer_output_tokens,
+            }
         )
-        usage = _history_usage(lms, before, proposer_index=len(lms) - 1)
         return Proposal(
             prompts=prompts_from_program(compiled),
             strategy=f"gepa-instruction-only-pareto-{ordinal:04d}",
@@ -438,9 +480,14 @@ class DspyOptimizerAdapter(OptimizerAdapter):
         import dspy
 
         manifest = authority.train if scope == "train" else authority.validation
+        limit = (
+            self.config.gepa_train_conversation_limit
+            if scope == "train"
+            else self.config.gepa_validation_conversation_limit
+        )
         inputs = {source.selection_index: source for source in authority.inputs}
         examples = []
-        for entry in manifest.ordered_conversations:
+        for entry in manifest.ordered_conversations[:limit]:
             source = inputs[entry.authority_index]
             for task_name in TASK_ORDER:
                 task = self.tasks.tasks[task_name]

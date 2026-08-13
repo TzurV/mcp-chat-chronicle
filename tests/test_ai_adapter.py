@@ -178,6 +178,8 @@ def test_adapter_explicitly_degrades_when_profile_disables_schema_enforcement(
         ("TimeoutError", "timeout"),
         ("ConnectionError", "connection"),
         ("AuthenticationError", "authentication"),
+        ("PermissionDeniedError", "permission"),
+        ("QuotaError", "quota"),
         ("RateLimitError", "rate_limit"),
         ("UnexpectedError", "provider"),
     ],
@@ -212,6 +214,9 @@ def test_adapter_normalizes_provider_errors(
         ),
         ("NotFoundError", "model not loaded: private-name", 404, "model_not_found"),
         ("BadRequestError", "maximum context length exceeded", 400, "context_length"),
+        ("BadRequestError", "private invalid request", 400, "invalid_request"),
+        ("PermissionDeniedError", "private provider payload", 403, "permission"),
+        ("QuotaError", "private quota payload", 429, "quota"),
         (
             "BadRequestError",
             "unsupported parameter response_format with private output",

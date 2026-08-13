@@ -19,6 +19,10 @@ per task. Each demonstration records its frozen train case/model authority and h
 input and response as part of the stable candidate identity.
 Packages and state use JSON. DSPy state is saved with `save_program=False` and loaded with
 `allow_pickle=False` and `allow_unsafe_lm_state=False`.
+GEPA's own ignored, resumable working state uses its pinned cloudpickle serializer because DSPy
+creates dynamic signature classes that standard pickle cannot serialize. This internal optimizer
+checkpoint is never accepted as a candidate/result package and is never loaded by Chronicle's
+package verification path; accepted Chronicle artifacts remain state-only JSON.
 
 Optimization configuration is strict and fail-closed. Paths containing `holdout` are rejected.
 Qwen and Phi each run with context 8,192, concurrency one, at most one infrastructure retry, and no
@@ -131,6 +135,22 @@ replays packaged examples as ordered user/assistant messages before the current 
 not discarded when DSPy compilation ends. GEPA is instruction-only, uses a
 fixed seed and Pareto selection, enables detailed statistics, and retains candidate parents, validation
 subscores, discovery counts, best outputs, usage, latency, failures, and search logs.
+
+Mixed-task GEPA runs use Chronicle's deterministic trace-aligned component selector. It starts at the
+candidate's round-robin cursor and selects the first component represented by an eligible trace in the
+captured reflection minibatch; the cursor then advances past that component. A minibatch with no
+eligible component trace fails explicitly. Bounded lifecycle qualifications may set all three tracked
+controls: `gepa_train_conversation_limit`, `gepa_validation_conversation_limit`, and
+`gepa_max_candidate_proposals`. Train and validation limits must be supplied together, select manifest
+entries in frozen order without content inspection, and participate in configuration authority.
+
+`add_format_failure_as_feedback` is explicitly disabled. DSPy's enabled behavior embeds the raw
+malformed completion in reflection data, which is incompatible with Chronicle's bounded sanitized
+feedback boundary. Schema/JSON failures remain terminal scored failures represented by deterministic
+diagnostic categories; output is not repaired, semantically retried, or manually reinterpreted. GEPA
+logical task calls are counted at the DSPy callback boundary, including calls made by deep-copied LMs,
+while token fields include only provider usage actually exposed to Chronicle. Reservations include a
+complete possible end-of-iteration overshoot beyond the nominal metric-call stopping threshold.
 
 Context-fit evidence uses the same messages and response schema as the production adapter. For every
 required development case it conservatively estimates the serialized system prompt, packaged

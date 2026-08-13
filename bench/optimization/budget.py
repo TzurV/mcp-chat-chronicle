@@ -199,6 +199,19 @@ class BudgetLedger:
         reservations = [updated if item == current else item for item in state.reservations]
         return self._write(counters, reservations)
 
+    def retain_interrupted(self, reservation_id: str) -> BudgetState:
+        """Mark a reservation interrupted while conservatively retaining it in counters."""
+        state = self.load()
+        matches = [item for item in state.reservations if item.reservation_id == reservation_id]
+        if len(matches) != 1:
+            raise ValueError("optimizer budget reservation is missing or duplicated")
+        current = matches[0]
+        if current.status != "pending":
+            raise ValueError("optimizer budget reservation is already reconciled")
+        updated = current.model_copy(update={"status": "interrupted"})
+        reservations = [updated if item == current else item for item in state.reservations]
+        return self._write(state.counters, reservations)
+
     def _write(self, counters: UsageCounters, reservations: list[Reservation]) -> BudgetState:
         payload = {
             "format_version": 1,

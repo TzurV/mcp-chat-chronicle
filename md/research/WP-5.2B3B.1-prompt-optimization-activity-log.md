@@ -1,8 +1,8 @@
 # WP-5.2B3B.1 Prompt Optimization Activity Log
 
-**Status:** P0 and BootstrapFewShot complete; canonical recovery accepted; the
-first GEPA provider attempt produced no candidate because the proposer route
-failed; local hosted lifecycle qualification is next
+**Status:** P0 and BootstrapFewShot complete; hosted routes and the synthetic
+GEPA lifecycle qualified locally; the two-conversation private smoke exposed a
+deterministic component/minibatch mismatch and remains incomplete
 
 **Evidence date:** 2026-08-13
 
@@ -808,3 +808,84 @@ facts. Low for any more specific provider-cause inference.
 Suitable as a privacy-safe engineering/process observation with complete
 denominators. Not suitable as a GEPA quality result. See
 `md/research/WP-5.2B3B.1C-gepa-pilot-article-evidence-addendum.md`.
+
+## 20. Local hosted lifecycle qualification
+
+### Measured fact
+
+On 2026-08-13, local Vertex routes for Gemini 3.5 Flash and Gemini 3.5
+Flash-Lite both qualified in `global` through the application LiteLLM boundary.
+Each returned a schema-valid synthetic response with a stop finish and exact
+actual model identity. Qualification used two calls, no retries, 154 input and
+17 output/reasoning tokens, 7,797 ms, and US$0.0002526 measured cost.
+
+An initial synthetic GEPA attempt completed four seed-evaluation calls and then
+hit a local standard-pickle failure on DSPy's dynamic signature class. The
+working-state serializer was changed to pinned cloudpickle while Chronicle's
+accepted package boundary remained state-only JSON. The corrected synthetic
+attempt produced one distinct proposal, made ten GEPA surrogate metric calls,
+one proposer call, and eight explicit surrogate calls, and completed 8/8
+terminal task positions. Four were schema/contract-valid; aggregate synthetic
+reference agreement was 2.4. Privacy had zero findings, maximum complete request
+size was 1,238/8,192 tokens, and fresh-process verification plus byte-stable
+zero-call replay passed.
+
+The private smoke selected the first frozen train and first frozen validation
+conversation by manifest metadata and bound all eight existing FABLE references.
+After four seed-validation and three reflective-minibatch surrogate calls, GEPA
+selected `task_0` while the sampled tasks were 1, 3, and 2. With no matching
+`task_0` trace, it reported no valid reflective examples, made no proposer call,
+and produced no proposal or candidate. This was a deterministic orchestration
+mismatch, not evidence that the selected development examples lacked useful
+semantic feedback. The private attempt was retained and was not retried.
+
+The bounded offline rework added a trace-aligned deterministic selector. Starting
+at the round-robin cursor, it selects the first component represented by an
+eligible minibatch trace and advances the cursor. A regression reproduces the
+exact `task_0` versus tasks 1, 3, and 2 mismatch and proves that the aligned
+policy selects a represented component without inspecting content. Format
+failures are explicitly excluded because DSPy's enabled policy would include
+raw malformed completions; schema/JSON failures stay terminal deterministic
+failures with zero repair and zero semantic retry.
+
+A network-free synthetic lifecycle then ran through Chronicle's tracked
+`run_optimization` orchestration and production DSPy GEPA adapter. Exactly one
+proposal position produced one distinct candidate. The run persisted normal
+candidate, result, usage, lineage, authorization, trial, privacy, and replay
+authority. It accounted for 22 DSPy task calls, one proposer call, and 240
+terminal synthetic candidate-evaluation positions across P0, Bootstrap, and the
+GEPA candidate; the ledger total was 263 task invocations, one proposer call,
+zero retries, zero measured tokens, and zero cost. Fresh-process CLI verification
+reported zero provider calls, and adapter histories were unchanged by replay.
+No hosted or private call was made during this rework.
+
+Observed activity was 32 logical calls; fail-closed accounting charged 44 calls
+and US$5.82768 of the 60-call/US$25 ceilings. Fixed-judge, holdout, RunPod, C1
+state, historical P0, and Bootstrap activity were all zero.
+
+### Interpretation
+
+The local hosted model routes work, and both the earlier hosted synthetic evidence
+and the tracked offline synthetic lifecycle prove proposal/evaluation/persistence/
+verification/replay mechanics. The private lifecycle remains unproven. Its prior
+stop was a repaired component/minibatch alignment defect, not a semantic result
+and not evidence that GEPA or either synthetic candidate improves P0.
+
+### Denominator and limitation
+
+Synthetic: one proposal, one distinct package, and 8/8 terminal explicit task
+positions. Private: two selected conversations and eight references, but zero
+proposals, zero candidates, and 0/8 explicit candidate positions. DSPy copied
+candidate LMs internally, so some successful synthetic and all stopped-attempt
+token histories were unavailable; conservative reservations remain authoritative
+where measured usage is incomplete.
+
+### Confidence and publication status
+
+High confidence for route identity, call boundaries, synthetic lifecycle,
+serialization repair, privacy/context checks, fresh-process verification, and
+the zero-call replay. High confidence that the private acceptance criteria were
+not met and that no private rerun occurred. A fresh private run requires separate
+owner authorization after manager review and commit. Suitable as privacy-safe
+systems/process evidence with these complete denominators; not suitable as a
+prompt-quality, P0-improvement, or general GEPA effectiveness claim.

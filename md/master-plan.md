@@ -2,7 +2,7 @@
 
 **Repo:** first public source release under `mcp-chat-chronicle`; later rename/PyPI candidate `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** Chat Chronicle v0.2.0 source/tag, real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and the published LP-4.1/LP-4.2/LP-5 material are accepted · the public GitHub release page remains an administrative publication gate · WP-5.2B3A accepted common 8K after local 16K recovered no prior context failures · WP-5.2B3B is accepted as a controlled manual-prompt experiment: unchanged P0 remained best at 62/80 pooled local usable cases while P1/P2 each produced 58/80, portability regressed, P3 was not triggered, and holdout access stayed zero · WP-5.2B3B.1 has frozen P0 at 11/32 valid on its private 6/4 pilot and completed the DSPy BootstrapFewShot comparator at the same 11/32 validity but lower semantic agreement; Bootstrap failed context/privacy promotion gates and a local fixed-judge reference slightly favored P0 on both paired and unpaired valid cases · the remaining pre-GEPA blocker is a network-free historical-P0/current-Bootstrap checkpoint-identity repair, after which GEPA starts from P0 without rerunning either candidate · compute is released/stopped while private persistent evidence remains retained · local finalist transfer validation and one-shot holdout evaluation remain later gated work · Chrome Gemini Nano, Edge Aion, and Phi Silica remain preliminary research/planning only · the later independent untouched evaluation set remains TBD · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", + configurable AI tasks, measured local-model evaluation, controlled context/prompt studies, remote hardware comparison, and established automatic prompt optimization)**, **amended by `md/change-order-01.md`**. Full reasoning chain in Appendix A. · **Last updated:** 2026-08-11
+**Status:** Chat Chronicle v0.2.0, the real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and published LP-4.1/LP-4.2/LP-5 material are accepted · WP-5.2B3A accepted common 8K · WP-5.2B3B accepted unchanged P0 after both manually authored variants reduced pooled local reliability · WP-5.2B3B.1 completed its frozen P0 and negative BootstrapFewShot comparator · B3B.1D accepted provider-error, serialization, trace-alignment, bounded-accounting, and tracked synthetic GEPA lifecycle repairs, while its previous private smoke produced no candidate and remains diagnostic only · B3B.1D.1 is next: Gemini 2.5 Flash-Lite becomes the single 8K hosted candidate, Gemini 3.5 Flash remains proposer, and one bounded P0-versus-GEPA private lifecycle will use unchanged FABLE references under cumulative 80-call/US$35 ceilings · fixed judging and the twenty-conversation holdout remain closed · compute is stopped while retained private evidence remains available · Chrome Gemini Nano, Edge Aion, and Phi Silica remain research/planning only · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", plus configurable AI tasks, measured model evaluation, controlled context/prompt studies, remote hardware comparison, and automatic prompt optimization)**, **amended by `md/change-order-01.md`** · **Last updated:** 2026-08-13
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Release update (2026-07-28):** v0.2.0 release content is committed on
@@ -736,8 +736,8 @@ or a no-improvement result. The fixed judge and holdout were not accessed. Paid
 compute is stopped while the Pod, 30 GB volume, models, and private state remain
 retained.
 
-**WP-5.2B3B.1D Local hosted GEPA lifecycle qualification.** *(ready for a new
-executor task; handoff:
+**WP-5.2B3B.1D Local hosted GEPA lifecycle qualification.** *(offline repair
+accepted; private objective incomplete; handoff:
 `md/handoffs/WP-5.2B3B.1D-local-hosted-gepa-lifecycle-qualification.md`)*
 *Objective:* Remove RunPod and local LM Studio from the diagnostic path and
 prove the complete GEPA lifecycle locally before another paid remote search.
@@ -754,6 +754,33 @@ the synthetic and real smoke; provider/model/usage/cost provenance is complete;
 no improvement is required; no RunPod state, prior C1 evidence, fixed-judge
 artifact, or holdout content is opened or changed; and no private payload,
 credential, project identifier, or prompt candidate is tracked.
+
+**Accepted offline progress (2026-08-13):** Provider failures now retain their
+primary sanitized category, both planned hosted routes qualified, and Chronicle
+uses deterministic trace-aligned GEPA component selection with an explicit
+privacy-preserving format-failure policy. A network-free synthetic lifecycle
+passed through tracked `run_optimization`, produced one distinct candidate,
+persisted normal authority/accounting artifacts, and verified from a fresh
+process with zero calls. The prior private smoke selected a component absent
+from its reflection minibatch and produced no proposal; it remains diagnostic
+append-only evidence, not a quality or no-improvement result.
+
+**WP-5.2B3B.1D.1 Gemini 2.5 Flash-Lite private GEPA lifecycle.** *(ready for the
+existing executor; handoff:
+`md/handoffs/WP-5.2B3B.1D.1-gemini-2.5-flash-lite-private-lifecycle.md`)*
+*Objective:* Use `vertex_ai/gemini-2.5-flash-lite` as the single hosted
+candidate replacing the small local models for this bounded experiment, while
+retaining `vertex_ai/gemini-3.5-flash` as the GEPA proposer. Enforce the same
+8,192-token complete-request limit used for local candidates. Generate a new P0
+candidate baseline over the frozen first train and validation conversations,
+run one local GEPA proposal, and evaluate the distinct tuned prompt against the
+same unchanged FABLE references. The fixed judge remains outside optimization.
+*AC:* The 2.5 Flash-Lite route qualifies; eight P0 and eight tuned positions are
+terminal; one distinct proposal/candidate is persisted; paired reliability and
+FABLE metrics plus complete provider accounting are reported; fresh-process
+verification and zero-call replay pass; cumulative activity stays within 80
+calls and US$35; and no holdout, fixed judge, RunPod, local model, fallback
+model, new reference, or tracked private artifact is used.
 
 **WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
 gated by B3B.1 shortlist)*

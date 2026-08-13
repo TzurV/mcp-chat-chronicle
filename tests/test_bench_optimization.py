@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
 import shutil
 import subprocess
 import sys
@@ -19,15 +20,20 @@ from bench.optimization.authority import verify_authority
 from bench.optimization.budget import BudgetLedger, UsageCounters
 from bench.optimization.compat import EXPECTED_RESULT_FIELDS, verify_compatibility
 from bench.optimization.diagnostics import (
+    OptimizerFailureRecorder,
     application_stack_frames,
     failure_boundary,
+    optimizer_failure_category,
     sanitized_exception_message,
 )
 from bench.optimization.dspy_bridge import (
+    GEPA_ADD_FORMAT_FAILURE_AS_FEEDBACK,
     DemoAuthority,
+    TraceAlignedReflectionComponentSelector,
     bootstrap_metric_acceptance,
     build_program,
     compile_bootstrap,
+    compile_gepa,
     demonstrations_from_program,
     load_state_only,
     prompts_from_program,
@@ -610,7 +616,7 @@ def historical_recovery_workspace(tmp_path: Path) -> Path:
     def identity(commit: str):
         return lambda: ImplementationIdentity(commit, False, None)
 
-    with pytest.raises(ValueError, match="usage is missing"):
+    with pytest.raises(RuntimeError, match="synthetic bootstrap interruption"):
         run_optimization(
             config_path,
             ExecutionAdapters(candidate, FailingBootstrapAdapter()),
@@ -622,7 +628,7 @@ def historical_recovery_workspace(tmp_path: Path) -> Path:
         value["application_commit"] = commit
         config_path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8")
         if commit == SECOND_APPLICATION_COMMIT:
-            with pytest.raises(ValueError, match="usage is missing"):
+            with pytest.raises(RuntimeError, match="synthetic bootstrap interruption"):
                 run_optimization(
                     config_path,
                     ExecutionAdapters(candidate, FailingBootstrapAdapter()),
@@ -1596,6 +1602,81 @@ def test_synthetic_gate_diagnostics_are_boundary_aware_and_privacy_safe() -> Non
     assert sanitized_exception_message(ValueError("secret-bearing provider detail")) == (
         "external or value-bearing exception details redacted"
     )
+
+
+@pytest.mark.parametrize(
+    ("exception", "category"),
+    [
+        (type("NotFoundError", (RuntimeError,), {})("model not found"), "model-not-found"),
+        (type("AuthenticationError", (RuntimeError,), {})("private"), "authentication"),
+        (type("PermissionDeniedError", (RuntimeError,), {})("private"), "permission"),
+        (type("QuotaError", (RuntimeError,), {})("private"), "quota"),
+        (TimeoutError("private"), "timeout"),
+        (type("BadRequestError", (RuntimeError,), {})("private"), "invalid-request"),
+        (json.JSONDecodeError("private", "private", 0), "invalid-json"),
+        (pickle.PicklingError("private"), "local-serialization"),
+    ],
+)
+def test_optimizer_failure_categories_are_distinct_and_sanitized(
+    exception: Exception, category: str
+) -> None:
+    assert optimizer_failure_category(exception) == category
+    recorder = OptimizerFailureRecorder()
+    recorder.on_lm_end("synthetic", None, exception)
+    assert recorder.categories == [category]
+    assert "private" not in json.dumps(recorder.categories)
+
+
+def test_optimizer_operation_error_serializes_without_losing_primary_category() -> None:
+    original = OptimizerOperationError(
+        "sanitized optimizer operation failure",
+        usage=AdapterUsage(proposer_calls=1, input_tokens=3, output_tokens=2),
+        failure_category="model-not-found",
+        usage_complete=False,
+    )
+    restored = pickle.loads(pickle.dumps(original))
+    assert isinstance(restored, OptimizerOperationError)
+    assert restored.failure_category == "model-not-found"
+    assert restored.usage == original.usage
+    assert restored.usage_complete is False
+
+
+def test_gepa_secondary_pickling_error_preserves_captured_provider_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import dspy
+    from bench.optimization import production
+
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    optimizer = object.__new__(DspyOptimizerAdapter)
+    optimizer.config = config
+    optimizer.config_path = config_path
+    optimizer.authority = authority
+    optimizer.tasks = load_task_catalog(tmp_path / "tasks.yaml")
+    optimizer.candidate_lms = {
+        "qwen": type("LM", (), {"history": []})(),
+        "phi": type("LM", (), {"history": []})(),
+    }
+    optimizer.reflection_lm = type("LM", (), {"history": []})()
+    monkeypatch.setattr(optimizer, "_examples", lambda authority, scope: [])
+    monkeypatch.setattr(production, "build_program", lambda parent, lms: object())
+
+    def masked_failure(*args, **kwargs):
+        del args, kwargs
+        primary = type("NotFoundError", (RuntimeError,), {})("private model not found")
+        for callback in dspy.settings.get("callbacks", []):
+            callback.on_lm_end("synthetic", None, primary)
+        raise pickle.PicklingError("secondary serialization detail")
+
+    monkeypatch.setattr(production, "compile_gepa", masked_failure)
+    with pytest.raises(OptimizerOperationError) as captured:
+        optimizer.gepa(baseline_package(tmp_path / "tasks.yaml"), authority, "", 1)
+    assert captured.value.failure_category == "model-not-found"
+    assert captured.value.usage is None
+    assert captured.value.usage_complete is False
+    assert pickle.loads(pickle.dumps(captured.value)).failure_category == "model-not-found"
     private_filename = Path(__file__).parents[1] / ".chronicle" / "private" / "gate.py"
     try:
         exec(
@@ -1649,6 +1730,123 @@ def test_exact_pinned_optimizer_api_and_result_schema() -> None:
     result = verify_compatibility()
     assert result["versions"] == {"dspy": "3.3.0", "gepa": "0.1.1"}
     assert set(result["gepa_result_fields"]) == EXPECTED_RESULT_FIELDS
+
+
+def test_bounded_gepa_scope_requires_paired_limits_and_binds_identity(
+    tmp_path: Path,
+) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    value = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    value["gepa_train_conversation_limit"] = 1
+    with pytest.raises(ValidationError, match="train and validation limits together"):
+        OptimizationConfig.model_validate(value)
+    value["gepa_validation_conversation_limit"] = 1
+    value["gepa_max_candidate_proposals"] = 1
+    bounded = OptimizationConfig.model_validate(value)
+    assert bounded.gepa_train_conversation_limit == 1
+    assert bounded.gepa_validation_conversation_limit == 1
+    assert bounded.gepa_max_candidate_proposals == 1
+    assert optimization_config_identity(bounded) != optimization_config_identity(
+        load_optimization_config(config_path)
+    )
+
+
+def test_gepa_uses_pinned_cloudpickle_for_dynamic_dspy_signatures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import dspy
+
+    captured: dict[str, object] = {}
+
+    class FakeGEPA:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def compile(self, program, *, trainset, valset):
+            captured["trainset"] = trainset
+            captured["valset"] = valset
+            return program
+
+    monkeypatch.setattr("bench.optimization.dspy_bridge.verify_compatibility", lambda: {})
+    monkeypatch.setattr(dspy, "GEPA", FakeGEPA)
+    program = type("Program", (), {"named_predictors": lambda self: []})()
+    assert (
+        compile_gepa(
+            program,
+            ["train"],
+            ["validation"],
+            lambda *args: 0,
+            object(),
+            seed=7,
+            max_metric_calls=5,
+            log_dir=tmp_path / "gepa",
+        )
+        is program
+    )
+    assert captured["gepa_kwargs"] == {"use_cloudpickle": True}
+    assert isinstance(captured["component_selector"], TraceAlignedReflectionComponentSelector)
+    assert captured["add_format_failure_as_feedback"] is False
+    assert GEPA_ADD_FORMAT_FAILURE_AS_FEEDBACK is False
+
+
+def test_trace_aligned_selector_reproduces_task_zero_minibatch_mismatch(
+    tmp_path: Path,
+) -> None:
+    import dspy
+    from gepa.strategies.component_selector import RoundRobinReflectionComponentSelector
+
+    config_path = synthetic_workspace(tmp_path)
+    program = build_program(baseline_package(tmp_path / "tasks.yaml"))
+    candidate = {
+        name: predictor.signature.instructions for name, predictor in program.named_predictors()
+    }
+    trajectories = [
+        {"trace": [(getattr(program, f"task_{task_id}"), {}, dspy.Prediction())]}
+        for task_id in (1, 3, 2)
+    ]
+
+    class State:
+        list_of_named_predictors = list(candidate)
+        named_predictor_id_to_update_next_for_program_candidate = {0: 0}
+
+    state = State()
+    assert RoundRobinReflectionComponentSelector()(
+        state, trajectories, [0.0] * 3, 0, candidate
+    ) == ["task_0"]
+    state.named_predictor_id_to_update_next_for_program_candidate[0] = 0
+    selector = TraceAlignedReflectionComponentSelector(program)
+    assert selector(state, trajectories, [0.0] * 3, 0, candidate) == ["task_1"]
+    assert state.named_predictor_id_to_update_next_for_program_candidate[0] == 2
+    assert "task_0" not in selector._represented_components(trajectories, candidate)
+    assert config_path.is_file()
+
+
+def test_trace_aligned_selector_excludes_format_failures_without_repair_or_retry(
+    tmp_path: Path,
+) -> None:
+    import dspy
+    from dspy.teleprompt.bootstrap_trace import FailedPrediction
+
+    synthetic_workspace(tmp_path)
+    program = build_program(baseline_package(tmp_path / "tasks.yaml"))
+    candidate = {
+        name: predictor.signature.instructions for name, predictor in program.named_predictors()
+    }
+    malformed = FailedPrediction("private malformed synthetic output")
+    trajectories = [
+        {"trace": [(program.task_0, {}, malformed)]},
+        {"trace": [(program.task_2, {}, dspy.Prediction())]},
+    ]
+
+    class State:
+        list_of_named_predictors = list(candidate)
+        named_predictor_id_to_update_next_for_program_candidate = {0: 0}
+
+    selector = TraceAlignedReflectionComponentSelector(program)
+    assert selector(State(), trajectories, [0.0, 0.0], 0, candidate) == ["task_2"]
+    with pytest.raises(ValueError, match="no eligible component trace"):
+        selector(State(), trajectories[:1], [0.0], 0, candidate)
+    assert malformed.completion_text == "private malformed synthetic output"
 
 
 def test_production_candidate_adapter_is_networkless_injected_and_identity_bound(
@@ -2426,7 +2624,7 @@ def test_end_to_end_synthetic_optimize_resume_verify_and_shortlist(tmp_path: Pat
     candidate = FakeCandidateAdapter()
     interrupted = FakeOptimizerAdapter(fail_gepa_once=2)
     clock = StepClock()
-    with pytest.raises(ValueError, match="usage is missing"):
+    with pytest.raises(RuntimeError, match="synthetic interruption"):
         run_optimization(
             config_path,
             ExecutionAdapters(candidate, interrupted),
@@ -2482,6 +2680,177 @@ def test_end_to_end_synthetic_optimize_resume_verify_and_shortlist(tmp_path: Pat
     assert shortlist["count"] == 3
     assert len(list((tmp_path / "shortlist").glob("candidate-*.json"))) == 4
     assert candidate.calls == 20  # five candidates x train/validation x two models
+
+
+def test_supported_tracked_lifecycle_runs_aligned_gepa_and_zero_call_verification(
+    tmp_path: Path,
+) -> None:
+    import dspy
+
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=1, total_candidates=1)
+    config_value = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config_value["gepa_train_conversation_limit"] = 1
+    config_value["gepa_validation_conversation_limit"] = 1
+    config_value["gepa_max_candidate_proposals"] = 1
+    config_path.write_text(yaml.safe_dump(config_value, sort_keys=False), encoding="utf-8")
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    real_optimizer = object.__new__(DspyOptimizerAdapter)
+    real_optimizer.config = config
+    real_optimizer.config_path = config_path
+    real_optimizer.authority = authority
+    real_optimizer.tasks = load_task_catalog(tmp_path / "tasks.yaml")
+
+    examples = [
+        *real_optimizer._examples(authority, "train"),
+        *real_optimizer._examples(authority, "validation"),
+    ]
+    references_by_model = {
+        model_id: {
+            example.selected_input: example.reference_json
+            for example in examples
+            if example.model_id == model_id
+        }
+        for model_id in ("qwen", "phi")
+    }
+    aligned_instruction = "Synthetic trace-aligned instruction."
+
+    proposal_made = {"value": False}
+
+    class InstructionAwareDummyLM(dspy.utils.DummyLM):
+        def __init__(self, references: dict[str, str]) -> None:
+            super().__init__([{"response_json": "{}"}])
+            self.references = references
+
+        def forward(self, prompt=None, messages=None, **kwargs):
+            rendered = "\n".join(
+                str(message.get("content", "")) for message in (messages or [{"content": prompt}])
+            )
+            selected_input = next(
+                (
+                    value
+                    for value in sorted(self.references, key=len, reverse=True)
+                    if value in rendered
+                ),
+                None,
+            )
+            response_json = (
+                self.references[selected_input]
+                if proposal_made["value"] and selected_input is not None
+                else "{}"
+            )
+            self.answers = iter([{"response_json": response_json}])
+            return super().forward(prompt=prompt, messages=messages, **kwargs)
+
+    real_optimizer.candidate_lms = {
+        model_id: InstructionAwareDummyLM(references)
+        for model_id, references in references_by_model.items()
+    }
+
+    class ReflectionDummyLM(dspy.utils.DummyLM):
+        def forward(self, prompt=None, messages=None, **kwargs):
+            proposal_made["value"] = True
+            return super().forward(prompt=prompt, messages=messages, **kwargs)
+
+    real_optimizer.reflection_lm = ReflectionDummyLM([{"new_instruction": aligned_instruction}])
+
+    class TrackedOfflineOptimizer(FakeOptimizerAdapter):
+        def reservation(self, optimizer: str) -> AdapterReservation:
+            if optimizer == "bootstrap-few-shot":
+                return super().reservation(optimizer)
+            return real_optimizer.reservation("gepa")
+
+        def gepa(self, parent, current_authority, feedback: str, ordinal: int) -> Proposal:
+            self.calls.append(f"gepa-{ordinal}")
+            return real_optimizer.gepa(parent, current_authority, feedback, ordinal)
+
+    candidate_adapter = FakeCandidateAdapter()
+    optimizer_adapter = TrackedOfflineOptimizer()
+    result = run_optimization(
+        config_path,
+        ExecutionAdapters(candidate_adapter, optimizer_adapter),
+        resume=False,
+        identity_probe=clean_identity,
+        monotonic_ns=StepClock(),
+    )
+    assert result["status"] == "pilot-no-improvement"
+    assert result["stop_reason"] == "pilot-continuation-criteria-failed"
+    assert result["gepa_results"] == 1
+    assert optimizer_adapter.calls == ["bootstrap", "gepa-1"]
+    assert candidate_adapter.calls == 12
+    assert result["budget"]["task_invocations"] == 263
+    assert result["budget"]["proposer_calls"] == 1
+    assert result["budget"]["infrastructure_retries"] == 0
+    assert sum(len(lm.history) for lm in real_optimizer.candidate_lms.values()) == 0
+    assert len(real_optimizer.reflection_lm.history) == 1
+
+    root = tmp_path / "private" / "run"
+    state = json.loads((root / "run-state.json").read_text(encoding="utf-8"))
+    gepa_result = CandidateResult.model_validate_json(
+        (root / "results" / f"{state['gepa_result_ids'][0]}.json").read_text(encoding="utf-8")
+    )
+    proposal_trial = TrialStore(root).current("proposal-gepa-0001")
+    assert proposal_trial is not None
+    optimizer_usage = proposal_trial.accounting["optimizer_usage"]
+    assert {
+        key: optimizer_usage[key]
+        for key in (
+            "task_calls",
+            "proposer_calls",
+            "input_tokens",
+            "output_tokens",
+            "retries",
+            "latency_ms",
+        )
+    } == {
+        "task_calls": 22,
+        "proposer_calls": 1,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "retries": 0,
+        "latency_ms": 7,
+    }
+    assert optimizer_usage["compute_hours"] == pytest.approx(7 / 3_600_000)
+    assert optimizer_usage["compute_cost_usd"] == pytest.approx(
+        (7 / 3_600_000) * (config.budget.compute_cost_usd / config.budget.total_compute_hours)
+    )
+    candidate_path = root / "candidates" / f"{gepa_result.candidate_id}.json"
+    candidate = read_package(candidate_path)
+    assert candidate.lineage.optimizer == "gepa"
+    assert candidate.lineage.parent_id is not None
+    assert any(aligned_instruction in candidate.prompts[task].text for task in TASK_ORDER)
+    assert (
+        gepa_result.accounting.terminal_invocations == gepa_result.accounting.expected_invocations
+    )
+    assert gepa_result.privacy.eligible is True
+
+    call_evidence_before = (
+        candidate_adapter.calls,
+        tuple(len(lm.history) for lm in real_optimizer.candidate_lms.values()),
+        len(real_optimizer.reflection_lm.history),
+    )
+    verified = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "bench",
+            "verify",
+            "--package",
+            str(candidate_path),
+            "--config",
+            str(config_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert verified.returncode == 0, verified.stderr
+    assert json.loads(verified.stdout)["provider_calls"] == 0
+    assert call_evidence_before == (
+        candidate_adapter.calls,
+        tuple(len(lm.history) for lm in real_optimizer.candidate_lms.values()),
+        len(real_optimizer.reflection_lm.history),
+    )
 
 
 def test_pilot_checkpoint_stops_when_continuation_criteria_fail(tmp_path: Path) -> None:

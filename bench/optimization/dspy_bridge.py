@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from numbers import Real
 from pathlib import Path
@@ -32,6 +32,81 @@ class DemoAuthority:
 
 
 BOOTSTRAP_ACCEPTANCE_THRESHOLD = 0.999
+
+# DSPy's format-failure feedback includes the model's raw malformed completion.
+# Chronicle excludes those records from reflection: candidate output remains
+# immutable, is never repaired or semantically retried, and is scored through the
+# existing deterministic schema/JSON diagnostics instead.
+GEPA_ADD_FORMAT_FAILURE_AS_FEEDBACK = False
+
+
+class TraceAlignedReflectionComponentSelector:
+    """Deterministically select the next component represented by an eligible trace."""
+
+    def __init__(
+        self,
+        program: Any,
+        *,
+        include_format_failures: bool = GEPA_ADD_FORMAT_FAILURE_AS_FEEDBACK,
+    ) -> None:
+        self._signatures = {
+            name: predictor.signature for name, predictor in program.named_predictors()
+        }
+        self._include_format_failures = include_format_failures
+
+    def _represented_components(
+        self,
+        trajectories: list[Any],
+        candidate: dict[str, str],
+    ) -> set[str]:
+        from dspy.teleprompt.bootstrap_trace import FailedPrediction
+
+        represented: set[str] = set()
+        candidate_signatures = {
+            name: signature.with_instructions(candidate[name])
+            for name, signature in self._signatures.items()
+            if name in candidate
+        }
+        for trajectory in trajectories:
+            if not isinstance(trajectory, Mapping):
+                continue
+            for trace_item in trajectory.get("trace") or []:
+                if not isinstance(trace_item, tuple) or len(trace_item) != 3:
+                    continue
+                predictor, _inputs, prediction = trace_item
+                if not self._include_format_failures and isinstance(prediction, FailedPrediction):
+                    continue
+                observed_signature = getattr(predictor, "signature", None)
+                if observed_signature is None:
+                    continue
+                for name, expected_signature in candidate_signatures.items():
+                    if expected_signature.equals(observed_signature):
+                        represented.add(name)
+        return represented
+
+    def __call__(
+        self,
+        state: Any,
+        trajectories: list[Any],
+        subsample_scores: list[float],
+        candidate_idx: int,
+        candidate: dict[str, str],
+    ) -> list[str]:
+        del subsample_scores
+        component_names = [name for name in state.list_of_named_predictors if name in candidate]
+        if not component_names:
+            raise ValueError("GEPA candidate has no selectable Chronicle components")
+        represented = self._represented_components(trajectories, candidate)
+        cursor = state.named_predictor_id_to_update_next_for_program_candidate[candidate_idx]
+        for offset in range(len(component_names)):
+            component_id = (cursor + offset) % len(component_names)
+            name = component_names[component_id]
+            if name in represented:
+                state.named_predictor_id_to_update_next_for_program_candidate[candidate_idx] = (
+                    component_id + 1
+                ) % len(component_names)
+                return [name]
+        raise ValueError("GEPA reflection minibatch has no eligible component trace")
 
 
 def bootstrap_metric_acceptance(value: Any) -> bool:
@@ -309,20 +384,30 @@ def compile_gepa(
     seed: int,
     max_metric_calls: int,
     log_dir: Path,
+    max_candidate_proposals: int | None = None,
 ) -> Any:
     verify_compatibility()
     import dspy
+
+    gepa_kwargs: dict[str, Any] = {"use_cloudpickle": True}
+    if max_candidate_proposals is not None:
+        from gepa.utils.stop_condition import MaxCandidateProposalsStopper
+
+        gepa_kwargs["stop_callbacks"] = MaxCandidateProposalsStopper(max_candidate_proposals)
 
     optimizer = dspy.GEPA(
         metric=metric,
         max_metric_calls=max_metric_calls,
         reflection_lm=reflection_lm,
         candidate_selection_strategy="pareto",
+        component_selector=TraceAlignedReflectionComponentSelector(program),
+        add_format_failure_as_feedback=GEPA_ADD_FORMAT_FAILURE_AS_FEEDBACK,
         num_threads=1,
         track_stats=True,
         track_best_outputs=True,
         seed=seed,
         log_dir=str(log_dir),
+        gepa_kwargs=gepa_kwargs,
     )
     return optimizer.compile(program, trainset=trainset, valset=valset)
 

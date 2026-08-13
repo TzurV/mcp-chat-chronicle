@@ -185,6 +185,9 @@ class OptimizationConfig(StrictModel):
     gepa_track_stats: Literal[True] = True
     gepa_instruction_only: Literal[True] = True
     gepa_max_metric_calls_per_candidate: StrictInt = Field(default=20, gt=0, le=20)
+    gepa_max_candidate_proposals: StrictInt | None = Field(default=None, gt=0, le=20)
+    gepa_train_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=6)
+    gepa_validation_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=4)
 
     @model_validator(mode="after")
     def fixed_contract(self) -> OptimizationConfig:
@@ -205,6 +208,12 @@ class OptimizationConfig(StrictModel):
             raise ValueError("train and validation manifests must be distinct")
         if self.run_id != self.optimizer_id:
             raise ValueError("run_id and optimizer_id must match")
+        bounded = (
+            self.gepa_train_conversation_limit,
+            self.gepa_validation_conversation_limit,
+        )
+        if (bounded[0] is None) != (bounded[1] is None):
+            raise ValueError("bounded GEPA scope requires train and validation limits together")
         return self
 
 

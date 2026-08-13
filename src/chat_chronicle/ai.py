@@ -317,12 +317,15 @@ def _provider_failure(exc: Exception) -> LLMError:
     elif status == 404 and "model" in message:
         kind = "model_not_found"
         detail = "The configured model was not found or is not loaded by the provider."
-    elif any(marker in name for marker in ("authentication", "permission")) or status in {
-        401,
-        403,
-    }:
+    elif "permission" in name or status == 403:
+        kind = "permission"
+        detail = "The provider rejected the configured permission."
+    elif "authentication" in name or status == 401:
         kind = "authentication"
         detail = "The provider rejected the configured authentication."
+    elif "quota" in name or "resourceexhausted" in name or "quota" in message:
+        kind = "quota"
+        detail = "The provider quota rejected the request."
     elif any(marker in name for marker in ("ratelimit", "rate_limit")) or status == 429:
         kind = "rate_limit"
         detail = "The provider rate-limited the request."
@@ -350,6 +353,9 @@ def _provider_failure(exc: Exception) -> LLMError:
     ):
         kind = "unsupported_parameter"
         detail = "The provider rejected a request parameter or structured-output mode."
+    elif "badrequest" in name or "invalidrequest" in name or status == 400:
+        kind = "invalid_request"
+        detail = "The provider rejected the request as invalid."
     elif status is not None:
         kind = "provider_http"
         detail = f"The provider returned HTTP status {status}."
@@ -450,9 +456,7 @@ class LiteLLMClient:
             )
             if request.reasoning_effort is not None:
                 if request.model.startswith("lm_studio/"):
-                    completion_kwargs["extra_body"] = {
-                        "reasoning_effort": request.reasoning_effort
-                    }
+                    completion_kwargs["extra_body"] = {"reasoning_effort": request.reasoning_effort}
                 else:
                     completion_kwargs["reasoning_effort"] = request.reasoning_effort
             response = await litellm.acompletion(**completion_kwargs)
@@ -476,9 +480,7 @@ class LiteLLMClient:
                 provider=provider,
                 model=actual_model,
                 usage=usage,
-                finish_reason=_normalized_finish_reason(
-                    getattr(choices[0], "finish_reason", None)
-                ),
+                finish_reason=_normalized_finish_reason(getattr(choices[0], "finish_reason", None)),
             )
         except LLMError:
             raise

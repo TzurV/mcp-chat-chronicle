@@ -67,12 +67,34 @@ class OptimizerOperationError(RuntimeError):
         self,
         message: str,
         *,
-        usage: AdapterUsage,
+        usage: AdapterUsage | None,
         failure_category: str,
+        usage_complete: bool = True,
     ) -> None:
         self.usage = usage
         self.failure_category = failure_category
+        self.usage_complete = usage_complete
         super().__init__(message)
+
+    def __reduce__(self):
+        return (
+            _restore_optimizer_operation_error,
+            (str(self), self.usage, self.failure_category, self.usage_complete),
+        )
+
+
+def _restore_optimizer_operation_error(
+    message: str,
+    usage: AdapterUsage | None,
+    failure_category: str,
+    usage_complete: bool,
+) -> OptimizerOperationError:
+    return OptimizerOperationError(
+        message,
+        usage=usage,
+        failure_category=failure_category,
+        usage_complete=usage_complete,
+    )
 
 
 class CaseOutcome(StrictModel):
@@ -675,12 +697,16 @@ def _propose(
         measured_usage = None
         failure_category = type(exc).__name__
         if isinstance(exc, OptimizerOperationError):
-            measured_usage = _with_optimizer_timing(exc.usage, requested, config, elapsed_ms)
-            ledger.reconcile(
-                reservation.reservation_id,
-                _usage_counters(measured_usage),
-                interrupted=True,
-            )
+            if exc.usage is not None:
+                measured_usage = _with_optimizer_timing(exc.usage, requested, config, elapsed_ms)
+            if exc.usage_complete and measured_usage is not None:
+                ledger.reconcile(
+                    reservation.reservation_id,
+                    _usage_counters(measured_usage),
+                    interrupted=True,
+                )
+            elif measured_usage is not None:
+                ledger.retain_interrupted(reservation.reservation_id)
             failure_category = exc.failure_category
         TrialStore(root).append(
             f"proposal-{optimizer}-{ordinal:04d}",
@@ -691,7 +717,7 @@ def _propose(
             optimizer_wall_ms=elapsed_ms,
         )
         if measured_usage is None:
-            ledger.reconcile(reservation.reservation_id, None, interrupted=True)
+            ledger.retain_interrupted(reservation.reservation_id)
         raise
     elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
     measured_usage = _with_optimizer_timing(proposal.usage, requested, config, elapsed_ms)
