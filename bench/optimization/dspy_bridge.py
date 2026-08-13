@@ -173,6 +173,7 @@ def demonstrations_from_program(
     """Extract bounded DSPy demos and bind each input to frozen train authority."""
     predictor = getattr(program, f"task_{TASK_ORDER.index(task)}")
     provenance = getattr(program, "_chronicle_demo_authority", {})
+    authorized_models = {model_id for _, model_id, _ in authorized}
     result: list[CandidateDemonstration] = []
     for demo in getattr(predictor, "demos", []):
         value = demo.toDict() if hasattr(demo, "toDict") else dict(demo)
@@ -181,7 +182,11 @@ def demonstrations_from_program(
         trusted = provenance.get(id(demo))
         if not isinstance(trusted, DemoAuthority):
             raise ValueError("BootstrapFewShot demonstration provenance is missing or ambiguous")
-        if trusted.task != task or trusted.model_id not in {"qwen", "phi"}:
+        if (
+            trusted.task != task
+            or not trusted.model_id
+            or (authorized_models and trusted.model_id not in authorized_models)
+        ):
             raise ValueError("BootstrapFewShot demonstration task/model authority mismatch")
         if not isinstance(selected_input, str) or not isinstance(response_json, str):
             raise ValueError("BootstrapFewShot demonstration fields are incomplete")
@@ -289,7 +294,7 @@ def compile_bootstrap(
         value = example.toDict() if hasattr(example, "toDict") else dict(example)
         selected_input = value.get("selected_input")
         response_json = value.get("response_json")
-        if value.get("task") != task or value.get("model_id") not in {"qwen", "phi"}:
+        if value.get("task") != task or not isinstance(value.get("model_id"), str):
             raise ValueError("BootstrapFewShot train example provenance is invalid")
         if not isinstance(selected_input, str) or not isinstance(response_json, str):
             raise ValueError("BootstrapFewShot train example fields are incomplete")

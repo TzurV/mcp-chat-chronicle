@@ -23,6 +23,7 @@ from .feedback import Diagnostic, render_feedback
 from .metrics import MetricVector
 from .models import (
     OptimizationConfig,
+    candidate_model_identity,
     load_optimization_config,
     optimization_config_identity,
     proposer_identity,
@@ -54,6 +55,8 @@ class AdapterReservation(StrictModel):
     compute_hours: float = Field(default=0, ge=0)
     compute_cost_usd: float = Field(default=0, ge=0)
     retries: StrictInt = Field(default=0, ge=0, le=3000)
+    reasoning_tokens: StrictInt = Field(default=0, ge=0, exclude_if=lambda value: value == 0)
+    provider_cost_usd: float = Field(default=0, ge=0, exclude_if=lambda value: value == 0)
 
 
 class AdapterUsage(AdapterReservation):
@@ -100,7 +103,7 @@ def _restore_optimizer_operation_error(
 class CaseOutcome(StrictModel):
     alias: str
     task: str
-    model_id: Literal["qwen", "phi"]
+    model_id: str = Field(min_length=1)
     terminal: bool
     valid: bool
     semantic_agreement: float = Field(ge=0, le=1)
@@ -109,7 +112,7 @@ class CaseOutcome(StrictModel):
 
 class EvaluationBatch(StrictModel):
     scope: Literal["train", "validation"]
-    model_id: Literal["qwen", "phi"]
+    model_id: str = Field(min_length=1)
     outcomes: list[CaseOutcome]
     usage: AdapterUsage
 
@@ -134,14 +137,14 @@ class Proposal(StrictModel):
 
 class CandidateAdapter(Protocol):
     def reservation(
-        self, scope: Literal["train", "validation"], model_id: Literal["qwen", "phi"]
+        self, scope: Literal["train", "validation"], model_id: str
     ) -> AdapterReservation: ...
 
     def evaluate(
         self,
         candidate: CandidatePackage,
         scope: Literal["train", "validation"],
-        model_id: Literal["qwen", "phi"],
+        model_id: str,
         authority: VerifiedAuthority,
     ) -> EvaluationBatch: ...
 
@@ -332,7 +335,7 @@ def run_optimization(
     else:
         baseline_result = _result_by_id(root, state.baseline_result_id)
 
-    if not state.bootstrap_result_ids:
+    if config.bootstrap_enabled and not state.bootstrap_result_ids:
         proposed = _propose(
             baseline,
             "bootstrap-few-shot",
@@ -422,7 +425,7 @@ def run_optimization(
         config.budget.total_candidates,
         monotonic_ns,
     )
-    next_operation = _next_gepa_operation(adapters)
+    next_operation = _next_gepa_operation(config, adapters)
     if len(state.gepa_result_ids) >= config.budget.total_candidates:
         status, reason = "complete", "candidate-ceiling-reached"
     elif not total_ledger.can_fit(next_operation):
@@ -457,7 +460,7 @@ def _run_gepa_phase(
     monotonic_ns,
 ) -> RunState:
     while len(state.gepa_result_ids) < candidate_limit:
-        if not ledger.can_fit(_next_gepa_operation(adapters)):
+        if not ledger.can_fit(_next_gepa_operation(config, adapters)):
             break
         existing = [
             baseline_result,
@@ -537,7 +540,7 @@ def _authorize(
         "train_manifest_sha256": config.train_manifest.sha256,
         "validation_manifest_sha256": config.validation_manifest.sha256,
         "model_artifact_sha256": {
-            model.id: model.artifact_sha256 for model in config.candidate_models
+            model.id: candidate_model_identity(model) for model in config.candidate_models
         },
         "proposer_identity_sha256": proposer_identity(config.proposer),
         "optimizer_identity_sha256": digest(
@@ -563,10 +566,10 @@ def _authorize(
     return authority
 
 
-def _next_gepa_operation(adapters: ExecutionAdapters) -> UsageCounters:
+def _next_gepa_operation(config: OptimizationConfig, adapters: ExecutionAdapters) -> UsageCounters:
     values = [UsageCounters(candidates=1), _usage_counters(adapters.optimizer.reservation("gepa"))]
     for scope in ("train", "validation"):
-        for model_id in ("qwen", "phi"):
+        for model_id in _model_ids(config):
             values.append(_usage_counters(adapters.candidate.reservation(scope, model_id)))
     result = UsageCounters()
     for value in values:
@@ -615,7 +618,7 @@ def _pilot_checkpoint(
         and all(result.privacy.eligible for result in results)
     )
     total_ledger = BudgetLedger(root, config, pilot=False)
-    next_operation = _next_gepa_operation(adapters)
+    next_operation = _next_gepa_operation(config, adapters)
     capacity = min(
         total_ledger.achievable_operations(next_operation),
         config.budget.total_candidates - len(results),
@@ -789,7 +792,7 @@ def _evaluate(
     batches: list[EvaluationBatch] = []
     try:
         for scope in ("train", "validation"):
-            for model_id in ("qwen", "phi"):
+            for model_id in _model_ids(config):
                 requested = adapter.reservation(scope, model_id)
                 reservation = ledger.reserve(
                     "task",
@@ -806,7 +809,7 @@ def _evaluate(
                 except Exception:
                     ledger.reconcile(reservation.reservation_id, None, interrupted=True)
                     raise
-                _validate_batch(batch, scope, model_id, authority)
+                _validate_batch(batch, scope, model_id, authority, config)
                 ledger.reconcile(reservation.reservation_id, _usage_counters(batch.usage))
                 batches.append(batch)
     except Exception as exc:
@@ -845,11 +848,17 @@ def _validate_batch(
     scope: str,
     model_id: str,
     authority: VerifiedAuthority,
+    config: OptimizationConfig,
 ) -> None:
     manifest = authority.train if scope == "train" else authority.validation
+    limit = (
+        config.evaluation_train_conversation_limit
+        if scope == "train"
+        else config.evaluation_validation_conversation_limit
+    )
     expected_aliases = {
         f"c{entry.authority_index:03d}--{task}"
-        for entry in manifest.ordered_conversations
+        for entry in manifest.ordered_conversations[:limit]
         for task in TASK_ORDER
     }
     aliases = [item.alias for item in batch.outcomes]
@@ -881,11 +890,12 @@ def _build_result(
     validation = [
         item for batch in batches if batch.scope == "validation" for item in batch.outcomes
     ]
-    train_metric = _metric(candidate, train)
-    validation_metric = _metric(candidate, validation)
+    model_ids = _model_ids(config)
+    train_metric = _metric(candidate, train, model_ids)
+    validation_metric = _metric(candidate, validation, model_ids)
     model_valid = {
         model: sum(item.valid for item in validation if item.model_id == model)
-        for model in ("qwen", "phi")
+        for model in model_ids
     }
     task_valid = {
         task: sum(item.valid for item in validation if item.task == task) for task in TASK_ORDER
@@ -932,6 +942,8 @@ def _build_result(
         usage={
             "input_tokens": sum(item.input_tokens for item in usage),
             "output_tokens": sum(item.output_tokens for item in usage),
+            "reasoning_tokens": sum(item.reasoning_tokens for item in usage),
+            "provider_cost_usd": sum(item.provider_cost_usd for item in usage),
         },
     )
     result_authority = ResultAuthority(
@@ -963,13 +975,15 @@ def _build_result(
     return CandidateResult(result_id=result_identity(payload), **payload)
 
 
-def _metric(candidate: CandidatePackage, outcomes: list[CaseOutcome]) -> MetricVector:
+def _metric(
+    candidate: CandidatePackage, outcomes: list[CaseOutcome], model_ids: list[str]
+) -> MetricVector:
     model_counts = Counter(item.model_id for item in outcomes if item.valid)
     task_counts = Counter(item.task for item in outcomes if item.valid)
     semantic = sum(item.semantic_agreement for item in outcomes) / len(outcomes) if outcomes else 0
     return MetricVector(
         total_valid=sum(item.valid for item in outcomes),
-        worst_model_valid=min(model_counts.get("qwen", 0), model_counts.get("phi", 0)),
+        worst_model_valid=min(model_counts.get(model_id, 0) for model_id in model_ids),
         minimum_task_valid=min(task_counts.get(task, 0) for task in TASK_ORDER),
         semantic_agreement=semantic,
         complete_package_uts=None,
@@ -1080,7 +1094,13 @@ def _verify_execution_inputs(config: OptimizationConfig, config_path: Path) -> N
     if hashlib.sha256(catalog.read_bytes()).hexdigest() != config.accepted_task_catalog_sha256:
         raise ValueError("accepted task catalog hash mismatch")
     for model in config.candidate_models:
-        artifact = resolve_config_path(config_path, model.artifact_path)
-        if hashlib.sha256(artifact.read_bytes()).hexdigest() != model.artifact_sha256:
-            raise ValueError(f"optimizer {model.id} artifact hash mismatch")
+        if model.credential_mode == "local-endpoint":
+            assert model.artifact_path is not None and model.artifact_sha256 is not None
+            artifact = resolve_config_path(config_path, model.artifact_path)
+            if hashlib.sha256(artifact.read_bytes()).hexdigest() != model.artifact_sha256:
+                raise ValueError(f"optimizer {model.id} artifact hash mismatch")
     verify_compatibility()
+
+
+def _model_ids(config: OptimizationConfig) -> list[str]:
+    return [model.id for model in config.candidate_models]

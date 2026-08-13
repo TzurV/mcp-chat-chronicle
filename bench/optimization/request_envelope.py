@@ -63,17 +63,7 @@ def estimate_request_envelope(
         for task_name in TASK_ORDER:
             task = tasks.tasks[task_name]
             messages, schema, _ = case_request_parts(candidate, task_name, task, source)
-            serialized = json.dumps(
-                {
-                    "messages": messages,
-                    "response_schema": schema,
-                    "enforce_schema": True,
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            )
-            input_tokens = _conservative_tokens(serialized) + WRAPPER_ALLOWANCE_TOKENS
+            input_tokens = estimate_case_input_tokens(messages, schema)
             output_tokens = task.generation.max_tokens
             total = input_tokens + output_tokens
             alias = f"c{source.selection_index:03d}--{task_name}"
@@ -93,6 +83,23 @@ def estimate_request_envelope(
         total_tokens=total,
         fits_context=total <= 8192,
     )
+
+
+def estimate_case_input_tokens(
+    messages: list[dict[str, str]], response_schema: dict[str, Any]
+) -> int:
+    """Conservatively estimate the complete provider request before a live call."""
+    serialized = json.dumps(
+        {
+            "messages": messages,
+            "response_schema": response_schema,
+            "enforce_schema": True,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return _conservative_tokens(serialized) + WRAPPER_ALLOWANCE_TOKENS
 
 
 def verify_demonstration_authority(

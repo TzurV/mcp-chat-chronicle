@@ -23,6 +23,7 @@ class Diagnostic(StrictModel):
         "date-mismatch",
         "label-mismatch",
         "timeout",
+        "provider-failure",
         "context-boundary",
     ]
     schema_path: str = Field(default="$", max_length=120)

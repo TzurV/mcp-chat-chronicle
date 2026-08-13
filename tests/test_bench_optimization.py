@@ -20,6 +20,7 @@ from bench.optimization.authority import verify_authority
 from bench.optimization.budget import BudgetLedger, UsageCounters
 from bench.optimization.compat import EXPECTED_RESULT_FIELDS, verify_compatibility
 from bench.optimization.diagnostics import (
+    CompleteRequestGuard,
     OptimizerFailureRecorder,
     application_stack_frames,
     failure_boundary,
@@ -100,7 +101,7 @@ from bench.optimization.trials import TrialStore
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from chat_chronicle.ai import CompletionResponse, canonical_hash
+from chat_chronicle.ai import CompletionResponse, LLMError, canonical_hash
 from chat_chronicle.ai_config import load_task_catalog
 
 APPLICATION_COMMIT = "a" * 40
@@ -1849,6 +1850,19 @@ def test_trace_aligned_selector_excludes_format_failures_without_repair_or_retry
     assert malformed.completion_text == "private malformed synthetic output"
 
 
+def test_dspy_candidate_complete_request_guard_stops_before_submission() -> None:
+    candidate_lm = type(
+        "CandidateLM",
+        (),
+        {"_chronicle_optimizer_role": "candidate", "kwargs": {"response_format": "schema"}},
+    )()
+    proposer_lm = type("ProposerLM", (), {"_chronicle_optimizer_role": "proposer", "kwargs": {}})()
+    guard = CompleteRequestGuard(context_window=8192, output_allowance_tokens=2048)
+    guard.on_lm_start("proposer", proposer_lm, {"prompt": "x" * 30000})
+    with pytest.raises(RuntimeError, match="8K context boundary"):
+        guard.on_lm_start("candidate", candidate_lm, {"prompt": "x" * 30000})
+
+
 def test_production_candidate_adapter_is_networkless_injected_and_identity_bound(
     tmp_path: Path,
 ) -> None:
@@ -1872,6 +1886,170 @@ def test_production_candidate_adapter_is_networkless_injected_and_identity_bound
     )
     with pytest.raises(ValueError, match="response identity mismatch"):
         mismatched.evaluate(candidate, "validation", "qwen", authority)
+
+
+def test_vertex_single_candidate_is_bounded_identity_bound_and_thinking_disabled(
+    tmp_path: Path,
+) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["candidate_models"] = [
+        {
+            "id": "gemini-2.5-flash-lite",
+            "profile": "vertex-candidate",
+            "expected_provider": "Google Vertex AI",
+            "expected_model": "gemini-2.5-flash-lite",
+            "litellm_model": "vertex_ai/gemini-2.5-flash-lite",
+            "credential_mode": "vertex-adc",
+            "google_cloud_project_env": "GOOGLE_CLOUD_PROJECT",
+            "google_cloud_location_env": "GOOGLE_CLOUD_LOCATION",
+            "vertex_project_env": "VERTEXAI_PROJECT",
+            "vertex_location_env": "VERTEXAI_LOCATION",
+            "vertex_enable_env": "VERTEXAI_ENABLED",
+            "resolved_location": "global",
+            "timeout_seconds": 5,
+            "estimated_seconds_per_task": 1,
+            "reasoning_effort": "disable",
+            "context_window": 8192,
+            "concurrency": 1,
+            "infrastructure_retries": 1,
+            "semantic_retries": 0,
+        }
+    ]
+    raw["bootstrap_enabled"] = False
+    raw["evaluation_train_conversation_limit"] = 1
+    raw["evaluation_validation_conversation_limit"] = 1
+    raw["gepa_train_conversation_limit"] = 1
+    raw["gepa_validation_conversation_limit"] = 1
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    assert len(authority.inputs) == 2
+    assert len(authority.references) == 8
+    client = FakeLiteLLMClient(provider="Google Vertex AI", model="gemini-2.5-flash-lite")
+    environment = {
+        "GOOGLE_CLOUD_PROJECT": "synthetic-project",
+        "GOOGLE_CLOUD_LOCATION": "global",
+        "VERTEXAI_PROJECT": "synthetic-project",
+        "VERTEXAI_LOCATION": "global",
+        "VERTEXAI_ENABLED": "true",
+    }
+    adapter = LiteLLMCandidateAdapter(
+        config,
+        config_path,
+        client=client,
+        environment=environment,
+        adc_probe=lambda: True,
+    )
+    batch = adapter.evaluate(
+        baseline_package(tmp_path / "tasks.yaml"),
+        "validation",
+        "gemini-2.5-flash-lite",
+        authority,
+    )
+    assert len(batch.outcomes) == 4
+    assert batch.usage.task_calls == 4
+    assert batch.usage.reasoning_tokens == 0
+    assert all(request.reasoning_effort == "disable" for request in client.requests)
+    assert all(request.vertex_project == "synthetic-project" for request in client.requests)
+    assert all(request.vertex_location == "global" for request in client.requests)
+    assert all(
+        request.estimated_input_tokens is not None
+        and request.estimated_input_tokens + request.max_tokens <= 8192
+        for request in client.requests
+    )
+
+
+def test_candidate_format_failure_is_terminal_without_semantic_retry(tmp_path: Path) -> None:
+    class FormatFailureClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def complete(self, request):
+            del request
+            self.calls += 1
+            raise LLMError("invalid_json", "synthetic sanitized format failure")
+
+    config_path = synthetic_workspace(tmp_path)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["candidate_models"] = raw["candidate_models"][:1]
+    raw["evaluation_train_conversation_limit"] = 1
+    raw["evaluation_validation_conversation_limit"] = 1
+    raw["gepa_train_conversation_limit"] = 1
+    raw["gepa_validation_conversation_limit"] = 1
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    client = FormatFailureClient()
+    batch = LiteLLMCandidateAdapter(config, config_path, client=client).evaluate(
+        baseline_package(tmp_path / "tasks.yaml"), "validation", "qwen", authority
+    )
+    assert client.calls == 4
+    assert batch.usage.retries == 0
+    assert all(not outcome.valid for outcome in batch.outcomes)
+    assert {
+        diagnostic.category for outcome in batch.outcomes for diagnostic in outcome.diagnostics
+    } == {"provider-failure"}
+
+
+def test_tracked_optimizer_runs_single_candidate_direct_p0_to_gepa(tmp_path: Path) -> None:
+    class BoundedCandidate(FakeCandidateAdapter):
+        def reservation(self, scope: str, model_id: str) -> AdapterReservation:
+            del scope, model_id
+            return AdapterReservation(task_calls=4)
+
+        def evaluate(self, candidate, scope, model_id, authority) -> EvaluationBatch:
+            self.calls += 1
+            manifest = authority.train if scope == "train" else authority.validation
+            outcomes = [
+                CaseOutcome(
+                    alias=f"c{entry.authority_index:03d}--{task}",
+                    task=task,
+                    model_id=model_id,
+                    terminal=True,
+                    valid=True,
+                    semantic_agreement=1,
+                    diagnostics=[],
+                )
+                for entry in manifest.ordered_conversations[:1]
+                for task in TASK_ORDER
+            ]
+            return EvaluationBatch(
+                scope=scope,
+                model_id=model_id,
+                outcomes=outcomes,
+                usage=AdapterUsage(task_calls=4),
+            )
+
+    config_path = synthetic_workspace(tmp_path, pilot_candidates=1, total_candidates=1)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["candidate_models"] = raw["candidate_models"][:1]
+    raw["bootstrap_enabled"] = False
+    raw["gepa_max_candidate_proposals"] = 1
+    raw["evaluation_train_conversation_limit"] = 1
+    raw["evaluation_validation_conversation_limit"] = 1
+    raw["gepa_train_conversation_limit"] = 1
+    raw["gepa_validation_conversation_limit"] = 1
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    optimizer = FakeOptimizerAdapter(max_gepa=1)
+    summary = run_optimization(
+        config_path,
+        ExecutionAdapters(candidate=BoundedCandidate(), optimizer=optimizer),
+        resume=False,
+        identity_probe=clean_identity,
+    )
+    assert summary["baseline_results"] == 1
+    assert summary["bootstrap_results"] == 0
+    assert summary["gepa_results"] == 1
+    assert optimizer.calls == ["gepa-1"]
+    root = tmp_path / "private" / "run"
+    results = [
+        CandidateResult.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in (root / "results").glob("*.json")
+    ]
+    assert len(results) == 2
+    assert all(set(result.validation_model_valid) == {"qwen"} for result in results)
+    assert all(result.accounting.expected_invocations == 8 for result in results)
 
 
 def test_bootstrap_post_compile_failure_carries_measured_history_usage(

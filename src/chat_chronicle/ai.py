@@ -385,7 +385,9 @@ class CompletionRequest:
     api_key: str | None = None
     context_window: int | None = None
     estimated_input_tokens: int | None = None
-    reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = None
+    reasoning_effort: Literal["disable", "none", "minimal", "low", "medium", "high"] | None = None
+    vertex_project: str | None = None
+    vertex_location: str | None = None
 
 
 @dataclass(frozen=True)
@@ -454,6 +456,10 @@ class LiteLLMClient:
                 api_base=request.api_base,
                 api_key=request.api_key,
             )
+            if request.vertex_project is not None:
+                completion_kwargs["vertex_project"] = request.vertex_project
+            if request.vertex_location is not None:
+                completion_kwargs["vertex_location"] = request.vertex_location
             if request.reasoning_effort is not None:
                 if request.model.startswith("lm_studio/"):
                     completion_kwargs["extra_body"] = {"reasoning_effort": request.reasoning_effort}
@@ -468,6 +474,11 @@ class LiteLLMClient:
                 raise LLMError("invalid_json", "Provider returned an empty structured response.")
             usage_object = getattr(response, "usage", None)
             usage = usage_object.model_dump() if usage_object is not None else None
+            hidden = getattr(response, "_hidden_params", None)
+            response_cost = hidden.get("response_cost") if isinstance(hidden, dict) else None
+            if isinstance(response_cost, int | float) and not isinstance(response_cost, bool):
+                usage = dict(usage or {})
+                usage["cost_usd"] = float(response_cost)
             provider = str(getattr(response, "provider", "") or "").strip()
             if not provider or provider == "unknown":
                 provider = request.model.split("/", 1)[0] if "/" in request.model else "unknown"

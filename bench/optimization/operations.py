@@ -284,7 +284,7 @@ def _eligible(package: CandidatePackage, result: CandidateResult, p0: CandidateR
             result.validation_metric.total_valid >= p0.validation_metric.total_valid,
             all(
                 result.validation_model_valid[model] >= p0.validation_model_valid[model] - 1
-                for model in ("qwen", "phi")
+                for model in p0.validation_model_valid
             ),
             all(
                 result.validation_task_valid[task] >= p0.validation_task_valid[task] - 1

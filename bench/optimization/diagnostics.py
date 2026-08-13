@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import traceback
 from collections.abc import Callable
@@ -183,3 +184,33 @@ class OptimizerFailureRecorder:
             if category != "local-serialization":
                 return category
         return self.categories[0] if self.categories else None
+
+
+@dataclass(frozen=True)
+class CompleteRequestGuard:
+    """Abort a candidate DSPy boundary before submission when its full request exceeds 8K."""
+
+    context_window: int
+    output_allowance_tokens: int
+    wrapper_allowance_tokens: int = 64
+
+    def __getattr__(self, name: str):
+        if name.startswith("on_"):
+            return lambda *args, **kwargs: None
+        raise AttributeError(name)
+
+    def on_lm_start(self, call_id: str, instance: Any, inputs: dict[str, Any]) -> None:
+        del call_id
+        if getattr(instance, "_chronicle_optimizer_role", None) != "candidate":
+            return
+        serialized = json.dumps(
+            {"inputs": inputs, "model_kwargs": getattr(instance, "kwargs", {})},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        input_tokens = (len(serialized.encode("utf-8")) + 2) // 3
+        total = input_tokens + self.wrapper_allowance_tokens + self.output_allowance_tokens
+        if total > self.context_window:
+            raise RuntimeError("candidate complete request exceeds the 8K context boundary")

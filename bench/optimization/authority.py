@@ -13,6 +13,7 @@ from bench.models import (
     InputEnvelope,
     ReferenceEnvelope,
     SelectionManifest,
+    SelectionManifestConversation,
 )
 
 from .models import OptimizationConfig, resolve_config_path
@@ -86,13 +87,26 @@ def verify_authority(config: OptimizationConfig, config_path: Path) -> VerifiedA
     if train != expected_manifests[0] or validation != expected_manifests[1]:
         raise ValueError("optimizer split order or deterministic selection is invalid")
 
+    bounded = config.evaluation_train_conversation_limit is not None
+    selected_entries = list(development.ordered_conversations)
+    if bounded:
+        assert config.evaluation_validation_conversation_limit is not None
+        selected_entries = [
+            *train.ordered_conversations[: config.evaluation_train_conversation_limit],
+            *validation.ordered_conversations[
+                : config.evaluation_validation_conversation_limit
+            ],
+        ]
     inputs = _load_selected_inputs(
-        resolve_config_path(config_path, config.paths.inputs), development
+        resolve_config_path(config_path, config.paths.inputs),
+        selected_entries,
+        require_exact_inventory=not bounded,
     )
     references = _load_selected_references(
         resolve_config_path(config_path, config.paths.references),
         inputs,
         config.accepted_task_catalog_sha256,
+        require_exact_inventory=not bounded,
     )
     return VerifiedAuthority(development, train, validation, inputs, references)
 
@@ -105,21 +119,25 @@ def _load_split(
     )
 
 
-def _load_selected_inputs(root: Path, manifest: SelectionManifest) -> list[InputEnvelope]:
-    expected_names = [
-        f"c{item.authority_index:03d}.json" for item in manifest.ordered_conversations
-    ]
-    files = sorted(root.glob("*.json")) if root.is_dir() else []
-    if sorted(path.name for path in files) != sorted(expected_names):
-        raise ValueError("optimizer development inputs are missing, extra, or substituted")
+def _load_selected_inputs(
+    root: Path,
+    entries: list[SelectionManifestConversation],
+    *,
+    require_exact_inventory: bool,
+) -> list[InputEnvelope]:
+    expected_names = [f"c{item.authority_index:03d}.json" for item in entries]
+    if require_exact_inventory:
+        files = sorted(root.glob("*.json")) if root.is_dir() else []
+        if sorted(path.name for path in files) != sorted(expected_names):
+            raise ValueError("optimizer development inputs are missing, extra, or substituted")
     inputs = [
         InputEnvelope.model_validate_json(
             (root / f"c{entry.authority_index:03d}.json").read_text(encoding="utf-8")
         )
-        for entry in manifest.ordered_conversations
+        for entry in entries
     ]
-    _validate_inputs(inputs, [entry.authority_index for entry in manifest.ordered_conversations])
-    for entry, source in zip(manifest.ordered_conversations, inputs, strict=True):
+    _validate_inputs(inputs, [entry.authority_index for entry in entries])
+    for entry, source in zip(entries, inputs, strict=True):
         if _conversation_identity(source) != entry.conversation_identity:
             raise ValueError("optimizer input is outside accepted development authority")
         if source.provider != entry.provider:
@@ -131,6 +149,8 @@ def _load_selected_references(
     root: Path,
     inputs: list[InputEnvelope],
     task_catalog_sha256: str,
+    *,
+    require_exact_inventory: bool,
 ) -> dict[str, ReferenceEnvelope]:
     expected_names = sorted(f"c{source.selection_index:03d}.json" for source in inputs)
     task_dirs = (
@@ -140,9 +160,10 @@ def _load_selected_references(
         raise ValueError("optimizer reference task directories are missing or extra")
     references: dict[str, ReferenceEnvelope] = {}
     for task in TASK_ORDER:
-        files = sorted((root / task).glob("*.json"))
-        if sorted(path.name for path in files) != expected_names:
-            raise ValueError("optimizer references are missing, extra, or substituted")
+        if require_exact_inventory:
+            files = sorted((root / task).glob("*.json"))
+            if sorted(path.name for path in files) != expected_names:
+                raise ValueError("optimizer references are missing, extra, or substituted")
         for source in inputs:
             alias = f"c{source.selection_index:03d}--{task}"
             reference = ReferenceEnvelope.model_validate_json(

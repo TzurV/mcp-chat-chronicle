@@ -7,7 +7,7 @@ from pathlib import Path, PurePath
 from typing import Any, Literal
 
 import yaml
-from pydantic import Field, StrictInt, field_validator, model_validator
+from pydantic import Field, StrictBool, StrictInt, field_validator, model_validator
 
 from bench.models import TASK_ORDER, StrictModel
 
@@ -37,26 +37,60 @@ class ManifestBinding(StrictModel):
 
 
 class CandidateModel(StrictModel):
-    id: Literal["qwen", "phi"]
+    id: str = Field(min_length=1, pattern=r"^[a-z0-9][a-z0-9._-]*$")
     profile: str = Field(min_length=1)
-    artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    artifact_path: str = Field(min_length=1, exclude=True)
+    artifact_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    artifact_path: str | None = Field(default=None, min_length=1, exclude=True)
     expected_provider: str = Field(min_length=1)
     expected_model: str = Field(min_length=1)
     litellm_model: str = Field(min_length=1)
-    api_base: str = Field(min_length=1)
+    credential_mode: Literal["local-endpoint", "vertex-adc"] = "local-endpoint"
+    api_base: str | None = Field(default=None, min_length=1)
     api_key_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    google_cloud_project_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    google_cloud_location_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    vertex_project_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    vertex_location_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    vertex_enable_env: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]*$")
+    resolved_location: Literal["global"] | None = None
     timeout_seconds: float = Field(default=120, gt=0, le=600)
     estimated_seconds_per_task: float = Field(default=30, gt=0, le=600)
-    reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] = "none"
+    reasoning_effort: Literal["disable", "none", "minimal", "low", "medium", "high"] = "none"
     context_window: Literal[8192] = 8192
     concurrency: Literal[1] = 1
     infrastructure_retries: StrictInt = Field(default=1, ge=0, le=1)
     semantic_retries: Literal[0] = 0
 
     @model_validator(mode="after")
-    def no_holdout(self) -> CandidateModel:
-        _forbid_holdout(self.artifact_path)
+    def runtime_contract(self) -> CandidateModel:
+        vertex_fields = (
+            self.google_cloud_project_env,
+            self.google_cloud_location_env,
+            self.vertex_project_env,
+            self.vertex_location_env,
+            self.vertex_enable_env,
+        )
+        if self.credential_mode == "local-endpoint":
+            if self.artifact_path is None or self.artifact_sha256 is None or self.api_base is None:
+                raise ValueError("local-endpoint candidate requires artifact and API base")
+            if any(value is not None for value in vertex_fields) or self.resolved_location:
+                raise ValueError("local-endpoint candidate cannot contain Vertex ADC fields")
+            _forbid_holdout(self.artifact_path)
+            return self
+        if self.artifact_path is not None or self.artifact_sha256 is not None:
+            raise ValueError("vertex-adc candidate uses a provider-route identity, not an artifact")
+        if self.api_base is not None or self.api_key_env is not None:
+            raise ValueError("vertex-adc candidate cannot require an API base or key")
+        if any(value is None for value in vertex_fields):
+            raise ValueError("vertex-adc candidate requires project and location environment names")
+        if self.expected_provider != "Google Vertex AI" or not self.litellm_model.startswith(
+            "vertex_ai/"
+        ):
+            raise ValueError("vertex-adc candidate requires a Google Vertex AI LiteLLM model")
+        if self.resolved_location != "global" or self.reasoning_effort != "disable":
+            raise ValueError(
+                "vertex-adc candidate must resolve to global with reasoning explicitly disabled"
+            )
         return self
 
 
@@ -182,10 +216,13 @@ class OptimizationConfig(StrictModel):
     bootstrap_max_bootstrapped_demos: Literal[1] = 1
     bootstrap_max_rounds: Literal[1] = 1
     bootstrap_teacher: Literal["candidate-model"] = "candidate-model"
+    bootstrap_enabled: StrictBool = True
     gepa_track_stats: Literal[True] = True
     gepa_instruction_only: Literal[True] = True
     gepa_max_metric_calls_per_candidate: StrictInt = Field(default=20, gt=0, le=20)
     gepa_max_candidate_proposals: StrictInt | None = Field(default=None, gt=0, le=20)
+    evaluation_train_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=6)
+    evaluation_validation_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=4)
     gepa_train_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=6)
     gepa_validation_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=4)
 
@@ -195,8 +232,9 @@ class OptimizationConfig(StrictModel):
             raise ValueError("optimizer tasks must be the four accepted tasks in fixed order")
         if tuple(self.mutable_fields) != MUTABLE_FIELDS:
             raise ValueError("optimizer mutation surface must contain only four system prompts")
-        if [item.id for item in self.candidate_models] != ["qwen", "phi"]:
-            raise ValueError("candidate models must be qwen then phi")
+        model_ids = [item.id for item in self.candidate_models]
+        if not model_ids or len(model_ids) != len(set(model_ids)):
+            raise ValueError("candidate models must contain at least one unique model identity")
         if self.train_manifest.role != "optimizer-train" or self.train_manifest.conversations != 6:
             raise ValueError("train manifest must bind the frozen six-conversation split")
         if (
@@ -214,6 +252,14 @@ class OptimizationConfig(StrictModel):
         )
         if (bounded[0] is None) != (bounded[1] is None):
             raise ValueError("bounded GEPA scope requires train and validation limits together")
+        evaluation_bounded = (
+            self.evaluation_train_conversation_limit,
+            self.evaluation_validation_conversation_limit,
+        )
+        if (evaluation_bounded[0] is None) != (evaluation_bounded[1] is None):
+            raise ValueError(
+                "bounded evaluation scope requires train and validation limits together"
+            )
         return self
 
 
@@ -271,6 +317,16 @@ def proposer_identity(proposer: ProposerProfile) -> str:
     from bench.io import digest
 
     return digest(proposer.model_dump(mode="json"))
+
+
+def candidate_model_identity(candidate: CandidateModel) -> str:
+    """Bind a local artifact hash or the complete non-secret hosted route contract."""
+    from bench.io import digest
+
+    if candidate.credential_mode == "local-endpoint":
+        assert candidate.artifact_sha256 is not None
+        return candidate.artifact_sha256
+    return digest(candidate.model_dump(mode="json", exclude={"artifact_path", "artifact_sha256"}))
 
 
 def proposer_cache_identity(proposer: ProposerProfile) -> str:

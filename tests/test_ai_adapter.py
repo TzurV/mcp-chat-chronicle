@@ -100,6 +100,40 @@ def test_adapter_passes_reasoning_effort_and_normalizes_finish_reason(
     }
 
 
+def test_adapter_passes_vertex_adc_route_and_exact_thinking_disable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    async def completion(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"result":"ok"}'))],
+            provider="Google Vertex AI",
+            model="gemini-2.5-flash-lite",
+            usage=SimpleNamespace(model_dump=lambda: {"prompt_tokens": 3}),
+            _hidden_params={"response_cost": 0.000001},
+        )
+
+    monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(acompletion=completion))
+    request = CompletionRequest(
+        **{
+            **_request().__dict__,
+            "model": "vertex_ai/gemini-2.5-flash-lite",
+            "reasoning_effort": "disable",
+            "vertex_project": "synthetic-project",
+            "vertex_location": "global",
+        }
+    )
+    result = asyncio.run(LiteLLMClient().complete(request))
+    assert captured["reasoning_effort"] == "disable"
+    assert captured["vertex_project"] == "synthetic-project"
+    assert captured["vertex_location"] == "global"
+    assert result.provider == "Google Vertex AI"
+    assert result.model == "gemini-2.5-flash-lite"
+    assert result.usage == {"prompt_tokens": 3, "cost_usd": 0.000001}
+
+
 def test_adapter_passes_lm_studio_reasoning_effort_in_request_body(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

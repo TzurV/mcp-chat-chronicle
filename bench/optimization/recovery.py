@@ -15,6 +15,7 @@ from .budget import BudgetLedger
 from .execution import ExecutionAuthority, RunState
 from .models import (
     OptimizationConfig,
+    candidate_model_identity,
     load_optimization_config,
     optimization_config_identity,
     proposer_identity,
@@ -246,7 +247,7 @@ def _verify_authorization_compatibility(
         "train_manifest_sha256": config.train_manifest.sha256,
         "validation_manifest_sha256": config.validation_manifest.sha256,
         "model_artifact_sha256": {
-            model.id: model.artifact_sha256 for model in config.candidate_models
+            model.id: candidate_model_identity(model) for model in config.candidate_models
         },
         "proposer_identity_sha256": proposer_identity(config.proposer),
         "optimizer_identity_sha256": digest(

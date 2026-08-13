@@ -16,7 +16,11 @@ from chat_chronicle.ai import CompletionRequest, LiteLLMClient, LLMError
 from chat_chronicle.ai_config import interpolate_prompt, load_task_catalog
 
 from .authority import VerifiedAuthority
-from .diagnostics import OptimizerFailureRecorder, optimizer_failure_category
+from .diagnostics import (
+    CompleteRequestGuard,
+    OptimizerFailureRecorder,
+    optimizer_failure_category,
+)
 from .dspy_bridge import (
     build_program,
     compile_bootstrap,
@@ -38,13 +42,20 @@ from .execution import (
 )
 from .feedback import Diagnostic, render_feedback
 from .models import (
+    CandidateModel,
     OptimizationConfig,
     ProposerProfile,
     proposer_cache_identity,
     resolve_config_path,
 )
 from .package import CandidatePackage
-from .request_envelope import case_request_parts, verify_demonstration_authority
+from .request_envelope import (
+    case_request_parts,
+    estimate_case_input_tokens,
+    verify_demonstration_authority,
+)
+
+_RETRYABLE_INFRASTRUCTURE_FAILURES = frozenset({"connection", "rate_limit", "timeout"})
 
 
 class LiteLLMCandidateAdapter(CandidateAdapter):
@@ -53,17 +64,32 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
         config: OptimizationConfig,
         config_path: Path,
         client: LiteLLMClient | None = None,
+        *,
+        environment: Mapping[str, str] | None = None,
+        adc_probe: Callable[[], bool] | None = None,
     ) -> None:
         self.config = config
         self.tasks = load_task_catalog(
             resolve_config_path(config_path, config.paths.accepted_task_catalog)
         )
         self.client = client or LiteLLMClient()
+        self.runtimes = {
+            model.id: _candidate_runtime(
+                model,
+                environment=environment,
+                adc_probe=adc_probe,
+            )
+            for model in config.candidate_models
+        }
 
     def reservation(
-        self, scope: Literal["train", "validation"], model_id: Literal["qwen", "phi"]
+        self, scope: Literal["train", "validation"], model_id: str
     ) -> AdapterReservation:
-        conversations = 6 if scope == "train" else 4
+        conversations = (
+            self.config.evaluation_train_conversation_limit
+            if scope == "train"
+            else self.config.evaluation_validation_conversation_limit
+        ) or (6 if scope == "train" else 4)
         model = _model(self.config, model_id)
         cases = conversations * len(TASK_ORDER)
         attempts = cases * (1 + model.infrastructure_retries)
@@ -79,7 +105,7 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
         self,
         candidate: CandidatePackage,
         scope: Literal["train", "validation"],
-        model_id: Literal["qwen", "phi"],
+        model_id: str,
         authority: VerifiedAuthority,
     ) -> EvaluationBatch:
         return asyncio.run(self._evaluate(candidate, scope, model_id, authority))
@@ -88,20 +114,29 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
         self,
         candidate: CandidatePackage,
         scope: Literal["train", "validation"],
-        model_id: Literal["qwen", "phi"],
+        model_id: str,
         authority: VerifiedAuthority,
     ) -> EvaluationBatch:
         manifest = authority.train if scope == "train" else authority.validation
         inputs = {source.selection_index: source for source in authority.inputs}
         model = _model(self.config, model_id)
         outcomes: list[CaseOutcome] = []
-        attempts = retries = input_tokens = output_tokens = 0
+        attempts = retries = input_tokens = output_tokens = reasoning_tokens = 0
+        provider_cost_usd = 0.0
         started = time.monotonic()
-        for entry in manifest.ordered_conversations:
+        limit = (
+            self.config.evaluation_train_conversation_limit
+            if scope == "train"
+            else self.config.evaluation_validation_conversation_limit
+        )
+        for entry in manifest.ordered_conversations[:limit]:
             source = inputs[entry.authority_index]
             for task_name in TASK_ORDER:
                 task = self.tasks.tasks[task_name]
                 messages, schema, selector = case_request_parts(candidate, task_name, task, source)
+                estimated_input_tokens = estimate_case_input_tokens(messages, schema)
+                if estimated_input_tokens + task.generation.max_tokens > model.context_window:
+                    raise RuntimeError("candidate complete request exceeds the 8K context boundary")
                 request = CompletionRequest(
                     model=model.litellm_model,
                     messages=messages,
@@ -111,10 +146,10 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                     max_tokens=task.generation.max_tokens,
                     timeout=model.timeout_seconds,
                     retries=0,
-                    api_base=model.api_base,
-                    api_key=_optional_secret(model.api_key_env),
-                    context_window=8192,
+                    context_window=model.context_window,
+                    estimated_input_tokens=estimated_input_tokens,
                     reasoning_effort=model.reasoning_effort,
+                    **self.runtimes[model_id],
                 )
                 alias = f"c{source.selection_index:03d}--{task_name}"
                 response = None
@@ -126,8 +161,13 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                         break
                     except LLMError as exc:
                         failure = exc
-                        if retry < model.infrastructure_retries:
+                        if (
+                            retry < model.infrastructure_retries
+                            and exc.kind in _RETRYABLE_INFRASTRUCTURE_FAILURES
+                        ):
                             retries += 1
+                            continue
+                        break
                 if response is None:
                     outcomes.append(
                         CaseOutcome(
@@ -139,9 +179,11 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                             semantic_agreement=0,
                             diagnostics=[
                                 Diagnostic(
-                                    category="timeout"
-                                    if getattr(failure, "kind", "") == "timeout"
-                                    else "schema",
+                                    category=(
+                                        "timeout"
+                                        if getattr(failure, "kind", "") == "timeout"
+                                        else "provider-failure"
+                                    ),
                                     schema_path="$",
                                     observed="provider-failure",
                                 )
@@ -157,8 +199,15 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                         f"candidate response identity mismatch for configured model {model_id}"
                     )
                 usage = response.usage or {}
-                input_tokens += int(usage.get("prompt_tokens", 0) or 0)
-                output_tokens += int(usage.get("completion_tokens", 0) or 0)
+                prompt_count, completion_count, reasoning_count = _history_entry_usage(
+                    {"usage": usage}
+                )
+                if reasoning_count:
+                    raise RuntimeError("candidate response violated the no-reasoning contract")
+                input_tokens += prompt_count
+                output_tokens += completion_count
+                reasoning_tokens += reasoning_count
+                provider_cost_usd += _provider_cost(usage)
                 outcomes.append(
                     _validate_response(
                         alias,
@@ -183,6 +232,8 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                 retries=retries,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                reasoning_tokens=reasoning_tokens,
+                provider_cost_usd=provider_cost_usd,
                 compute_hours=hours,
                 compute_cost_usd=hours * _compute_hourly_cost(self.config),
                 latency_ms=latency,
@@ -264,6 +315,52 @@ def build_proposer_client(
         )
     except Exception:
         raise RuntimeError("failed to initialize configured optimizer proposer") from None
+
+
+def _candidate_runtime(
+    model: CandidateModel,
+    *,
+    environment: Mapping[str, str] | None = None,
+    adc_probe: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
+    """Resolve a candidate route transiently without serializing credentials or project values."""
+    environ = os.environ if environment is None else environment
+    if model.credential_mode == "local-endpoint":
+        return {
+            "api_base": model.api_base,
+            "api_key": _optional_secret(model.api_key_env, environ),
+        }
+    names = {
+        "Google Cloud project": model.google_cloud_project_env,
+        "Google Cloud location": model.google_cloud_location_env,
+        "Vertex project": model.vertex_project_env,
+        "Vertex location": model.vertex_location_env,
+        "Vertex enable flag": model.vertex_enable_env,
+    }
+    values: dict[str, str] = {}
+    for label, name in names.items():
+        assert name is not None
+        value = environ.get(name)
+        if not value:
+            raise RuntimeError(f"missing required candidate {label} environment variable {name}")
+        values[label] = value
+    if values["Google Cloud project"] != values["Vertex project"]:
+        raise RuntimeError("configured candidate Vertex project environment variables disagree")
+    if values["Google Cloud location"] != "global" or values["Vertex location"] != "global":
+        raise RuntimeError("configured candidate Vertex location must resolve to global")
+    if values["Vertex enable flag"].casefold() not in {"1", "true", "yes"}:
+        raise RuntimeError("configured candidate Vertex enable environment variable must be true")
+    probe = _default_adc_probe if adc_probe is None else adc_probe
+    try:
+        adc_available = probe()
+    except Exception:
+        adc_available = False
+    if not adc_available:
+        raise RuntimeError("Google Vertex AI Application Default Credentials are unavailable")
+    return {
+        "vertex_project": values["Google Cloud project"],
+        "vertex_location": "global",
+    }
 
 
 def _default_adc_probe() -> bool:
@@ -407,10 +504,16 @@ class DspyOptimizerAdapter(OptimizerAdapter):
             lm._chronicle_optimizer_role = "candidate"
         self.reflection_lm._chronicle_optimizer_role = "proposer"
         recorder = OptimizerFailureRecorder(usage_extractor=_history_entry_usage)
+        context_guard = CompleteRequestGuard(
+            context_window=self.config.context_window,
+            output_allowance_tokens=max(
+                task.generation.max_tokens for task in self.tasks.tasks.values()
+            ),
+        )
         import dspy
 
         try:
-            with dspy.context(callbacks=[recorder]):
+            with dspy.context(callbacks=[context_guard, recorder]):
                 compiled = compile_gepa(
                     program,
                     train,
@@ -452,6 +555,12 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                 "output_tokens": recorder.proposer_output_tokens,
             }
         )
+        if _reasoning_tokens_since(list(self.candidate_lms.values()), before[:-1]):
+            raise OptimizerOperationError(
+                "GEPA candidate violated the no-reasoning contract",
+                usage=usage,
+                failure_category="reasoning-policy",
+            )
         return Proposal(
             prompts=prompts_from_program(compiled),
             strategy=f"gepa-instruction-only-pareto-{ordinal:04d}",
@@ -463,14 +572,15 @@ class DspyOptimizerAdapter(OptimizerAdapter):
 
         result = {}
         for model in self.config.candidate_models:
+            runtime = _candidate_runtime(model)
             result[model.id] = dspy.LM(
                 model.litellm_model,
-                api_base=model.api_base,
-                api_key=_optional_secret(model.api_key_env),
                 temperature=0,
                 timeout=model.timeout_seconds,
                 num_retries=0,
                 cache=False,
+                reasoning_effort=model.reasoning_effort,
+                **runtime,
             )
         return result
 
@@ -500,7 +610,7 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                     "last_active_date": source.last_active_date,
                     "transcript": selector.transcript,
                 }
-                for model_id in ("qwen", "phi"):
+                for model_id in (model.id for model in self.config.candidate_models):
                     examples.append(
                         dspy.Example(
                             task=task_name,
@@ -614,13 +724,21 @@ def _model(config: OptimizationConfig, model_id: str):
     return next(model for model in config.candidate_models if model.id == model_id)
 
 
-def _optional_secret(name: str | None) -> str | None:
+def _optional_secret(name: str | None, environment: Mapping[str, str] | None = None) -> str | None:
     if name is None:
         return None
-    value = os.environ.get(name)
+    environ = os.environ if environment is None else environment
+    value = environ.get(name)
     if not value:
         raise RuntimeError(f"missing required candidate environment variable {name}")
     return value
+
+
+def _provider_cost(usage: Mapping[str, Any]) -> float:
+    value = usage.get("cost_usd", 0)
+    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+        raise TypeError("invalid provider cost field")
+    return float(value)
 
 
 def _compute_hourly_cost(config: OptimizationConfig) -> float:
@@ -664,6 +782,14 @@ def _history_usage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         latency_ms=0,
+    )
+
+
+def _reasoning_tokens_since(lms: list[Any], before: list[int]) -> int:
+    return sum(
+        _history_entry_usage(item)[2]
+        for lm, start in zip(lms, before, strict=True)
+        for item in getattr(lm, "history", [])[start:]
     )
 
 

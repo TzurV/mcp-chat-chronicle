@@ -34,7 +34,7 @@ class CandidateLineage(StrictModel):
 class CandidateDemonstration(StrictModel):
     kind: Literal["labeled", "bootstrapped"]
     case_alias: str = Field(pattern=r"^c\d{3}--[a-z-]+$")
-    model_id: Literal["qwen", "phi"]
+    model_id: str = Field(min_length=1, pattern=r"^[a-z0-9][a-z0-9._-]*$")
     selected_input: str = Field(min_length=1)
     response_json: str = Field(min_length=2)
     demonstration_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -165,7 +165,7 @@ class CandidateResult(StrictModel):
     authority: ResultAuthority
     train_metric: MetricVector
     validation_metric: MetricVector
-    validation_model_valid: dict[Literal["qwen", "phi"], StrictInt]
+    validation_model_valid: dict[str, StrictInt]
     validation_task_valid: dict[str, StrictInt]
     prompt_token_max: StrictInt = Field(ge=0)
     request_envelope: RequestEnvelopeEvidence
@@ -180,8 +180,8 @@ class CandidateResult(StrictModel):
             raise ValueError("train metric candidate identity mismatch")
         if self.validation_metric.candidate_id != self.candidate_id:
             raise ValueError("validation metric candidate identity mismatch")
-        if set(self.validation_model_valid) != {"qwen", "phi"}:
-            raise ValueError("result must account for Qwen and Phi")
+        if set(self.validation_model_valid) != set(self.authority.model_artifact_sha256):
+            raise ValueError("result candidate-model accounting differs from authority")
         if set(self.validation_task_valid) != set(TASK_ORDER):
             raise ValueError("result must account for all four tasks")
         if self.prompt_fits_context != self.request_envelope.fits_context:
@@ -223,7 +223,7 @@ def demonstration_value(
     *,
     kind: Literal["labeled", "bootstrapped"],
     case_alias: str,
-    model_id: Literal["qwen", "phi"],
+    model_id: str,
     selected_input: str,
     response_json: str,
 ) -> CandidateDemonstration:
