@@ -1,9 +1,10 @@
 # WP-5.2B3B.1 Prompt Optimization Activity Log
 
-**Status:** P0 and BootstrapFewShot complete; canonical no-call recovery is
-accepted and GEPA-ready with P0 as parent; GEPA not started
+**Status:** P0 and BootstrapFewShot complete; canonical recovery accepted; the
+first GEPA provider attempt produced no candidate because the proposer route
+failed; local hosted lifecycle qualification is next
 
-**Evidence date:** 2026-08-12
+**Evidence date:** 2026-08-13
 
 **Purpose:** Preserve a detailed, privacy-safe record of the prompt-optimization
 work, including negative results, engineering failures, DSPy compatibility
@@ -121,14 +122,16 @@ The planned implementation:
 - returns a bounded shortlist rather than choosing a hidden winner;
 - preserves every proposal, failure, call, token, latency, and cost append-only.
 
-GEPA has not yet made a private proposer call. No GEPA result should be implied
-from this log.
+GEPA later crossed the private proposer boundary once, but the provider route
+failed before a candidate existed. No GEPA prompt-quality result should be
+implied from this log.
 
 ### 4.4 Why these three methods were selected
 
 This is a three-stage method program, not three completed optimizer results.
-Manual global prompting and BootstrapFewShot are complete; GEPA is selected and
-implemented but has not run on private development data.
+Manual global prompting and BootstrapFewShot are complete. GEPA is selected and
+implemented, but its first private provider attempt stopped before candidate
+generation and therefore remains unevaluated as an optimization method.
 
 The methods were chosen to increase automation and search power one step at a
 time while keeping the experiment interpretable:
@@ -364,9 +367,10 @@ These are optimizer/candidate accounting figures, not the full RunPod invoice.
 ## 8. Fixed-Judge Reference
 
 The fixed judge was intentionally excluded from Bootstrap feedback and is
-contractually excluded from any future GEPA feedback. GEPA has not run yet. The
-judge was run afterward as an optional local reference against only schema-valid
-P0 and Bootstrap validation outputs.
+contractually excluded from GEPA feedback. The first GEPA provider attempt made
+no judge call and produced no candidate. The judge was run afterward as an
+optional local reference against only schema-valid P0 and Bootstrap validation
+outputs.
 
 ### Scope and result
 
@@ -685,9 +689,10 @@ Recovered evidence records:
   response hashes, fixed-judge evidence, and frozen 6/4 manifests.
 
 This is a bookkeeping/readiness result, not a prompt-quality improvement.
-Bootstrap remains a negative comparator and GEPA remains unstarted. A new owner
-authorization is required before compatible compute, ADC setup, or the first
-GEPA proposer call.
+Bootstrap remains a negative comparator. GEPA later reached the proposer
+boundary but produced no candidate, so a successful lifecycle and method result
+remain outstanding. A new owner authorization is required before another
+private proposer attempt.
 
 ## 18. Evidence Sources
 
@@ -705,6 +710,9 @@ GEPA proposer call.
 - `md/handoffs/reports/WP-5.2B3B.1A-bootstrap-local-fixed-judge-reference-completion-report.md`
 - `md/handoffs/WP-5.2B3B.1B-checkpoint-recovery-gepa-readiness.md`
 - `md/handoffs/reports/WP-5.2B3B.1B-checkpoint-recovery-gepa-readiness-completion-report.md`
+- `md/handoffs/WP-5.2B3B.1C-gepa-pilot-and-bounded-search.md`
+- `md/handoffs/reports/WP-5.2B3B.1C-gepa-pilot-and-bounded-search-completion-report.md`
+- `md/research/WP-5.2B3B.1C-gepa-pilot-article-evidence-addendum.md`
 - [DSPy BootstrapFewShot API](https://dspy.ai/api/optimizers/BootstrapFewShot/)
 - [DSPy GEPA API](https://dspy.ai/api/optimizers/GEPA/overview/)
 - [DSPy MIPROv2 API](https://dspy.ai/api/optimizers/MIPROv2/)
@@ -725,3 +733,78 @@ accepted historical observations. Every update should separate:
 4. limitation;
 5. confidence;
 6. publication status.
+
+## 19. GEPA pilot diagnostic stop
+
+### Measured fact
+
+On 2026-08-13, the owner-authorized pilot resumed from exact clean application
+commit `5ef7f0a05fce9e36cc9eed6c4db28381f195d6c6`. Retained P0 and Bootstrap
+authority, the frozen six-train/four-validation development split, deterministic
+FABLE scoring, model artifacts, context, privacy, and budget gates passed. The
+fixed judge remained outside GEPA and the holdout was not accessed.
+
+Temporary Vertex ADC existed only in RAM. Default and explicit credential loads
+passed, and the exact Gemini 3.1 Pro Vertex adapter initialized without a call.
+One environment-construction failure caused by missing Google runtime packages
+was preserved as a consumed authorization with no reservation, trial, model
+call, or provider call. Installing the accepted top-level Google runtime
+versions repaired the environment without changing production code.
+
+The real proposal position ran for 329,682 ms. It completed no proposal and
+generated no candidate or result. The current append-only trial is
+`interrupted` with failure category `PicklingError`. Underlying provider
+attempts returned HTTP 400/model-not-found responses; aggregate diagnostics
+found no authentication, permission, billing, quota, rate-limit, location, or
+timeout category.
+
+The exception prevented measured usage from returning. The fail-closed ledger
+retained 20 task invocations, 20 proposer calls, 20 retries, 1,000,000 input
+tokens, 160,000 output/reasoning tokens, 0.833333 configured compute hours,
+US$3.92 proposer cost, and US$1.294105 configured compute cost. These are
+reservation amounts, not measured consumption.
+
+Search denominators were one started proposal, zero completed proposals, one
+interrupted proposal, zero candidates, zero candidate results, zero privacy or
+context checks, zero eligible candidates, zero shortlist entries, and zero
+continuation operations. The candidate-dependent pilot gate was not evaluable
+and failed closed. P0 remains unchanged at 11/32 valid; no P0,
+BootstrapFewShot, recovery, judge, or holdout rerun occurred.
+
+The activity used one RTX 5090 32 GB GPU in an EU Secure class at US$0.99/hour
+for approximately 1.761 hours, an estimated US$1.744. ADC was revoked and its
+RAM directory removed, models and LM Studio were stopped, and paid compute was
+stopped. The Pod, retained 30 GB network volume, repository, models, and results
+were not deleted.
+
+### Interpretation
+
+This result measures a provider/runtime failure boundary, not GEPA prompt
+quality. The correct experimental action was to preserve uncertainty, keep
+fail-closed accounting, and block continuation rather than relax the frozen
+model, route, retry, scoring, or pilot criteria.
+
+### Denominator
+
+One authorized GEPA proposal position and zero generated candidates. Actual
+provider-attempt and token counts are unknown because the adapter did not return
+measured usage; only the full reservation is authoritative for remaining
+capacity.
+
+### Limitation
+
+The model-not-found response can reflect preview availability or account
+access, and the outer `PicklingError` prevents a cleaner provider failure record.
+No statement about GEPA effectiveness, local-model gains, privacy eligibility,
+remote transfer, or holdout generalization is supported.
+
+### Confidence
+
+High for lifecycle, append-only, zero-candidate, cleanup, and fail-closed budget
+facts. Low for any more specific provider-cause inference.
+
+### Publication status
+
+Suitable as a privacy-safe engineering/process observation with complete
+denominators. Not suitable as a GEPA quality result. See
+`md/research/WP-5.2B3B.1C-gepa-pilot-article-evidence-addendum.md`.

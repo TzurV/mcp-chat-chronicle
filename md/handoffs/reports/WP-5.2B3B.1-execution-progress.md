@@ -2,11 +2,71 @@
 
 ## Status
 
-**WP-5.2B3B.1B Gate 2/3 was accepted by PM validation on 2026-08-12.** The
-no-call checkpoint recovery is complete from clean manager commit
-`96d9fca9fed965e72f3e1182b72d0a9b3e3d618b`. P0 is the explicit future GEPA
-parent; Bootstrap attempt `0003` is registered as a completed manager-policy
-non-promotable comparator. GEPA remains unstarted.
+**WP-5.2B3B.1C is stopped at a preserved diagnostic boundary and is ready for
+PM validation.** Execution used clean manager commit
+`5ef7f0a05fce9e36cc9eed6c4db28381f195d6c6`. P0 remained the GEPA parent and
+Bootstrap attempt `0003` remained the completed manager-policy non-promotable
+comparator. The bounded GEPA operation reached the authorized Vertex route but
+produced no candidate or GEPA result. The append-only proposal attempt is
+`interrupted` with failure category `PicklingError`; its underlying provider
+attempts returned HTTP 400/model-not-found responses. Continuation did not run.
+
+## 2026-08-13 GEPA pilot update
+
+- Retained state, budget, P0 parentage, Bootstrap disposition, the frozen 6/4
+  development split, both model artifacts, the 8,192-token context, and the
+  exact proposer profile passed the no-call preflight. The ignored execution
+  config changed only at `application_commit`, with an adjacent private backup.
+- The RunPod environment was a single RTX 5090 32 GB GPU in the EU Secure class
+  at US$0.99/hour with a retained 30 GB network volume. The Pod ran for about
+  1.761 hours during this activity, an estimated US$1.744 of Pod compute. This
+  wall-clock estimate is separate from the optimizer's fail-closed ledger.
+- Temporary user ADC was created only in RAM. Python credential loading and the
+  configured `vertex_ai/gemini-3.1-pro-preview` production adapter initialized
+  without a provider call before the pilot. No credential or project value was
+  written to tracked files or persistent storage.
+- One pre-provider start failed because the retained environment lacked the
+  Google Vertex runtime packages. It appended and consumed an authorization but
+  created no reservation, trial, candidate, model call, or provider call. The
+  accepted top-level runtime versions were then installed without changing
+  production code; compatibility and package checks passed.
+- The authorized pilot appended a fresh authorization and one GEPA proposal
+  attempt. It ran for 329,682 ms, ended with exit code 2, and retained an
+  interrupted `PicklingError` attempt. Boolean-only log classification found
+  repeated `BadRequestError`, `LMInvalidRequestError`, and `OpenAIError`
+  wrappers around HTTP 400/model-not-found responses. There was no
+  authentication, permission, billing, quota, rate-limit, or timeout signal.
+- Because the exception escaped before measured usage could be returned, the
+  ledger correctly retained the full fail-closed proposal reservation: 20 task
+  invocations, 20 proposer calls, 20 infrastructure retries, 1,000,000 input
+  tokens, 160,000 output/reasoning tokens, 0.833333 configured compute hours,
+  US$3.92 proposer cost, and US$1.294105 configured compute cost. These are
+  conservative accounting charges, not proof that each reserved call or token
+  was consumed or billed.
+- Candidate packages/results generated, deterministically evaluated,
+  privacy-scanned, context-checked, and shortlisted were all 0/0. The pilot
+  checkpoint was not created. P0 comparison was therefore not evaluable, the
+  component-wise gate did not pass, and automatic continuation was prohibited.
+- P0 remains frozen at 11/32 validation-valid outputs: Qwen 5/16, Phi 6/16,
+  conversation summary 0/8, work-mode classification 6/8, last activity 0/8,
+  and title assessment 5/8. No P0, BootstrapFewShot, recovery, fixed-judge, or
+  holdout operation was rerun.
+- Final validation found zero pending reservations, zero GEPA results, no pilot
+  checkpoint, a hash-valid state and budget, a valid current interrupted trial,
+  the exact clean execution commit, and zero credential-shaped files on
+  persistent storage. Existing P0 and Bootstrap evidence remained immutable.
+- LM Studio was unloaded and stopped. ADC revocation returned success, the
+  RAM credential directory and its tmux session were removed, and the paid Pod
+  was stopped without deletion. The Pod, 30 GB network volume, repository,
+  models, and all persistent results remain retained; ongoing GPU spend is
+  US$0/hour.
+- The exact execution commit's GitHub Actions run completed successfully in all
+  four Ubuntu/Windows x Python 3.11/3.12 jobs.
+
+No retry, provider/model/region change, request repair, P0 rerun, or holdout
+access is authorized from this checkpoint. A manager must review the
+model-availability failure and the unwrapped GEPA `PicklingError`; any new real
+attempt requires a fresh owner instruction after an accepted repair.
 
 ## 2026-08-12 checkpoint recovery and readiness update
 
