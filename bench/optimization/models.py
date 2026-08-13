@@ -83,8 +83,8 @@ class CandidateModel(StrictModel):
             raise ValueError("vertex-adc candidate cannot require an API base or key")
         if any(value is None for value in vertex_fields):
             raise ValueError("vertex-adc candidate requires project and location environment names")
-        if self.expected_provider != "Google Vertex AI" or not self.litellm_model.startswith(
-            "vertex_ai/"
+        if self.expected_provider not in {"Google Vertex AI", "vertex_ai"} or not (
+            self.litellm_model.startswith("vertex_ai/")
         ):
             raise ValueError("vertex-adc candidate requires a Google Vertex AI LiteLLM model")
         if self.resolved_location != "global" or self.reasoning_effort != "disable":
@@ -92,6 +92,14 @@ class CandidateModel(StrictModel):
                 "vertex-adc candidate must resolve to global with reasoning explicitly disabled"
             )
         return self
+
+
+def candidate_provider_matches(candidate: CandidateModel, actual_provider: str) -> bool:
+    """Match a provider response without weakening the configured route boundary."""
+
+    if candidate.credential_mode == "vertex-adc":
+        return actual_provider in {"Google Vertex AI", "vertex_ai"}
+    return actual_provider == candidate.expected_provider
 
 
 class ProposerProfile(StrictModel):

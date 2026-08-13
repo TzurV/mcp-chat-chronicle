@@ -889,3 +889,60 @@ not met and that no private rerun occurred. A fresh private run requires separat
 owner authorization after manager review and commit. Suitable as privacy-safe
 systems/process evidence with these complete denominators; not suitable as a
 prompt-quality, P0-improvement, or general GEPA effectiveness claim.
+
+## 21. Gemini 2.5 Flash-Lite private lifecycle persistence stop
+
+### Measured fact
+
+On 2026-08-13, the owner-authorized 14-file authority subset was copied by
+literal allowlist into a new ignored D.1 root. A private source/destination
+SHA-256 inventory proved byte identity, and destination enumeration proved zero
+extra payloads. All configuration and subsequent reads used only the copied
+authority. The source authority was not modified, and unrelated private cases
+or prior run artifacts were not enumerated or opened.
+
+`vertex_ai/gemini-2.5-flash-lite` qualified through Vertex AI in `global` with
+one schema-valid call, no retry, disabled reasoning, a stop finish, 7 input and
+11 output tokens, 15,360 ms latency, and US$0.0000051 measured cost. The tracked
+optimizer path then received all eight expected P0 responses from the same
+provider/model route. They used 12,113 input and 968 output tokens, zero
+reasoning tokens, zero retries, 19,376 ms aggregate latency, and US$0.0015985.
+All eight requests were below the application-owned 8,192-token complete-request
+limit; maximum estimated size was 3,935 tokens.
+
+Chronicle stopped while constructing the persisted P0 result because its usage
+map required strict integers and rejected the fractional provider-cost value.
+No result or baseline pointer was accepted. GEPA proposer calls, proposals,
+tuned evaluations, fixed-judge calls, holdout access, RunPod activity, local or
+fallback model calls, and replay calls were all zero. Outputs were not repaired,
+regenerated, or manually scored.
+
+The bounded offline repair permits finite nonnegative fractional usage values,
+validates hosted provider routes during supported preflight, accepts LiteLLM's
+observed Vertex provider alias without weakening exact model/region/reasoning
+checks, and appends an interrupted trial when persistence fails after terminal
+evaluation. Focused and full tests pass.
+
+### Interpretation
+
+The candidate route and the eight-call private generation boundary worked. The
+failure is a deterministic local accounting-schema defect, not a provider,
+format, context, reference, or prompt-quality result. Since no P0 result was
+persisted, the GEPA and tuned-candidate lifecycle remains unproven and there is
+no P0-versus-tuned comparison.
+
+### Denominator and accounting
+
+D.1 made nine calls total: one qualification and eight P0 calls, with zero
+retries and US$0.0016036 measured cost. Combined B3B.1D/D.1 accounting is 41
+observed calls, 53 conservatively charged calls, US$0.0261762 partial measured
+cost, and US$5.8336808 conservative reservation against the 80-call/US$35
+ceilings. Reservations and measured cost remain distinct.
+
+### Confidence and publication status
+
+High confidence for authority-copy integrity, route identity, terminal call
+accounting, context enforcement, and the local persistence failure. No private
+quality or GEPA effectiveness claim is supported. Preserve the new ignored run
+append-only. A fresh private run requires manager acceptance and separate owner
+authorization.

@@ -1888,8 +1888,9 @@ def test_production_candidate_adapter_is_networkless_injected_and_identity_bound
         mismatched.evaluate(candidate, "validation", "qwen", authority)
 
 
+@pytest.mark.parametrize("actual_provider", ["Google Vertex AI", "vertex_ai"])
 def test_vertex_single_candidate_is_bounded_identity_bound_and_thinking_disabled(
-    tmp_path: Path,
+    tmp_path: Path, actual_provider: str
 ) -> None:
     config_path = synthetic_workspace(tmp_path)
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -1926,7 +1927,17 @@ def test_vertex_single_candidate_is_bounded_identity_bound_and_thinking_disabled
     authority = verify_authority(config, config_path)
     assert len(authority.inputs) == 2
     assert len(authority.references) == 8
-    client = FakeLiteLLMClient(provider="Google Vertex AI", model="gemini-2.5-flash-lite")
+    preflight_result = preflight(config_path, check_framework=False)
+    assert preflight_result["zero_holdout"] is True
+    assert preflight_result["artifacts"] == [
+        {
+            "id": "gemini-2.5-flash-lite",
+            "verified": True,
+            "kind": "provider-route",
+            "context_window": 8192,
+        }
+    ]
+    client = FakeLiteLLMClient(provider=actual_provider, model="gemini-2.5-flash-lite")
     environment = {
         "GOOGLE_CLOUD_PROJECT": "synthetic-project",
         "GOOGLE_CLOUD_LOCATION": "global",
@@ -1958,6 +1969,60 @@ def test_vertex_single_candidate_is_bounded_identity_bound_and_thinking_disabled
         and request.estimated_input_tokens + request.max_tokens <= 8192
         for request in client.requests
     )
+
+
+def test_candidate_accounting_accepts_fractional_provider_cost_and_rejects_bad_usage() -> None:
+    payload = dict(
+        task_invocations=1,
+        proposer_calls=0,
+        infrastructure_retries=0,
+        terminal_invocations=1,
+        expected_invocations=1,
+        failures={},
+        latency_ms=1,
+        usage={"input_tokens": 3, "provider_cost_usd": 0.000001},
+    )
+    valid = CandidateAccounting(**payload)
+    assert valid.usage["provider_cost_usd"] == 0.000001
+    for usage in (
+        {"provider_cost_usd": -0.1},
+        {"provider_cost_usd": float("inf")},
+        {"provider_cost_usd": float("nan")},
+        {"": 1},
+    ):
+        with pytest.raises(ValidationError, match="finite, and nonnegative"):
+            CandidateAccounting(**{**payload, "usage": usage})
+    with pytest.raises(ValidationError):
+        CandidateAccounting(**{**payload, "usage": {"provider_cost_usd": True}})
+
+
+def test_post_evaluation_persistence_failure_records_interrupted_trial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bench.optimization import execution
+
+    config_path = synthetic_workspace(tmp_path)
+
+    def fail_result_persistence(*args, **kwargs):
+        del args, kwargs
+        raise RuntimeError("synthetic result persistence failure")
+
+    monkeypatch.setattr(execution, "_build_result", fail_result_persistence)
+    with pytest.raises(RuntimeError, match="result persistence failure"):
+        run_optimization(
+            config_path,
+            ExecutionAdapters(FakeCandidateAdapter(), FakeOptimizerAdapter()),
+            resume=False,
+            identity_probe=clean_identity,
+        )
+
+    root = tmp_path / "private" / "run"
+    baseline = baseline_package(tmp_path / "tasks.yaml")
+    trial = TrialStore(root).current(f"candidate-{baseline.candidate_id[:16]}")
+    assert trial is not None
+    assert trial.status == "interrupted"
+    assert trial.failure_category == "RuntimeError"
+    assert not list((root / "results").glob("*.json"))
 
 
 def test_candidate_format_failure_is_terminal_without_semantic_retry(tmp_path: Path) -> None:

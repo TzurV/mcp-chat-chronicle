@@ -821,17 +821,27 @@ def _evaluate(
             failure_category=type(exc).__name__,
         )
         raise
-    result = _build_result(
-        candidate,
-        config,
-        config_path,
-        authority,
-        execution_authority,
-        batches,
-        trial_id,
-        root,
-        optimizer_latency_ms,
-    )
+    try:
+        result = _build_result(
+            candidate,
+            config,
+            config_path,
+            authority,
+            execution_authority,
+            batches,
+            trial_id,
+            root,
+            optimizer_latency_ms,
+        )
+    except Exception as exc:
+        TrialStore(root).append(
+            trial_id,
+            "interrupted",
+            ledger.load().counters.model_dump(mode="json"),
+            candidate_id=candidate.candidate_id,
+            failure_category=type(exc).__name__,
+        )
+        raise
     write_result(root / "results" / f"{result.result_id}.json", result)
     TrialStore(root).append(
         trial_id,

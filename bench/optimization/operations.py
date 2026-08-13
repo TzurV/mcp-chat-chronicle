@@ -16,6 +16,7 @@ from .budget import BudgetLedger, UsageCounters, enforce_budget
 from .compat import verify_compatibility
 from .execution import RunState
 from .models import (
+    candidate_model_identity,
     load_optimization_config,
     optimization_config_identity,
     resolve_config_path,
@@ -43,16 +44,31 @@ def preflight(config_path: Path, *, check_framework: bool = True) -> dict[str, A
     authority = verify_authority(config, config_path)
     artifacts = []
     for model in config.candidate_models:
-        path = resolve_config_path(config_path, model.artifact_path)
-        if hashlib.sha256(path.read_bytes()).hexdigest() != model.artifact_sha256:
-            raise ValueError(f"optimizer {model.id} artifact hash mismatch")
-        artifacts.append({"id": model.id, "verified": True, "context_window": 8192})
+        if model.credential_mode == "local-endpoint":
+            assert model.artifact_path is not None and model.artifact_sha256 is not None
+            path = resolve_config_path(config_path, model.artifact_path)
+            if hashlib.sha256(path.read_bytes()).hexdigest() != model.artifact_sha256:
+                raise ValueError(f"optimizer {model.id} artifact hash mismatch")
+            kind = "local-artifact"
+        else:
+            candidate_model_identity(model)
+            kind = "provider-route"
+        artifacts.append(
+            {
+                "id": model.id,
+                "verified": True,
+                "kind": kind,
+                "context_window": model.context_window,
+            }
+        )
     enforce_budget(config, UsageCounters(), pilot=True)
     result: dict[str, Any] = {
         "valid": True,
         "zero_holdout": (
-            len(authority.inputs) == 10
-            and len(authority.references) == 40
+            len(authority.inputs)
+            == (config.evaluation_train_conversation_limit or 6)
+            + (config.evaluation_validation_conversation_limit or 4)
+            and len(authority.references) == len(authority.inputs) * len(TASK_ORDER)
             and authority.development.role == "development"
         ),
         "development_conversations": authority.development.conversation_count,

@@ -45,6 +45,7 @@ from .models import (
     CandidateModel,
     OptimizationConfig,
     ProposerProfile,
+    candidate_provider_matches,
     proposer_cache_identity,
     resolve_config_path,
 )
@@ -192,7 +193,7 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                     )
                     continue
                 if (
-                    response.provider != model.expected_provider
+                    not candidate_provider_matches(model, response.provider)
                     or response.model != model.expected_model
                 ):
                     raise ValueError(

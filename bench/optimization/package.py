@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, field_validator, model_validator
 
 from bench.io import atomic_json, digest
 from bench.models import TASK_ORDER, StrictModel
@@ -90,7 +91,24 @@ class CandidateAccounting(StrictModel):
     failures: dict[str, StrictInt]
     latency_ms: StrictInt = Field(ge=0)
     optimizer_latency_ms: StrictInt = Field(default=0, ge=0)
-    usage: dict[str, StrictInt]
+    usage: dict[str, StrictInt | float]
+
+    @field_validator("usage", mode="before")
+    @classmethod
+    def nonnegative_finite_usage(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        if any(
+            not isinstance(key, str)
+            or not key
+            or isinstance(amount, bool)
+            or not isinstance(amount, int | float)
+            or amount < 0
+            or (isinstance(amount, float) and not math.isfinite(amount))
+            for key, amount in value.items()
+        ):
+            raise ValueError("candidate usage values must be named, finite, and nonnegative")
+        return value
 
     @model_validator(mode="after")
     def terminal(self) -> CandidateAccounting:
