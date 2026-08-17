@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from numbers import Real
 from pathlib import Path
 from typing import Any
 
+from bench.io import atomic_text
 from bench.models import TASK_ORDER
 
 from .compat import verify_compatibility
@@ -38,6 +41,27 @@ BOOTSTRAP_ACCEPTANCE_THRESHOLD = 0.999
 # immutable, is never repaired or semantically retried, and is scored through the
 # existing deterministic schema/JSON diagnostics instead.
 GEPA_ADD_FORMAT_FAILURE_AS_FEEDBACK = False
+
+
+@contextmanager
+def _gepa_json_checkpoint_compatibility():
+    """Route pinned GEPA JSON checkpoints through Chronicle's Windows-safe writer."""
+    from gepa.core.state import GEPAState, json_default
+
+    original = GEPAState._atomic_write_json
+
+    def write_json(self: Any, run_dir: str, filename: str, data: Any) -> None:
+        del self
+        atomic_text(
+            Path(run_dir) / filename,
+            json.dumps(data, indent=2, default=json_default),
+        )
+
+    GEPAState._atomic_write_json = write_json
+    try:
+        yield
+    finally:
+        GEPAState._atomic_write_json = original
 
 
 class TraceAlignedReflectionComponentSelector:
@@ -434,7 +458,8 @@ def compile_gepa(
         log_dir=str(log_dir),
         gepa_kwargs=gepa_kwargs,
     )
-    return optimizer.compile(program, trainset=trainset, valset=valset)
+    with _gepa_json_checkpoint_compatibility():
+        return optimizer.compile(program, trainset=trainset, valset=valset)
 
 
 def save_state_only(program: Any, path: Path) -> None:

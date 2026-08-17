@@ -1644,6 +1644,12 @@ def test_optimizer_failure_categories_are_distinct_and_sanitized(
     assert "private" not in json.dumps(recorder.categories)
 
 
+def test_optimizer_failure_recorder_ignores_recovered_adapter_parse_failure() -> None:
+    recorder = OptimizerFailureRecorder()
+    recorder.on_adapter_parse_end("synthetic", None, RuntimeError("private"))
+    assert recorder.categories == []
+
+
 def test_optimizer_operation_error_serializes_without_losing_primary_category() -> None:
     original = OptimizerOperationError(
         "sanitized optimizer operation failure",
@@ -1804,6 +1810,48 @@ def test_gepa_uses_pinned_cloudpickle_for_dynamic_dspy_signatures(
     assert isinstance(captured["component_selector"], TraceAlignedReflectionComponentSelector)
     assert captured["add_format_failure_as_feedback"] is False
     assert GEPA_ADD_FORMAT_FAILURE_AS_FEEDBACK is False
+
+
+def test_gepa_json_checkpoints_ignore_legacy_tmp_and_restore_pinned_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import dspy
+    from gepa.core.state import GEPAState
+
+    original = GEPAState._atomic_write_json
+    target = tmp_path / "run_log.json"
+    legacy_tmp = tmp_path / "run_log.json.tmp"
+    legacy_tmp.write_text("stale", encoding="utf-8")
+
+    class FakeGEPA:
+        def __init__(self, **kwargs):
+            del kwargs
+
+        def compile(self, program, *, trainset, valset):
+            del trainset, valset
+            state = object.__new__(GEPAState)
+            state._atomic_write_json(str(tmp_path), target.name, [{"i": 0}])
+            return program
+
+    monkeypatch.setattr("bench.optimization.dspy_bridge.verify_compatibility", lambda: {})
+    monkeypatch.setattr(dspy, "GEPA", FakeGEPA)
+    program = type("Program", (), {"named_predictors": lambda self: []})()
+    assert (
+        compile_gepa(
+            program,
+            ["train"],
+            ["validation"],
+            lambda *args: 0,
+            object(),
+            seed=7,
+            max_metric_calls=5,
+            log_dir=tmp_path,
+        )
+        is program
+    )
+    assert json.loads(target.read_text(encoding="utf-8")) == [{"i": 0}]
+    assert legacy_tmp.read_text(encoding="utf-8") == "stale"
+    assert GEPAState._atomic_write_json is original
 
 
 def test_trace_aligned_selector_reproduces_task_zero_minibatch_mismatch(

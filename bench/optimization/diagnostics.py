@@ -171,8 +171,10 @@ class OptimizerFailureRecorder:
         outputs: Any | None,
         exception: Exception | None = None,
     ) -> None:
-        del call_id, outputs
-        self._record(exception)
+        # ChatAdapter parse failures are recoverable by Chronicle's explicit
+        # JSONAdapter fallback. If fallback also fails, the terminal exception
+        # propagates to the optimizer boundary and is classified there.
+        del call_id, outputs, exception
 
     def _record(self, exception: Exception | None) -> None:
         if exception is not None:
