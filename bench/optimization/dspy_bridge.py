@@ -390,11 +390,15 @@ def compile_gepa(
     max_metric_calls: int,
     log_dir: Path,
     max_candidate_proposals: int | None = None,
+    callbacks: list[Any] | None = None,
+    use_merge: bool = True,
 ) -> Any:
     verify_compatibility()
     import dspy
 
     gepa_kwargs: dict[str, Any] = {"use_cloudpickle": True}
+    if callbacks:
+        gepa_kwargs["callbacks"] = callbacks
     if max_candidate_proposals is not None:
         from gepa.utils.stop_condition import MaxCandidateProposalsStopper
 
@@ -410,6 +414,7 @@ def compile_gepa(
         num_threads=1,
         track_stats=True,
         track_best_outputs=True,
+        use_merge=use_merge,
         seed=seed,
         log_dir=str(log_dir),
         gepa_kwargs=gepa_kwargs,

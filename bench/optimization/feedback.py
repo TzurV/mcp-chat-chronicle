@@ -17,6 +17,7 @@ _FORBIDDEN = re.compile(
 class Diagnostic(StrictModel):
     category: Literal[
         "schema",
+        "invalid-json",
         "invalid-enum",
         "evidence-mismatch",
         "cross-field",

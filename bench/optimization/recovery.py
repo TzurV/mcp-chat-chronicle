@@ -18,6 +18,7 @@ from .models import (
     candidate_model_identity,
     load_optimization_config,
     optimization_config_identity,
+    optimizer_framework_identity,
     proposer_identity,
     resolve_config_path,
 )
@@ -250,14 +251,7 @@ def _verify_authorization_compatibility(
             model.id: candidate_model_identity(model) for model in config.candidate_models
         },
         "proposer_identity_sha256": proposer_identity(config.proposer),
-        "optimizer_identity_sha256": digest(
-            {
-                "versions": config.versions.model_dump(mode="json"),
-                "seed": config.seed,
-                "bootstrap_teacher": config.bootstrap_teacher,
-                "gepa_instruction_only": config.gepa_instruction_only,
-            }
-        ),
+        "optimizer_identity_sha256": optimizer_framework_identity(config),
         "budget_sha256": digest(config.budget.model_dump(mode="json")),
     }
     for field, value in expected.items():

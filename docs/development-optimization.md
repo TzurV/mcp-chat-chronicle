@@ -147,10 +147,44 @@ entries in frozen order without content inspection, and participate in configura
 `add_format_failure_as_feedback` is explicitly disabled. DSPy's enabled behavior embeds the raw
 malformed completion in reflection data, which is incompatible with Chronicle's bounded sanitized
 feedback boundary. Schema/JSON failures remain terminal scored failures represented by deterministic
-diagnostic categories; output is not repaired, semantically retried, or manually reinterpreted. GEPA
-logical task calls are counted at the DSPy callback boundary, including calls made by deep-copied LMs,
-while token fields include only provider usage actually exposed to Chronicle. Reservations include a
-complete possible end-of-iteration overshoot beyond the nominal metric-call stopping threshold.
+diagnostic categories; output is not repaired, semantically retried, or manually reinterpreted.
+Chronicle explicitly wraps DSPy's normal `ChatAdapter` to `JSONAdapter` format fallback. Only DSPy's
+explicit `AdapterParseError` may trigger the one JSON fallback; LM/provider errors, callback errors,
+`ValueError`, `TypeError`, configuration failures, and unexpected exceptions propagate without a
+second transport. Each score position and actual transport receive separate append-only ignored
+evidence with adapter, fallback
+status, sanitized terminal state, latency, and provider usage or an explicit unavailable marker. A
+JSON fallback is a second task invocation, never a provider retry. Candidate LMs keep
+`num_retries=0`; infrastructure retries remain a separate budget field. GEPA reservations therefore
+allow two transports per logical score position and reconciliation fails closed if the transport
+ledger and DSPy task-call callbacks differ.
+
+Version 2 optimizer configurations must declare `gepa-reliability-v1`. This optimization-only scalar
+orders provider-invalid/empty output at `0.0`, invalid JSON at `0.1`, schema-invalid output at `0.3`,
+evidence-invalid output at `0.6`, cross-field/date-invalid output at `0.8`, and fully valid output at
+`0.999` plus FABLE agreement multiplied by `0.000001`. Every invalid stage stays below `0.999`.
+Only Pydantic model-output `ValidationError` maps to schema-invalid. Unknown schema identities,
+application defects, and unrelated exceptions propagate and stop optimization without another call
+or proposal decision.
+
+The score contract participates in configuration, optimizer-authority, result-authority, and GEPA
+state/cache identity. Historical version 1 configurations retain their prior scalar and identity.
+This gradient exists only to guide reflection; shortlist eligibility and final promotion still use
+the unchanged strict deterministic reliability gates.
+
+Version 2 also explicitly disables GEPA merge proposals so every bounded proposal has one
+proposer-selected component, one pre-decision envelope, and an exactly reservable call path;
+historical version 1 behavior is unchanged.
+
+Every GEPA proposal is observed through GEPA's public callbacks. After the proposal minibatch is
+scored, but before GEPA accepts or rejects it, Chronicle writes a private append-only envelope under
+the ignored run root. It binds proposal ordinal, optimizer/run identity, selected component, parent
+identity, private proposed text, prompt hashes and byte delta, demonstrations, example-local IDs,
+both score vectors, bounded category/path feedback, privacy evidence, and an event hash/version.
+Acceptance or rejection is a separate append-only decision record. Rejected proposals remain
+auditable, interrupted envelopes remain pending until a decision is appended, and tampered,
+duplicate, foreign, ambiguous, privacy-ineligible, or incompletely reconciled evidence fails closed.
+The proposed text is redacted from GEPA's ordinary logger and must not enter tracked reports.
 
 Context-fit evidence uses the same messages and response schema as the production adapter. For every
 required development case it conservatively estimates the serialized system prompt, packaged

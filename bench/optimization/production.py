@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from pydantic import ValidationError
+
 from bench.core import _schema_spec
+from bench.io import digest
 from bench.models import TASK_ORDER
 from chat_chronicle.ai import CompletionRequest, LiteLLMClient, LLMError
 from chat_chronicle.ai_config import interpolate_prompt, load_task_catalog
@@ -45,11 +50,24 @@ from .models import (
     CandidateModel,
     OptimizationConfig,
     ProposerProfile,
+    SearchScoreConfig,
     candidate_provider_matches,
+    gepa_state_namespace,
+    optimizer_framework_identity,
     proposer_cache_identity,
     resolve_config_path,
 )
-from .package import CandidatePackage
+from .observability import (
+    AdapterTransportRecorder,
+    AdapterTransportStore,
+    GEPAProposalObserver,
+    PrivateProposalLogFilter,
+    ProposalEventStore,
+    ProposalPrivacyEvidence,
+    explicit_fallback_adapter,
+)
+from .package import CandidatePackage, mutate_package
+from .privacy import scan_package
 from .request_envelope import (
     case_request_parts,
     estimate_case_input_tokens,
@@ -398,14 +416,18 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                 compute_cost_usd=hours * _compute_hourly_cost(self.config),
             )
         validation_conversations = self.config.gepa_validation_conversation_limit or 4
-        validation_calls = validation_conversations * len(TASK_ORDER) * 2
-        proposal_calls = 2 * 3 + validation_calls
+        validation_positions = validation_conversations * len(TASK_ORDER)
+        reflection_positions = 3
         if self.config.gepa_max_candidate_proposals is not None:
-            task_calls = validation_calls + (
-                self.config.gepa_max_candidate_proposals * proposal_calls
+            logical_positions = validation_positions + (
+                self.config.gepa_max_candidate_proposals
+                * (2 * reflection_positions + validation_positions)
             )
         else:
-            task_calls = self.config.gepa_max_metric_calls_per_candidate + proposal_calls
+            logical_positions = self.config.gepa_max_metric_calls_per_candidate + (
+                2 * reflection_positions + validation_positions
+            )
+        task_calls = logical_positions * 2
         proposer_calls = self.config.gepa_max_candidate_proposals or max(
             1, self.config.proposer.max_calls // self.config.budget.pilot_candidates
         )
@@ -496,12 +518,21 @@ class DspyOptimizerAdapter(OptimizerAdapter):
         ordinal: int,
     ) -> Proposal:
         del feedback
-        program = build_program(parent, self.candidate_lms)
+        run_root = resolve_config_path(self.config_path, self.config.paths.run_root)
+        identity = optimizer_framework_identity(self.config)
+        evidence_root = run_root / "observability" / f"gepa-{ordinal:04d}"
+        transport_store = AdapterTransportStore(
+            evidence_root / "adapter-transports",
+            run_id=self.config.run_id,
+            optimizer_identity=identity,
+        )
+        candidate_lms = self.candidate_lms
+        program = build_program(parent, candidate_lms)
         train = self._examples(authority, "train")
         validation = self._examples(authority, "validation")
-        lms = [*self.candidate_lms.values(), self.reflection_lm]
+        lms = [*candidate_lms.values(), self.reflection_lm]
         before = _history_counts(lms)
-        for lm in self.candidate_lms.values():
+        for lm in candidate_lms.values():
             lm._chronicle_optimizer_role = "candidate"
         self.reflection_lm._chronicle_optimizer_role = "proposer"
         recorder = OptimizerFailureRecorder(usage_extractor=_history_entry_usage)
@@ -513,8 +544,40 @@ class DspyOptimizerAdapter(OptimizerAdapter):
         )
         import dspy
 
+        proposal_store = ProposalEventStore(
+            evidence_root / "proposal-events",
+            run_id=self.config.run_id,
+            optimizer_id=self.config.optimizer_id,
+            optimizer_identity=identity,
+        )
+        observer = GEPAProposalObserver(
+            proposal_store,
+            demonstration_identities=[
+                demo.demonstration_sha256
+                for task in TASK_ORDER
+                for demo in parent.demonstrations[task]
+            ],
+            privacy_scan=self._proposal_privacy_scan(parent, authority, ordinal),
+        )
+        adapter = explicit_fallback_adapter(transport_store)
+        transport_recorder = AdapterTransportRecorder(transport_store, _transport_history_usage)
+        log_filter = PrivateProposalLogFilter()
+        gepa_logger = logging.getLogger("dspy.teleprompt.gepa.gepa")
+        gepa_logger.addFilter(log_filter)
+
         try:
-            with dspy.context(callbacks=[context_guard, recorder]):
+            with dspy.context(
+                callbacks=[context_guard, recorder, transport_recorder], adapter=adapter
+            ):
+                state_namespace = gepa_state_namespace(self.config)
+                state_root = (
+                    run_root
+                    / "dspy"
+                    / self.config.proposer.cache_namespace
+                    / proposer_cache_identity(self.config.proposer)[:16]
+                )
+                if state_namespace is not None:
+                    state_root = state_root / f"search-{state_namespace}"
                 compiled = compile_gepa(
                     program,
                     train,
@@ -524,12 +587,12 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                     seed=self.config.seed + ordinal - 1,
                     max_metric_calls=self.config.gepa_max_metric_calls_per_candidate,
                     max_candidate_proposals=self.config.gepa_max_candidate_proposals,
-                    log_dir=resolve_config_path(self.config_path, self.config.paths.run_root)
-                    / "dspy"
-                    / self.config.proposer.cache_namespace
-                    / proposer_cache_identity(self.config.proposer)[:16]
-                    / f"gepa-{ordinal:04d}",
+                    log_dir=state_root / f"gepa-{ordinal:04d}",
+                    callbacks=[observer],
+                    use_merge=True if self.config.version == 1 else self.config.gepa_use_merge,
                 )
+            observer.reconcile()
+            transport_recorder.reconcile(expected_task_calls=recorder.task_calls)
         except Exception as exc:
             usage = (
                 AdapterUsage(
@@ -548,6 +611,8 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                 failure_category=primary,
                 usage_complete=recorder.primary_category is None,
             ) from exc
+        finally:
+            gepa_logger.removeFilter(log_filter)
         usage = _history_usage(lms, before, proposer_index=len(lms) - 1).model_copy(
             update={
                 "task_calls": recorder.task_calls,
@@ -556,7 +621,7 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                 "output_tokens": recorder.proposer_output_tokens,
             }
         )
-        if _reasoning_tokens_since(list(self.candidate_lms.values()), before[:-1]):
+        if _reasoning_tokens_since(list(candidate_lms.values()), before[:-1]):
             raise OptimizerOperationError(
                 "GEPA candidate violated the no-reasoning contract",
                 usage=usage,
@@ -638,24 +703,143 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                     )
         return examples
 
-    @staticmethod
-    def _metric(gold, pred, trace=None, pred_name=None, pred_trace=None, **kwargs):
+    def _metric(self, gold, pred, trace=None, pred_name=None, pred_trace=None, **kwargs):
         del trace, pred_name, pred_trace, kwargs
-        outcome = _validate_response(
-            "optimizer-trace",
-            gold.task,
-            gold.model_id,
-            pred.response_json,
-            list(gold.allowed_evidence),
-            gold.start_date,
-            gold.last_active_date,
-            json.loads(gold.reference_json),
-            gold.output_schema,
-        )
-        score = (0.999 if outcome.valid else 0.0) + outcome.semantic_agreement / 1_000_000
+        if self.config.version == 1:
+            outcome = _validate_response(
+                "optimizer-trace",
+                gold.task,
+                gold.model_id,
+                pred.response_json,
+                list(gold.allowed_evidence),
+                gold.start_date,
+                gold.last_active_date,
+                json.loads(gold.reference_json),
+                gold.output_schema,
+            )
+            score = (0.999 if outcome.valid else 0.0) + outcome.semantic_agreement / 1_000_000
+            diagnostics = outcome.diagnostics
+        else:
+            assessment = _search_assessment(
+                gold.task,
+                pred.response_json,
+                list(gold.allowed_evidence),
+                gold.start_date,
+                gold.last_active_date,
+                json.loads(gold.reference_json),
+                gold.output_schema,
+                self.config.search_score,
+            )
+            score = assessment.score
+            diagnostics = assessment.diagnostics
         import dspy
 
-        return dspy.Prediction(score=score, feedback=render_feedback(outcome.diagnostics))
+        return dspy.Prediction(score=score, feedback=render_feedback(diagnostics))
+
+    def _proposal_privacy_scan(
+        self, parent: CandidatePackage, authority: VerifiedAuthority, ordinal: int
+    ) -> Callable[[dict[str, str]], ProposalPrivacyEvidence]:
+        private_texts: list[str] = []
+        exact_values: list[str] = []
+        for source in authority.inputs:
+            private_texts.extend((source.overview.transcript, source.recent.transcript))
+            exact_values.append(source.source_title)
+            exact_values.extend(str(value) for value in source.overview.selected_message_ids)
+            exact_values.extend(str(value) for value in source.recent.selected_message_ids)
+        for reference in authority.references.values():
+            private_texts.append(json.dumps(reference.output, sort_keys=True))
+
+        def scan(components: dict[str, str]) -> ProposalPrivacyEvidence:
+            prompts = {task: components[f"task_{index}"] for index, task in enumerate(TASK_ORDER)}
+            candidate = mutate_package(
+                parent,
+                prompts,
+                optimizer="gepa",
+                proposer_id=self.config.proposer.id,
+                mutation_ordinal=ordinal,
+            )
+            result = scan_package(candidate, private_texts, exact_values=exact_values)
+            return ProposalPrivacyEvidence(
+                scanner_version=result.scanner_version,
+                eligible=result.eligible,
+                finding_count=result.finding_count,
+                counts=result.counts,
+                evidence_sha256=digest(result.model_dump(mode="json")),
+            )
+
+        return scan
+
+
+@dataclass(frozen=True)
+class SearchAssessment:
+    stage: Literal[
+        "provider-invalid",
+        "invalid-json",
+        "schema-invalid",
+        "evidence-invalid",
+        "cross-field-invalid",
+        "fully-valid",
+    ]
+    score: float
+    diagnostics: list[Diagnostic]
+
+
+def _search_assessment(
+    task: str,
+    content: str,
+    allowed_evidence: list[int],
+    start_date: str,
+    last_active_date: str,
+    reference: dict[str, Any],
+    output_schema: str,
+    contract: SearchScoreConfig | None,
+) -> SearchAssessment:
+    """Grade deterministic reliability for GEPA reflection only."""
+    if contract is None:
+        raise ValueError("graded optimizer score contract is unavailable")
+    if not isinstance(content, str) or not content.strip():
+        return SearchAssessment(
+            "provider-invalid",
+            contract.provider_invalid,
+            [Diagnostic(category="provider-failure", schema_path="$")],
+        )
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return SearchAssessment(
+            "invalid-json",
+            contract.invalid_json,
+            [Diagnostic(category="invalid-json", schema_path="$")],
+        )
+    spec = _schema_spec(output_schema)
+    try:
+        final = spec.final_model.model_validate(parsed).model_dump(mode="json")
+    except ValidationError:
+        return SearchAssessment(
+            "schema-invalid",
+            contract.schema_invalid,
+            [Diagnostic(category="schema", schema_path="$")],
+        )
+    if not set(final.get("evidence_message_ids", [])) <= set(allowed_evidence):
+        return SearchAssessment(
+            "evidence-invalid",
+            contract.evidence_invalid,
+            [Diagnostic(category="evidence-mismatch", schema_path="$.evidence_message_ids")],
+        )
+    if task == "conversation-summary" and (
+        final["start_date"] != start_date or final["last_active_date"] != last_active_date
+    ):
+        return SearchAssessment(
+            "cross-field-invalid",
+            contract.cross_field_invalid,
+            [Diagnostic(category="date-mismatch", schema_path="$.start_date")],
+        )
+    agreement = _agreement(final, reference)
+    return SearchAssessment(
+        "fully-valid",
+        contract.fully_valid_base + agreement * contract.fable_tiebreak_scale,
+        [],
+    )
 
 
 def build_production_adapters(
@@ -848,6 +1032,17 @@ def _meaningfully_populated(value: Any) -> bool:
             dumped = model_dump()
         return isinstance(dumped, Mapping) and _meaningfully_populated(dumped)
     return True
+
+
+def _transport_history_usage(item: Any) -> tuple[int, int, int] | None:
+    has_response, response = _usage_field(item, "response")
+    if has_response:
+        has_usage, usage = _usage_field(response, "usage")
+    else:
+        has_usage, usage = _usage_field(item, "usage")
+    if not has_usage or usage is None:
+        return None
+    return _history_entry_usage(item)
 
 
 def _history_entry_usage(item: Any) -> tuple[int, int, int]:

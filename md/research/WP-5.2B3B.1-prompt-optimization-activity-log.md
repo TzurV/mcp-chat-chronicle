@@ -1008,3 +1008,56 @@ semantic-retry, and output-repair activity were all zero. Private values and
 generated text remain ignored. The one authorized fresh run is consumed. This
 is suitable as privacy-safe orchestration evidence with complete denominators,
 but not as tuned-prompt or optimization-quality evidence.
+
+## 23. Provider-free proposal observability and graded search foundations
+
+### Measured engineering fact
+
+WP-5.2B3B.1D.3 adds application-owned, ignored, append-only evidence before a
+GEPA proposal decision. The pre-decision envelope retains the private proposal
+text plus hashes, byte lengths/delta, selected component, parent identity,
+demonstration identities, sampled example-local IDs, before/after scores,
+bounded diagnostic category/path facts, privacy evidence, and a versioned event
+hash. A later append-only record captures accepted or rejected status. Synthetic
+tamper, duplicate, foreign-run, ambiguous, and interrupted-decision cases fail
+closed. Ordinary logs redact the proposal text.
+
+DSPy's ChatAdapter-to-JSONAdapter behavior is now explicit. The ignored
+transport ledger distinguishes logical score position from actual transport,
+marks the JSON request as fallback, keeps provider retry ordinal separate, and
+records usage and latency or explicit unavailability. Reservations allow two
+candidate transports per GEPA score position, and observed transports must
+exactly reconcile with DSPy's task-call count.
+
+Version 2 configuration adds the deterministic GEPA-only ladder: `0.0`
+provider-invalid/empty, `0.1` invalid JSON, `0.3` schema invalid, `0.6` evidence
+invalid, `0.8` cross-field/date invalid, and `0.999 + FABLE agreement * 0.000001`
+only after full validity. Invalid outputs cannot reach the `0.999` validity
+threshold. The score contract changes config, optimizer/result authority, and
+GEPA state/cache identity; historical v1 identity and scoring remain intact.
+Final promotion remains the unchanged strict deterministic comparison.
+
+### Experimental boundary
+
+All work was synthetic and provider-free. Candidate, proposer, fixed-judge,
+network, ADC, RunPod, LM Studio, private development authority, historical
+ignored runs, and holdout activity were zero. No model-quality or P0-improvement
+claim follows from this implementation evidence.
+
+### Future experiment design, not authorization
+
+A future failure-focused experiment would keep the frozen six-train/four-
+validation development split (24/16 cases), `vertex_ai/gemini-2.5-flash-lite`
+as the single 8K candidate, and `vertex_ai/gemini-3.5-flash` in `global` as the
+proposer. It should target four proposals, allow a minimum of three and maximum
+of five, prioritize the lowest graded failures while retaining valid anchors,
+and evaluate the finalist on all 40 development cases. The fixed judge remains
+after deterministic selection and the holdout remains at zero access.
+
+Conservative fresh-run charged-call estimates are 330/376/422 for three/four/
+five proposals. Adding the previously recorded 109 cumulative calls gives
+439/485/531. Using the prior per-call planning bounds, incremental conservative
+cost is US$1.4867808/US$1.9209856/US$2.3551904, and cumulative conservative cost
+would be US$7.5682584/US$8.0024632/US$8.4366680. A future handoff could therefore
+consider a 540-call cumulative ceiling while retaining the US$35 ceiling, but
+these figures are planning evidence only and grant no provider-call authority.

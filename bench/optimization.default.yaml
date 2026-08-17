@@ -1,4 +1,4 @@
-version: 1
+version: 2
 optimizer_id: wp-5.2b3b.1-example
 run_id: wp-5.2b3b.1-example
 application_commit: "0000000000000000000000000000000000000000"
@@ -116,4 +116,14 @@ bootstrap_max_rounds: 1
 bootstrap_teacher: candidate-model
 gepa_track_stats: true
 gepa_instruction_only: true
+gepa_use_merge: false
 gepa_max_metric_calls_per_candidate: 20
+search_score:
+  version: gepa-reliability-v1
+  provider_invalid: 0.0
+  invalid_json: 0.1
+  schema_invalid: 0.3
+  evidence_invalid: 0.6
+  cross_field_invalid: 0.8
+  fully_valid_base: 0.999
+  fable_tiebreak_scale: 0.000001

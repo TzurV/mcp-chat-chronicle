@@ -201,8 +201,21 @@ class OptimizationPaths(StrictModel):
         return self
 
 
+class SearchScoreConfig(StrictModel):
+    """Versioned, deterministic GEPA-only reliability score contract."""
+
+    version: Literal["gepa-reliability-v1"] = "gepa-reliability-v1"
+    provider_invalid: Literal[0.0] = 0.0
+    invalid_json: Literal[0.1] = 0.1
+    schema_invalid: Literal[0.3] = 0.3
+    evidence_invalid: Literal[0.6] = 0.6
+    cross_field_invalid: Literal[0.8] = 0.8
+    fully_valid_base: Literal[0.999] = 0.999
+    fable_tiebreak_scale: Literal[0.000001] = 0.000001
+
+
 class OptimizationConfig(StrictModel):
-    version: Literal[1] = 1
+    version: Literal[1, 2] = 1
     optimizer_id: str = Field(min_length=1)
     run_id: str = Field(min_length=1)
     application_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -227,12 +240,14 @@ class OptimizationConfig(StrictModel):
     bootstrap_enabled: StrictBool = True
     gepa_track_stats: Literal[True] = True
     gepa_instruction_only: Literal[True] = True
+    gepa_use_merge: Literal[False] | None = None
     gepa_max_metric_calls_per_candidate: StrictInt = Field(default=20, gt=0, le=20)
     gepa_max_candidate_proposals: StrictInt | None = Field(default=None, gt=0, le=20)
     evaluation_train_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=6)
     evaluation_validation_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=4)
     gepa_train_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=6)
     gepa_validation_conversation_limit: StrictInt | None = Field(default=None, gt=0, le=4)
+    search_score: SearchScoreConfig | None = None
 
     @model_validator(mode="after")
     def fixed_contract(self) -> OptimizationConfig:
@@ -268,6 +283,14 @@ class OptimizationConfig(StrictModel):
             raise ValueError(
                 "bounded evaluation scope requires train and validation limits together"
             )
+        if self.version == 1 and self.search_score is not None:
+            raise ValueError("version 1 optimizer config cannot declare a search score")
+        if self.version == 2 and self.search_score is None:
+            raise ValueError("version 2 optimizer config requires an explicit search score")
+        if self.version == 1 and self.gepa_use_merge is not None:
+            raise ValueError("version 1 optimizer config cannot change historical merge behavior")
+        if self.version == 2 and self.gepa_use_merge is not False:
+            raise ValueError("version 2 optimizer config must explicitly disable GEPA merge")
         return self
 
 
@@ -317,7 +340,38 @@ def load_optimization_config(path: Path) -> OptimizationConfig:
 def optimization_config_identity(config: OptimizationConfig) -> str:
     from bench.io import digest
 
-    return digest(config.model_dump(mode="json"))
+    payload = config.model_dump(mode="json")
+    if config.version == 1:
+        payload.pop("search_score", None)
+        payload.pop("gepa_use_merge", None)
+    return digest(payload)
+
+
+def optimizer_framework_identity(config: OptimizationConfig) -> str:
+    """Preserve the v1 identity while binding v2 runs to the graded score contract."""
+    from bench.io import digest
+
+    payload: dict[str, Any] = {
+        "versions": config.versions.model_dump(mode="json"),
+        "seed": config.seed,
+        "bootstrap_teacher": config.bootstrap_teacher,
+        "gepa_instruction_only": config.gepa_instruction_only,
+    }
+    if config.version == 2:
+        assert config.search_score is not None
+        payload["search_score"] = config.search_score.model_dump(mode="json")
+        payload["gepa_use_merge"] = config.gepa_use_merge
+    return digest(payload)
+
+
+def gepa_state_namespace(config: OptimizationConfig) -> str | None:
+    """Return a cache/state namespace only for versioned graded-score runs."""
+    from bench.io import digest
+
+    if config.version == 1:
+        return None
+    assert config.search_score is not None
+    return digest(config.search_score.model_dump(mode="json"))[:16]
 
 
 def proposer_identity(proposer: ProposerProfile) -> str:
