@@ -1678,7 +1678,7 @@ def test_gepa_secondary_pickling_error_preserves_captured_provider_failure(
     }
     optimizer.reflection_lm = type("LM", (), {"history": []})()
     monkeypatch.setattr(optimizer, "_examples", lambda authority, scope: [])
-    monkeypatch.setattr(production, "build_program", lambda parent, lms: object())
+    monkeypatch.setattr(production, "build_program", lambda parent, lms, **kwargs: object())
 
     def masked_failure(*args, **kwargs):
         del args, kwargs
@@ -2109,6 +2109,70 @@ def test_candidate_journal_records_each_infrastructure_retry_and_safe_route_usag
     assert sum(item["usage_available"] for item in usage_values) == 4
     serialized = "\n".join(path.read_text(encoding="utf-8") for path in root.rglob("*.json"))
     assert "Synthetic selected content" not in serialized
+
+
+def test_candidate_context_boundary_is_terminal_without_transport(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from bench.optimization import production
+    from bench.optimization.execution import _validate_batch
+
+    config_path = synthetic_workspace(tmp_path)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["candidate_models"] = raw["candidate_models"][:1]
+    raw["evaluation_train_conversation_limit"] = 1
+    raw["evaluation_validation_conversation_limit"] = 1
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    client = FakeLiteLLMClient()
+    monkeypatch.setattr(production, "estimate_case_input_tokens", lambda *args: 8192)
+    adapter = LiteLLMCandidateAdapter(config, config_path, client=client)
+    candidate = baseline_package(tmp_path / "tasks.yaml")
+    batch = adapter.evaluate(candidate, "validation", "qwen", authority)
+    _validate_batch(batch, "validation", "qwen", authority, config)
+    assert client.requests == []
+    assert batch.usage.task_calls == 0
+    assert batch.usage.retries == 0
+    assert len(batch.outcomes) == 4
+    assert all(outcome.diagnostics[0].category == "context-boundary" for outcome in batch.outcomes)
+    terminals = list(
+        (tmp_path / "private" / "run" / "observability" / "candidate-evaluations").rglob(
+            "terminal/*.json"
+        )
+    )
+    assert len(terminals) == 4
+    assert not list(
+        (tmp_path / "private" / "run" / "observability" / "candidate-evaluations").rglob(
+            "transports/*.json"
+        )
+    )
+    assert adapter.evaluate(candidate, "validation", "qwen", authority) == batch
+    assert client.requests == []
+
+
+def test_dspy_context_boundary_prediction_has_trace_and_no_lm_transport(tmp_path: Path) -> None:
+    import dspy
+
+    synthetic_workspace(tmp_path)
+    package = baseline_package(tmp_path / "tasks.yaml")
+    lm = dspy.utils.DummyLM([{"response_json": "must not be used"}])
+    program = build_program(
+        package,
+        {"qwen": lm},
+        context_eligible=lambda task, selected_input, instructions: False,
+    )
+    trace = []
+    with dspy.context(trace=trace):
+        prediction = program(
+            task=TASK_ORDER[0], selected_input="synthetic oversized input", model_id="qwen"
+        )
+    assert prediction.response_json == ""
+    assert prediction.context_boundary is True
+    assert lm.history == []
+    assert len(trace) == 1
+    assert trace[0][0] is program.task_0
+    assert trace[0][2] is prediction
 
 
 @pytest.mark.parametrize("actual_provider", ["Google Vertex AI", "vertex_ai"])

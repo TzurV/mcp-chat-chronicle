@@ -910,9 +910,14 @@ def _validate_batch(
         raise ValueError("candidate adapter batch case accounting mismatch")
     if any(item.model_id != model_id or not item.terminal for item in batch.outcomes):
         raise ValueError("candidate adapter returned non-terminal or foreign outcomes")
+    context_boundaries = sum(
+        any(diagnostic.category == "context-boundary" for diagnostic in item.diagnostics)
+        for item in batch.outcomes
+    )
+    transportable_cases = len(expected_aliases) - context_boundaries
     if (
-        batch.usage.retries > len(expected_aliases)
-        or batch.usage.task_calls != len(expected_aliases) + batch.usage.retries
+        batch.usage.retries > transportable_cases
+        or batch.usage.task_calls != transportable_cases + batch.usage.retries
     ):
         raise ValueError("candidate adapter usage does not match terminal cases")
 

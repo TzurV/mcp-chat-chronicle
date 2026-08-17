@@ -426,6 +426,24 @@ def test_graded_search_ladder_is_strict_and_invalid_never_reaches_promotion_thre
     assert values[-1].score >= 0.999
 
 
+def test_gepa_context_boundary_uses_provider_invalid_score_without_output_adaptation() -> None:
+    optimizer = object.__new__(DspyOptimizerAdapter)
+    optimizer.config = _score_config()
+    gold = SimpleNamespace(
+        task="conversation-summary",
+        model_id="synthetic",
+        allowed_evidence=[10],
+        start_date="2026-01-01",
+        last_active_date="2026-01-02",
+        reference_json=_valid_summary(),
+        output_schema="conversation-summary-v1",
+    )
+    prediction = SimpleNamespace(response_json="", context_boundary=True)
+    result = optimizer._metric(gold, prediction)
+    assert result.score == optimizer.config.search_score.provider_invalid
+    assert result.feedback == "context-boundary at $"
+
+
 def _assert_score_failure_has_no_decision_or_additional_transport(
     tmp_path: Path, operation
 ) -> None:

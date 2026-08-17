@@ -120,7 +120,12 @@ def bootstrap_metric_acceptance(value: Any) -> bool:
     return normalized >= BOOTSTRAP_ACCEPTANCE_THRESHOLD
 
 
-def build_program(package: CandidatePackage, lms: dict[str, Any] | None = None) -> Any:
+def build_program(
+    package: CandidatePackage,
+    lms: dict[str, Any] | None = None,
+    *,
+    context_eligible: Callable[[str, str, str], bool] | None = None,
+) -> Any:
     verify_compatibility()
     import dspy
 
@@ -143,6 +148,16 @@ def build_program(package: CandidatePackage, lms: dict[str, Any] | None = None) 
             if task not in TASK_ORDER:
                 raise ValueError("unknown Chronicle optimization task")
             predictor = getattr(self, f"task_{TASK_ORDER.index(task)}")
+            if context_eligible is not None and not context_eligible(
+                task, selected_input, predictor.signature.instructions
+            ):
+                prediction = dspy.Prediction(response_json="", context_boundary=True)
+                if dspy.settings.trace is not None and dspy.settings.max_trace_size > 0:
+                    trace = dspy.settings.trace
+                    if len(trace) >= dspy.settings.max_trace_size:
+                        trace.pop(0)
+                    trace.append((predictor, {"selected_input": selected_input}, prediction))
+                return prediction
             if self._chronicle_lms:
                 if model_id not in self._chronicle_lms:
                     raise ValueError("unknown Chronicle candidate model")

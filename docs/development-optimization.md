@@ -176,6 +176,14 @@ reconciliation charges only transports added since the prior interrupted checkpo
 batch replay performs zero transports and leaves the journal byte-stable. Tampered, foreign,
 duplicate, ambiguous, incomplete, or request-mismatched evidence fails closed before a new call.
 
+Preflight reports a privacy-safe complete-request summary with the case count, maximum estimated
+request size, and number of 8K boundary cases. A boundary case is not truncated or submitted. The
+ordinary evaluator persists it immediately as a terminal `context-boundary` outcome with zero
+transport. GEPA represents the same position with the existing `provider_invalid = 0.0` score and a
+sanitized context diagnostic, preserves its component trace for reflection, and makes no candidate
+transport. Result context-fit evidence remains false, so such a candidate cannot pass strict final
+promotion merely because all logical positions are terminal.
+
 Version 2 optimizer configurations must declare `gepa-reliability-v1`. This optimization-only scalar
 orders provider-invalid/empty output at `0.0`, invalid JSON at `0.1`, schema-invalid output at `0.3`,
 evidence-invalid output at `0.6`, cross-field/date-invalid output at `0.8`, and fully valid output at

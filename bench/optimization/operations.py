@@ -31,7 +31,11 @@ from .package import (
 )
 from .privacy import SCANNER_VERSION
 from .recovery import resolve_result_authorization
-from .request_envelope import estimate_request_envelope, verify_demonstration_authority
+from .request_envelope import (
+    estimate_request_envelope,
+    summarize_request_envelopes,
+    verify_demonstration_authority,
+)
 from .trials import TrialStore
 
 
@@ -40,8 +44,9 @@ def preflight(config_path: Path, *, check_framework: bool = True) -> dict[str, A
     catalog = resolve_config_path(config_path, config.paths.accepted_task_catalog)
     if hashlib.sha256(catalog.read_bytes()).hexdigest() != config.accepted_task_catalog_sha256:
         raise ValueError("accepted task catalog hash mismatch")
-    baseline_package(catalog)
+    baseline = baseline_package(catalog)
     authority = verify_authority(config, config_path)
+    tasks = load_task_catalog(catalog)
     artifacts = []
     for model in config.candidate_models:
         if model.credential_mode == "local-endpoint":
@@ -88,6 +93,7 @@ def preflight(config_path: Path, *, check_framework: bool = True) -> dict[str, A
             "inputs": len(authority.inputs),
             "references": len(authority.references),
         },
+        "complete_request_envelopes": summarize_request_envelopes(baseline, tasks, authority),
         "artifacts": artifacts,
         "config_sha256": optimization_config_identity(config),
         "ceilings": {

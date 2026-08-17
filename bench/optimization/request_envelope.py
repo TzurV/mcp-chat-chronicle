@@ -85,6 +85,28 @@ def estimate_request_envelope(
     )
 
 
+def summarize_request_envelopes(
+    candidate: CandidatePackage, tasks: Any, authority: VerifiedAuthority
+) -> dict[str, int | str | bool]:
+    """Return privacy-safe complete-request counts without case identities."""
+    totals = []
+    for source in authority.inputs:
+        for task_name in TASK_ORDER:
+            task = tasks.tasks[task_name]
+            messages, schema, _ = case_request_parts(candidate, task_name, task, source)
+            totals.append(estimate_case_input_tokens(messages, schema) + task.generation.max_tokens)
+    if not totals:
+        raise ValueError("complete request envelope has no development cases")
+    return {
+        "estimator_version": ESTIMATOR_VERSION,
+        "context_window": 8192,
+        "case_count": len(totals),
+        "context_boundary_cases": sum(value > 8192 for value in totals),
+        "maximum_complete_request_tokens": max(totals),
+        "all_fit": all(value <= 8192 for value in totals),
+    }
+
+
 def estimate_case_input_tokens(
     messages: list[dict[str, str]], response_schema: dict[str, Any]
 ) -> int:

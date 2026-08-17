@@ -108,28 +108,36 @@ class CandidateUsageEvent(StrictModel):
 class CandidateTerminalOutcome(StrictModel):
     contract_version: Literal[1] = 1
     request_sha256: str = Field(pattern=_SHA256)
-    transport_event_sha256: str = Field(pattern=_SHA256)
-    usage_event_sha256: str = Field(pattern=_SHA256)
-    terminal_category: Literal["valid-response", "invalid-output", "provider-failure"]
+    transport_event_sha256: str | None = Field(default=None, pattern=_SHA256)
+    usage_event_sha256: str | None = Field(default=None, pattern=_SHA256)
+    terminal_category: Literal[
+        "valid-response", "invalid-output", "provider-failure", "context-boundary"
+    ]
     outcome: CaseOutcome
     event_sha256: str = Field(pattern=_SHA256)
 
     @model_validator(mode="after")
     def reconciles(self) -> CandidateTerminalOutcome:
-        expected = (
-            "valid-response"
-            if self.outcome.valid
-            else (
-                "provider-failure"
-                if any(
-                    item.category in {"provider-failure", "timeout"}
-                    for item in self.outcome.diagnostics
+        if any(item.category == "context-boundary" for item in self.outcome.diagnostics):
+            expected = "context-boundary"
+        else:
+            expected = (
+                "valid-response"
+                if self.outcome.valid
+                else (
+                    "provider-failure"
+                    if any(
+                        item.category in {"provider-failure", "timeout"}
+                        for item in self.outcome.diagnostics
+                    )
+                    else "invalid-output"
                 )
-                else "invalid-output"
             )
-        )
         if self.terminal_category != expected or not self.outcome.terminal:
             raise ValueError("candidate terminal outcome category mismatch")
+        linked = self.transport_event_sha256 is not None and self.usage_event_sha256 is not None
+        if (expected != "context-boundary") != linked:
+            raise ValueError("candidate terminal transport linkage mismatch")
         if digest(self.model_dump(mode="json", exclude={"event_sha256"})) != self.event_sha256:
             raise ValueError("candidate terminal outcome identity mismatch")
         return self
@@ -325,6 +333,24 @@ class CandidateJournalStore:
         self._append(self._case_root(case) / "terminal" / self._name(event), event)
         return event
 
+    def append_context_outcome(
+        self, case: JournalCase, outcome: CaseOutcome
+    ) -> CandidateTerminalOutcome:
+        intents, transports, usages, terminal, _ = self._case_state(case)
+        if terminal is not None or intents or transports or usages:
+            raise ValueError("candidate context outcome must precede every transport intent")
+        event = _event(
+            CandidateTerminalOutcome,
+            contract_version=1,
+            request_sha256=case.request_sha256,
+            transport_event_sha256=None,
+            usage_event_sha256=None,
+            terminal_category="context-boundary",
+            outcome=outcome.model_dump(mode="json"),
+        )
+        self._append(self._case_root(case) / "terminal" / self._name(event), event)
+        return event
+
     def append_interruption(
         self, case: JournalCase, intent: CandidateRequestIntent, category: str
     ) -> None:
@@ -388,12 +414,15 @@ class CandidateJournalStore:
     def usage(self, cases: list[JournalCase], *, complete: bool = False) -> AdapterUsage:
         self._verify_layout(cases, complete=complete)
         task_calls = input_tokens = output_tokens = reasoning_tokens = latency_ms = 0
-        attempted_cases = 0
+        attempted_cases = context_cases = 0
         provider_cost = 0.0
         for case in cases:
             intents, transports, usages, terminal, _ = self._case_state(case)
             if complete and terminal is None:
                 raise ValueError("candidate batch contains an unfinished case journal")
+            context_cases += (
+                terminal is not None and terminal.terminal_category == "context-boundary"
+            )
             task_calls += len(intents)
             attempted_cases += bool(intents)
             for usage in usages.values():
@@ -405,7 +434,7 @@ class CandidateJournalStore:
         hours = latency_ms / 3_600_000
         return AdapterUsage(
             task_calls=task_calls,
-            retries=task_calls - (len(cases) if complete else attempted_cases),
+            retries=task_calls - ((len(cases) - context_cases) if complete else attempted_cases),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             reasoning_tokens=reasoning_tokens,
@@ -467,21 +496,25 @@ class CandidateJournalStore:
         if terminal is not None:
             if terminal.request_sha256 != case.request_sha256:
                 raise ValueError("candidate terminal request bytes do not match")
-            transport = next(
-                (
-                    item
-                    for item in transports
-                    if item.event_sha256 == terminal.transport_event_sha256
-                ),
-                None,
-            )
-            if transport is None or terminal.usage_event_sha256 not in {
-                item.event_sha256 for item in usages
-            }:
-                raise ValueError("candidate terminal evidence chain is incomplete")
-            terminal_attempt = transport.attempt_ordinal
-            if any(item.attempt_ordinal > terminal_attempt for item in intents):
-                raise ValueError("candidate terminal case has a duplicate later call intent")
+            if terminal.terminal_category == "context-boundary":
+                if intents or transports or usages:
+                    raise ValueError("candidate context terminal has transport evidence")
+            else:
+                transport = next(
+                    (
+                        item
+                        for item in transports
+                        if item.event_sha256 == terminal.transport_event_sha256
+                    ),
+                    None,
+                )
+                if transport is None or terminal.usage_event_sha256 not in {
+                    item.event_sha256 for item in usages
+                }:
+                    raise ValueError("candidate terminal evidence chain is incomplete")
+                terminal_attempt = transport.attempt_ordinal
+                if any(item.attempt_ordinal > terminal_attempt for item in intents):
+                    raise ValueError("candidate terminal case has a duplicate later call intent")
         return intents, transport_by_intent, usage_by_transport, terminal, interruptions
 
     def _verify_layout(self, cases: list[JournalCase], *, complete: bool) -> None:

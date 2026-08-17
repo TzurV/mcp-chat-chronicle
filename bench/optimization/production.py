@@ -205,8 +205,6 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                 task = self.tasks.tasks[task_name]
                 messages, schema, selector = case_request_parts(candidate, task_name, task, source)
                 estimated_input_tokens = estimate_case_input_tokens(messages, schema)
-                if estimated_input_tokens + task.generation.max_tokens > model.context_window:
-                    raise RuntimeError("candidate complete request exceeds the 8K context boundary")
                 request = CompletionRequest(
                     model=model.litellm_model,
                     messages=messages,
@@ -231,6 +229,20 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                 cases.append(case)
                 terminal = journal.terminal(case)
                 if terminal is not None:
+                    continue
+                if estimated_input_tokens + task.generation.max_tokens > model.context_window:
+                    journal.append_context_outcome(
+                        case,
+                        CaseOutcome(
+                            alias=alias,
+                            task=task_name,
+                            model_id=model_id,
+                            terminal=True,
+                            valid=False,
+                            semantic_agreement=0,
+                            diagnostics=[Diagnostic(category="context-boundary", schema_path="$")],
+                        ),
+                    )
                     continue
                 remaining = 1 + model.infrastructure_retries - journal.attempt_count(case)
                 if remaining <= 0:
@@ -661,7 +673,11 @@ class DspyOptimizerAdapter(OptimizerAdapter):
         demonstrations = {task: [] for task in TASK_ORDER}
         observed_lms: list[Any] = []
         for task in TASK_ORDER:
-            program = build_program(parent, self.candidate_lms)
+            program = build_program(
+                parent,
+                self.candidate_lms,
+                context_eligible=self._context_eligibility(parent, authority),
+            )
             task_examples = [example for example in examples if example.task == task]
             try:
                 compiled = compile_bootstrap(
@@ -727,7 +743,11 @@ class DspyOptimizerAdapter(OptimizerAdapter):
             optimizer_identity=identity,
         )
         candidate_lms = self.candidate_lms
-        program = build_program(parent, candidate_lms)
+        program = build_program(
+            parent,
+            candidate_lms,
+            context_eligible=self._context_eligibility(parent, authority),
+        )
         train = self._examples(authority, "train")
         validation = self._examples(authority, "validation")
         lms = [*candidate_lms.values(), self.reflection_lm]
@@ -905,7 +925,10 @@ class DspyOptimizerAdapter(OptimizerAdapter):
 
     def _metric(self, gold, pred, trace=None, pred_name=None, pred_trace=None, **kwargs):
         del trace, pred_name, pred_trace, kwargs
-        if self.config.version == 1:
+        if getattr(pred, "context_boundary", False):
+            score = 0.0 if self.config.version == 1 else self.config.search_score.provider_invalid
+            diagnostics = [Diagnostic(category="context-boundary", schema_path="$")]
+        elif self.config.version == 1:
             outcome = _validate_response(
                 "optimizer-trace",
                 gold.task,
@@ -935,6 +958,59 @@ class DspyOptimizerAdapter(OptimizerAdapter):
         import dspy
 
         return dspy.Prediction(score=score, feedback=render_feedback(diagnostics))
+
+    def _context_eligibility(
+        self, parent: CandidatePackage, authority: VerifiedAuthority
+    ) -> Callable[[str, str, str], bool]:
+        values_by_input: dict[tuple[str, str], tuple[dict[str, str], Any]] = {}
+        for source in authority.inputs:
+            for task_name in TASK_ORDER:
+                task = self.tasks.tasks[task_name]
+                selector = source.recent if task_name == "last-activity" else source.overview
+                values = {
+                    "conversation_id": str(source.source_conversation_id),
+                    "provider": source.provider,
+                    "title": source.source_title,
+                    "start_date": source.start_date,
+                    "last_active_date": source.last_active_date,
+                    "transcript": selector.transcript,
+                }
+                selected_input = interpolate_prompt(task.user_prompt, values)
+                key = (task_name, selected_input)
+                if key in values_by_input:
+                    raise ValueError("optimizer context authority contains duplicate task inputs")
+                values_by_input[key] = (values, selector)
+
+        def eligible(task_name: str, selected_input: str, instructions: str) -> bool:
+            key = (task_name, selected_input)
+            if key not in values_by_input:
+                raise ValueError("optimizer context request is outside development authority")
+            values, selector = values_by_input[key]
+            task = self.tasks.tasks[task_name]
+            messages = [
+                {
+                    "role": "system",
+                    "content": interpolate_prompt(instructions, values),
+                }
+            ]
+            for demonstration in parent.demonstrations[task_name]:
+                messages.extend(
+                    (
+                        {"role": "user", "content": demonstration.selected_input},
+                        {"role": "assistant", "content": demonstration.response_json},
+                    )
+                )
+            messages.append({"role": "user", "content": selected_input})
+            schema = _schema_spec(task.output_schema).provider_model.model_json_schema()
+            evidence = schema.get("properties", {}).get("evidence_message_ids", {})
+            if selector.selected_message_ids and isinstance(evidence, dict):
+                evidence.setdefault("items", {"type": "integer"})["enum"] = (
+                    selector.selected_message_ids
+                )
+            estimated = estimate_case_input_tokens(messages, schema)
+            return estimated + task.generation.max_tokens <= self.config.context_window
+
+        return eligible
 
     def _proposal_privacy_scan(
         self, parent: CandidatePackage, authority: VerifiedAuthority, ordinal: int
