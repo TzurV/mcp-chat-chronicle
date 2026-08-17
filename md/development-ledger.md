@@ -7,10 +7,10 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Field | Status |
 | --- | --- |
 | Date | 2026-08-17 |
-| Phase | WP-5.2B3B accepted; P0 and BootstrapFewShot complete; B3B.1D provider repair and hosted lifecycle accepted; D.1 is accepted as a diagnostic real GEPA lifecycle with no distinct tuned prompt |
-| Last accepted delivery | WP-5.2B3B.1D.1 fresh hosted lifecycle: authoritative Gemini 2.5 Flash-Lite P0, one Gemini 3.5 Flash GEPA proposal, verification, replay, and no-distinct-prompt repair accepted; no improvement result exists |
+| Phase | WP-5.2B3B accepted; P0 and BootstrapFewShot complete; B3B.1D hosted lifecycle accepted; D.2 offline analysis confirms a correct GEPA rejection on an all-invalid metric plateau |
+| Last accepted delivery | WP-5.2B3B.1D.2 offline GEPA rejection analysis: one proposal tied P0 at zero on three examples, rejected-proposal retention and adapter-fallback accounting gaps identified, no provider activity |
 | Current milestone state | M0/M1/M2 core and real-history prototype accepted; the configurable AI-task/evaluation stack and six aligned complete development arms are accepted; WP-4.1 read-only MCP recall is accepted; v0.2.0 is committed and remotely tagged; the primary v0.2.0 LinkedIn progress post and LP-5 MCP-on-Windows article/feed post are owner-reported published; the public GitHub release page remains pending verification |
-| Next action | Preserve both D.1 private roots append-only and inspect the retained GEPA rejection evidence offline. Decide separately whether to authorize a bounded multi-proposal search; do not judge or promote the unchanged-P0 repeat. |
+| Next action | Define a provider-free repair for private pre-decision proposal retention and adapter-fallback accounting, and decide whether to add a graded GEPA search signal while keeping strict final promotion. Do not authorize the proposed multi-proposal call ceiling yet. |
 | Current branch | `main` after merging the accepted B3B branch |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
@@ -71,6 +71,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.2B3B.1C | GEPA pilot and bounded search | Diagnostic evidence accepted; experimental objective incomplete | `md/handoffs/WP-5.2B3B.1C-gepa-pilot-and-bounded-search.md` | `md/handoffs/reports/WP-5.2B3B.1C-gepa-pilot-and-bounded-search-completion-report.md`; article evidence: `md/research/WP-5.2B3B.1C-gepa-pilot-article-evidence-addendum.md` | `md/handoffs/reports/WP-5.2B3B.1C-validation-review.md` | RAM-only ADC and retained-state controls passed, but the Gemini 3.1 Pro proposer route returned HTTP 400/model-not-found and ended behind a secondary PicklingError. Zero candidates and zero GEPA results were produced. Accept the operational and failure evidence only; do not interpret it as GEPA no-improvement. Paid compute is stopped and the Pod, retained volume, models, and private evidence remain preserved. |
 | WP-5.2B3B.1D | Local hosted GEPA lifecycle qualification | Offline repair accepted; private objective incomplete | `md/handoffs/WP-5.2B3B.1D-local-hosted-gepa-lifecycle-qualification.md` | `md/handoffs/reports/WP-5.2B3B.1D-local-hosted-gepa-lifecycle-qualification-completion-report.md` | `md/handoffs/reports/WP-5.2B3B.1D-validation-review.md` | Provider failures retain their primary category; Vertex routes qualified; trace-aligned component selection, explicit format-failure policy, bounded proposal controls, and tracked `run_optimization` synthetic lifecycle are accepted. The previous private attempt produced no candidate and is not a quality result. |
 | WP-5.2B3B.1D.1 | Gemini 2.5 Flash-Lite private GEPA lifecycle | Accepted diagnostic lifecycle; no tuned prompt produced | `md/handoffs/WP-5.2B3B.1D.1-gemini-2.5-flash-lite-private-lifecycle.md` | `md/handoffs/reports/WP-5.2B3B.1D.1-gemini-2.5-flash-lite-private-lifecycle-completion-report.md` | `md/handoffs/reports/WP-5.2B3B.1D.1-final-validation-review.md` | Fresh P0, one proposer call, result persistence, verification, and replay completed. GEPA rejected its changed proposal and returned P0 prompts; the second arm is an unchanged-P0 repeat. The accepted repair blocks lineage-only candidates before evaluation. No improvement or no-improvement quality claim is supported beyond the fact that this single bounded proposal produced no accepted mutation. |
+| WP-5.2B3B.1D.2 | Offline GEPA rejection analysis | Accepted | Analysis authorization supplied in manager continuation message | `md/handoffs/reports/WP-5.2B3B.1D.2-offline-gepa-rejection-analysis.md` | `md/handoffs/reports/WP-5.2B3B.1D.2-validation-review.md` | GEPA correctly rejected a 0-to-0 tie on examples `[0, 2, 1]`; only one example exercised the mutated component. Rejected proposal content and exact feedback were not retained, and four internal calls remain unattributed. The 510 cumulative call estimate is planning evidence, not authorization. |
 | WP-5.2B3B.2 | Local transfer qualification and winner freeze | Planned; gated by B3B.1 shortlist | Pending | Completion report and remote-to-local transfer evidence required | Pending | Rerun P0 and the top three to five immutable optimizer candidates on the local machine. Select one complete package using a predeclared reliability-first rule, or retain P0 explicitly. Keep judging credentials and final scoring local; do not treat RunPod timing as laptop evidence. |
 | WP-5.2B3C | One-shot prompt holdout evaluation | Planned; gated by B3B.2 winner freeze | Pending | Completion and publication evidence brief required | Pending | Run one frozen optimizer-selected package once over 80 holdout cases each for Qwen, Phi, and Gemini; compare with accepted P0 evidence and report generalization, transfer, reliability, failure taxonomy, cost, and chart-ready data without holdout-driven prompt changes. |
 | LP-4.3 | Established prompt optimization potential article | Planned; gated by automatic search and local transfer, preferably B3C | Pending | Analysis brief, article draft, figures, and publication record required | Pending | Compare the controlled manual P0/P1/P2 result with BootstrapFewShot/GEPA search, RunPod cost and speed, remote-to-local transfer, and holdout behavior. Separate prompt, model, context, compute, and judge effects and publish negative results and full denominators. |
@@ -188,11 +189,12 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Keep both WP-5.2B3B.1D.1 roots append-only. The fresh root contains an
-   authoritative P0 and unchanged-P0 repeat, but no distinct tuned prompt.
-2. Inspect the retained GEPA rejection evidence without provider calls. Do not
-   run the fixed judge on the unchanged repeat. A broader multi-proposal search
-   requires a separate handoff and explicit authorization.
+1. Keep both WP-5.2B3B.1D.1 roots append-only. D.2 confirms the proposal tied
+   P0 at zero and was correctly rejected.
+2. Implement and synthetically validate private pre-decision proposal
+   persistence and explicit DSPy fallback accounting. Decide whether GEPA may
+   use a graded deterministic search score while final promotion remains
+   strict. No additional private calls are authorized.
 3. Only after B3B.1D.1 acceptance, decide whether to run broader hosted-candidate search
    locally and return finalists to the retained RunPod Qwen/Phi environment.
 4. Return a frozen shortlist and validate P0 plus the top three to five
