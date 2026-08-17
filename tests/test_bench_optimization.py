@@ -1900,8 +1900,215 @@ def test_production_candidate_adapter_is_networkless_injected_and_identity_bound
         config_path,
         client=FakeLiteLLMClient(provider="unexpected"),
     )
+    mismatched_candidate = mutate_package(
+        candidate,
+        {task: candidate.prompts[task].text for task in TASK_ORDER},
+        optimizer="gepa",
+        proposer_id="synthetic-proposer",
+        mutation_ordinal=1,
+        strategy="synthetic-identity-check",
+    )
     with pytest.raises(ValueError, match="response identity mismatch"):
-        mismatched.evaluate(candidate, "validation", "qwen", authority)
+        mismatched.evaluate(mismatched_candidate, "validation", "qwen", authority)
+
+
+@pytest.mark.parametrize(
+    ("stage", "resume_calls", "charged_calls"),
+    [
+        ("before_transport", 16, 17),
+        ("after_response", 16, 17),
+        ("identity_validation", 16, 17),
+        ("usage_adaptation", 16, 17),
+        ("output_validation", 16, 17),
+        ("case_persistence", 16, 17),
+        ("batch_finalization", 0, 16),
+    ],
+)
+def test_candidate_journal_resumes_each_injected_interruption_without_completed_calls(
+    tmp_path: Path, stage: str, resume_calls: int, charged_calls: int
+) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    candidate = baseline_package(tmp_path / "tasks.yaml")
+    client = FakeLiteLLMClient()
+    injected = False
+
+    def fail_once(current: str, alias: str) -> None:
+        nonlocal injected
+        del alias
+        if not injected and current == stage:
+            injected = True
+            raise RuntimeError(f"synthetic {stage} interruption")
+
+    adapter = LiteLLMCandidateAdapter(
+        config,
+        config_path,
+        client=client,
+        failure_injector=fail_once,
+    )
+    with pytest.raises(RuntimeError, match=f"synthetic {stage} interruption"):
+        adapter.evaluate(candidate, "validation", "qwen", authority)
+    evidence_root = tmp_path / "private" / "run" / "observability" / "candidate-evaluations"
+    pattern = (
+        "batch-interruptions/*.json"
+        if stage == "batch_finalization"
+        else "cases/*/interruptions/*.json"
+    )
+    assert len(list(evidence_root.rglob(pattern))) == 1
+    calls_before_resume = len(client.requests)
+    adapter.failure_injector = None
+    batch = adapter.evaluate(candidate, "validation", "qwen", authority)
+    assert len(client.requests) - calls_before_resume == resume_calls
+    assert batch.usage.task_calls == charged_calls
+    assert batch.usage.retries == charged_calls - 16
+    assert len(batch.outcomes) == 16
+
+    journal_root = tmp_path / "private" / "run" / "observability" / "candidate-evaluations"
+    before = {
+        path.relative_to(journal_root): path.read_bytes()
+        for path in journal_root.rglob("*")
+        if path.is_file()
+    }
+    replay_calls = len(client.requests)
+    assert adapter.evaluate(candidate, "validation", "qwen", authority) == batch
+    after = {
+        path.relative_to(journal_root): path.read_bytes()
+        for path in journal_root.rglob("*")
+        if path.is_file()
+    }
+    assert len(client.requests) == replay_calls
+    assert after == before
+
+
+def test_candidate_journal_resumes_full_24_16_only_at_unfinished_positions(
+    tmp_path: Path,
+) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    candidate = baseline_package(tmp_path / "tasks.yaml")
+    client = FakeLiteLLMClient()
+    injected = False
+
+    def interrupt_seventh_case(stage: str, alias: str) -> None:
+        nonlocal injected
+        del alias
+        if not injected and stage == "case_persistence" and len(client.requests) == 7:
+            injected = True
+            raise RuntimeError("synthetic seventh-case persistence interruption")
+
+    adapter = LiteLLMCandidateAdapter(
+        config,
+        config_path,
+        client=client,
+        failure_injector=interrupt_seventh_case,
+    )
+    with pytest.raises(RuntimeError, match="seventh-case persistence interruption"):
+        adapter.evaluate(candidate, "train", "qwen", authority)
+    assert len(client.requests) == 7
+    recorded = adapter.recorded_usage(candidate, "train", "qwen", authority)
+    remaining = adapter.reservation_for(candidate, "train", "qwen", authority)
+    assert recorded.task_calls == 7
+    assert recorded.retries == 0
+    assert remaining.task_calls == 35
+    assert remaining.retries == 18
+
+    adapter.failure_injector = None
+    train = adapter.evaluate(candidate, "train", "qwen", authority)
+    assert len(client.requests) == 25
+    assert train.usage.task_calls == 25
+    assert train.usage.retries == 1
+    assert len(train.outcomes) == 24
+    from bench.optimization.execution import _adapter_usage_delta
+
+    incremental = _adapter_usage_delta(train.usage, recorded)
+    assert incremental.task_calls == 18
+    assert incremental.retries == 1
+
+    calls_before_validation = len(client.requests)
+    validation = adapter.evaluate(candidate, "validation", "qwen", authority)
+    assert len(client.requests) - calls_before_validation == 16
+    assert len(validation.outcomes) == 16
+
+    calls_before_replay = len(client.requests)
+    assert adapter.evaluate(candidate, "train", "qwen", authority) == train
+    assert adapter.evaluate(candidate, "validation", "qwen", authority) == validation
+    assert len(client.requests) == calls_before_replay
+
+
+def test_candidate_journal_tampering_fails_before_duplicate_transport(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(tmp_path)
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    candidate = baseline_package(tmp_path / "tasks.yaml")
+    client = FakeLiteLLMClient()
+    adapter = LiteLLMCandidateAdapter(config, config_path, client=client)
+    adapter.evaluate(candidate, "validation", "qwen", authority)
+    calls = len(client.requests)
+    terminal = next(
+        (tmp_path / "private" / "run" / "observability" / "candidate-evaluations").rglob(
+            "terminal/*.json"
+        )
+    )
+    terminal.write_bytes(terminal.read_bytes() + b" ")
+    with pytest.raises(ValueError, match="byte verified|invalid or tampered evidence"):
+        adapter.evaluate(candidate, "validation", "qwen", authority)
+    assert len(client.requests) == calls
+
+
+def test_candidate_journal_records_each_infrastructure_retry_and_safe_route_usage(
+    tmp_path: Path,
+) -> None:
+    class RetryOnceClient(FakeLiteLLMClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.alias_calls: Counter[tuple[str, ...]] = Counter()
+
+        async def complete(self, request) -> CompletionResponse:
+            case_key = tuple(request.response_schema["properties"])
+            self.alias_calls[case_key] += 1
+            if self.alias_calls[case_key] == 1:
+                self.requests.append(request)
+                raise LLMError("connection", "synthetic sanitized connection failure")
+            return await super().complete(request)
+
+    config_path = synthetic_workspace(tmp_path)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["candidate_models"] = raw["candidate_models"][:1]
+    raw["evaluation_train_conversation_limit"] = 1
+    raw["evaluation_validation_conversation_limit"] = 1
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    config = load_optimization_config(config_path)
+    authority = verify_authority(config, config_path)
+    client = RetryOnceClient()
+    adapter = LiteLLMCandidateAdapter(config, config_path, client=client)
+    batch = adapter.evaluate(
+        baseline_package(tmp_path / "tasks.yaml"), "validation", "qwen", authority
+    )
+    assert len(client.requests) == 8
+    assert batch.usage.task_calls == 8
+    assert batch.usage.retries == 4
+    assert batch.usage.input_tokens == 48
+
+    root = tmp_path / "private" / "run" / "observability" / "candidate-evaluations"
+    transport_values = [
+        json.loads(path.read_text(encoding="utf-8")) for path in root.rglob("transports/*.json")
+    ]
+    assert Counter(item["terminal"] for item in transport_values) == {
+        "provider-failure": 4,
+        "response": 4,
+    }
+    assert all(item["latency_available"] for item in transport_values)
+    assert all(
+        item["actual_provider"] in {"configured", "unavailable"} for item in transport_values
+    )
+    usage_values = [
+        json.loads(path.read_text(encoding="utf-8")) for path in root.rglob("usage/*.json")
+    ]
+    assert sum(item["usage_available"] for item in usage_values) == 4
+    serialized = "\n".join(path.read_text(encoding="utf-8") for path in root.rglob("*.json"))
+    assert "Synthetic selected content" not in serialized
 
 
 @pytest.mark.parametrize("actual_provider", ["Google Vertex AI", "vertex_ai"])

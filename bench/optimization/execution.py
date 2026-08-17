@@ -804,7 +804,18 @@ def _evaluate(
     try:
         for scope in ("train", "validation"):
             for model_id in _model_ids(config):
-                requested = adapter.reservation(scope, model_id)
+                recorded_usage_reader = getattr(adapter, "recorded_usage", None)
+                before = (
+                    recorded_usage_reader(candidate, scope, model_id, authority)
+                    if callable(recorded_usage_reader)
+                    else AdapterUsage()
+                )
+                reservation_reader = getattr(adapter, "reservation_for", None)
+                requested = (
+                    reservation_reader(candidate, scope, model_id, authority)
+                    if callable(reservation_reader)
+                    else adapter.reservation(scope, model_id)
+                )
                 reservation = ledger.reserve(
                     "task",
                     task_calls=requested.task_calls,
@@ -818,10 +829,20 @@ def _evaluate(
                 try:
                     batch = adapter.evaluate(candidate, scope, model_id, authority)
                 except Exception:
-                    ledger.reconcile(reservation.reservation_id, None, interrupted=True)
+                    usage_reader = getattr(adapter, "interrupted_usage", None)
+                    total = usage_reader() if callable(usage_reader) else None
+                    interrupted_usage = (
+                        None if total is None else _adapter_usage_delta(total, before)
+                    )
+                    ledger.reconcile(
+                        reservation.reservation_id,
+                        None if interrupted_usage is None else _usage_counters(interrupted_usage),
+                        interrupted=True,
+                    )
                     raise
                 _validate_batch(batch, scope, model_id, authority, config)
-                ledger.reconcile(reservation.reservation_id, _usage_counters(batch.usage))
+                incremental = _adapter_usage_delta(batch.usage, before)
+                ledger.reconcile(reservation.reservation_id, _usage_counters(incremental))
                 batches.append(batch)
     except Exception as exc:
         TrialStore(root).append(
@@ -1024,6 +1045,16 @@ def _usage_counters(value: AdapterUsage | AdapterReservation) -> UsageCounters:
         proposer_cost_usd=0,
         compute_cost_usd=value.compute_cost_usd,
     )
+
+
+def _adapter_usage_delta(total: AdapterUsage, before: AdapterUsage) -> AdapterUsage:
+    values: dict[str, int | float] = {}
+    for name in AdapterUsage.model_fields:
+        value = getattr(total, name) - getattr(before, name)
+        if value < -1e-12:
+            raise ValueError("candidate journal usage regressed across evaluation")
+        values[name] = max(0, value)
+    return AdapterUsage.model_validate(values)
 
 
 def _aggregate_feedback(root: Path, results: list[CandidateResult]) -> str:

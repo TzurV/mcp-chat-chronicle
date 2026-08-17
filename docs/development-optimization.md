@@ -159,6 +159,23 @@ JSON fallback is a second task invocation, never a provider retry. Candidate LMs
 allow two transports per logical score position and reconciliation fails closed if the transport
 ledger and DSPy task-call callbacks differ.
 
+Ordinary `LiteLLMCandidateAdapter` evaluation has a separate per-case journal below the ignored run
+root. Before every candidate transport it appends a request intent bound to the complete request
+SHA-256 without persisting request text. It then appends the transport result, sanitized configured
+and actual route identities, finish and latency availability, normalized usage and provider-cost
+availability, and the terminal `CaseOutcome`. Provider failures and infrastructure retries are
+separate attempts. Response identity, usage adaptation, output validation, case persistence, and
+batch-finalization interruptions remain typed append-only evidence instead of being converted into
+model-quality failures.
+
+A resumed batch verifies every journal file against its canonical bytes and event hash. It skips
+only terminal cases whose request hash still matches, refuses a later call intent for a completed
+case, and rebuilds the batch from terminal journals in frozen manifest/task order. Historical and
+incremental usage are kept separate: result accounting includes the complete journal, while budget
+reconciliation charges only transports added since the prior interrupted checkpoint. A completed
+batch replay performs zero transports and leaves the journal byte-stable. Tampered, foreign,
+duplicate, ambiguous, incomplete, or request-mismatched evidence fails closed before a new call.
+
 Version 2 optimizer configurations must declare `gepa-reliability-v1`. This optimization-only scalar
 orders provider-invalid/empty output at `0.0`, invalid JSON at `0.1`, schema-invalid output at `0.3`,
 evidence-invalid output at `0.6`, cross-field/date-invalid output at `0.8`, and fully valid output at

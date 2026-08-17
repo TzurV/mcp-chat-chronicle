@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import time
 from collections.abc import Callable, Mapping
@@ -21,6 +22,7 @@ from chat_chronicle.ai import CompletionRequest, LiteLLMClient, LLMError
 from chat_chronicle.ai_config import interpolate_prompt, load_task_catalog
 
 from .authority import VerifiedAuthority
+from .candidate_journal import CandidateJournalStore, JournalCase
 from .diagnostics import (
     CompleteRequestGuard,
     OptimizerFailureRecorder,
@@ -86,12 +88,18 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
         *,
         environment: Mapping[str, str] | None = None,
         adc_probe: Callable[[], bool] | None = None,
+        failure_injector: Callable[[str, str], None] | None = None,
     ) -> None:
         self.config = config
+        self.config_path = config_path
         self.tasks = load_task_catalog(
             resolve_config_path(config_path, config.paths.accepted_task_catalog)
         )
         self.client = client or LiteLLMClient()
+        self.failure_injector = failure_injector
+        self.config_sha256 = digest(config.model_dump(mode="json"))
+        self._active_journal: CandidateJournalStore | None = None
+        self._active_cases: list[JournalCase] = []
         self.runtimes = {
             model.id: _candidate_runtime(
                 model,
@@ -120,6 +128,41 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
             compute_cost_usd=hours * _compute_hourly_cost(self.config),
         )
 
+    def reservation_for(
+        self,
+        candidate: CandidatePackage,
+        scope: Literal["train", "validation"],
+        model_id: str,
+        authority: VerifiedAuthority,
+    ) -> AdapterReservation:
+        model = _model(self.config, model_id)
+        journal = self._journal(candidate, scope, model_id)
+        calls = retries = 0
+        for case in self._expected_cases(candidate, scope, model_id, authority):
+            if journal.terminal(case) is not None:
+                continue
+            prior = journal.attempt_count(case)
+            remaining = max(0, 1 + model.infrastructure_retries - prior)
+            calls += remaining
+            retries += max(0, remaining - (1 if prior == 0 else 0))
+        hours = calls * model.estimated_seconds_per_task / 3600
+        return AdapterReservation(
+            task_calls=calls,
+            retries=retries,
+            compute_hours=hours,
+            compute_cost_usd=hours * _compute_hourly_cost(self.config),
+        )
+
+    def recorded_usage(
+        self,
+        candidate: CandidatePackage,
+        scope: Literal["train", "validation"],
+        model_id: str,
+        authority: VerifiedAuthority,
+    ) -> AdapterUsage:
+        journal = self._journal(candidate, scope, model_id)
+        return journal.usage(self._expected_cases(candidate, scope, model_id, authority))
+
     def evaluate(
         self,
         candidate: CandidatePackage,
@@ -127,7 +170,14 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
         model_id: str,
         authority: VerifiedAuthority,
     ) -> EvaluationBatch:
+        self._active_journal = None
+        self._active_cases = []
         return asyncio.run(self._evaluate(candidate, scope, model_id, authority))
+
+    def interrupted_usage(self) -> AdapterUsage | None:
+        if self._active_journal is None:
+            return None
+        return self._active_journal.usage(self._active_cases)
 
     async def _evaluate(
         self,
@@ -139,10 +189,11 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
         manifest = authority.train if scope == "train" else authority.validation
         inputs = {source.selection_index: source for source in authority.inputs}
         model = _model(self.config, model_id)
-        outcomes: list[CaseOutcome] = []
-        attempts = retries = input_tokens = output_tokens = reasoning_tokens = 0
-        provider_cost_usd = 0.0
-        started = time.monotonic()
+        journal = self._journal(candidate, scope, model_id)
+        journal.usage(self._expected_cases(candidate, scope, model_id, authority))
+        cases: list[JournalCase] = []
+        self._active_journal = journal
+        self._active_cases = cases
         limit = (
             self.config.evaluation_train_conversation_limit
             if scope == "train"
@@ -171,25 +222,65 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                     **self.runtimes[model_id],
                 )
                 alias = f"c{source.selection_index:03d}--{task_name}"
+                case = JournalCase(
+                    position=len(cases),
+                    alias=alias,
+                    task=task_name,
+                    request_sha256=_candidate_request_sha256(request),
+                )
+                cases.append(case)
+                terminal = journal.terminal(case)
+                if terminal is not None:
+                    continue
+                remaining = 1 + model.infrastructure_retries - journal.attempt_count(case)
+                if remaining <= 0:
+                    raise RuntimeError("unfinished candidate case exhausted its retry allowance")
                 response = None
-                failure = None
-                for retry in range(model.infrastructure_retries + 1):
-                    attempts += 1
+                for _ in range(remaining):
+                    intent = journal.begin_attempt(
+                        case,
+                        configured_provider=model.expected_provider,
+                        configured_model=model.expected_model,
+                        configured_region=model.resolved_location or "local",
+                        reasoning_effort=model.reasoning_effort or "none",
+                    )
+                    stage = "before-transport"
                     try:
+                        self._inject("before_transport", alias)
+                        transport_started = time.monotonic()
                         response = await self.client.complete(request)
-                        break
                     except LLMError as exc:
-                        failure = exc
+                        latency = max(0, round((time.monotonic() - transport_started) * 1000))
+                        transport = journal.append_transport(
+                            case,
+                            intent,
+                            terminal="provider-failure",
+                            failure_category=_candidate_failure_category(exc),
+                            actual_provider="unavailable",
+                            actual_provider_sha256=None,
+                            actual_model="unavailable",
+                            actual_model_sha256=None,
+                            finish_available=False,
+                            finish_reason=None,
+                            latency_available=True,
+                            latency_ms=latency,
+                        )
+                        usage_event = journal.append_usage(
+                            case,
+                            transport,
+                            usage_available=False,
+                            input_tokens=None,
+                            output_tokens=None,
+                            reasoning_tokens=None,
+                            provider_cost_available=False,
+                            provider_cost_usd=None,
+                        )
                         if (
-                            retry < model.infrastructure_retries
+                            intent.attempt_ordinal <= model.infrastructure_retries
                             and exc.kind in _RETRYABLE_INFRASTRUCTURE_FAILURES
                         ):
-                            retries += 1
                             continue
-                        break
-                if response is None:
-                    outcomes.append(
-                        CaseOutcome(
+                        outcome = CaseOutcome(
                             alias=alias,
                             task=task_name,
                             model_id=model_id,
@@ -198,66 +289,175 @@ class LiteLLMCandidateAdapter(CandidateAdapter):
                             semantic_agreement=0,
                             diagnostics=[
                                 Diagnostic(
-                                    category=(
-                                        "timeout"
-                                        if getattr(failure, "kind", "") == "timeout"
-                                        else "provider-failure"
-                                    ),
+                                    category="timeout"
+                                    if exc.kind == "timeout"
+                                    else "provider-failure",
                                     schema_path="$",
                                     observed="provider-failure",
                                 )
                             ],
                         )
+                        stage = "case-persistence"
+                        self._inject("case_persistence", alias)
+                        journal.append_outcome(case, transport, usage_event, outcome)
+                        response = None
+                        break
+                    except Exception:
+                        journal.append_interruption(case, intent, stage)
+                        raise
+                    latency = max(0, round((time.monotonic() - transport_started) * 1000))
+                    provider_matches = candidate_provider_matches(model, response.provider)
+                    model_matches = response.model == model.expected_model
+                    transport = journal.append_transport(
+                        case,
+                        intent,
+                        terminal="response",
+                        failure_category="none",
+                        actual_provider=(
+                            "configured"
+                            if response.provider == model.expected_provider
+                            else ("accepted-alias" if provider_matches else "unexpected")
+                        ),
+                        actual_provider_sha256=digest(response.provider),
+                        actual_model="configured" if model_matches else "unexpected",
+                        actual_model_sha256=digest(response.model),
+                        finish_available=True,
+                        finish_reason=_candidate_finish_reason(response.finish_reason),
+                        latency_available=True,
+                        latency_ms=latency,
                     )
-                    continue
-                if (
-                    not candidate_provider_matches(model, response.provider)
-                    or response.model != model.expected_model
-                ):
-                    raise ValueError(
-                        f"candidate response identity mismatch for configured model {model_id}"
-                    )
-                usage = response.usage or {}
-                prompt_count, completion_count, reasoning_count = _history_entry_usage(
-                    {"usage": usage}
-                )
-                if reasoning_count:
-                    raise RuntimeError("candidate response violated the no-reasoning contract")
-                input_tokens += prompt_count
-                output_tokens += completion_count
-                reasoning_tokens += reasoning_count
-                provider_cost_usd += _provider_cost(usage)
-                outcomes.append(
-                    _validate_response(
-                        alias,
-                        task_name,
-                        model_id,
-                        response.content,
-                        selector.selected_message_ids,
-                        source.start_date,
-                        source.last_active_date,
-                        authority.references[alias].output,
-                        task.output_schema,
-                    )
-                )
-        latency = round((time.monotonic() - started) * 1000)
-        hours = latency / 3_600_000
-        return EvaluationBatch(
+                    try:
+                        stage = "after-response"
+                        self._inject("after_response", alias)
+                        stage = "identity-validation"
+                        self._inject("identity_validation", alias)
+                        if not provider_matches or not model_matches:
+                            raise ValueError(
+                                "candidate response identity mismatch for configured model "
+                                f"{model_id}"
+                            )
+                        stage = "usage-adaptation"
+                        self._inject("usage_adaptation", alias)
+                        usage = response.usage
+                        prompt_count, completion_count, reasoning_count = _history_entry_usage(
+                            {"usage": usage}
+                        )
+                        if reasoning_count:
+                            raise RuntimeError(
+                                "candidate response violated the no-reasoning contract"
+                            )
+                        cost_available = isinstance(usage, Mapping) and "cost_usd" in usage
+                        provider_cost = _provider_cost(usage or {})
+                        usage_event = journal.append_usage(
+                            case,
+                            transport,
+                            usage_available=usage is not None,
+                            input_tokens=prompt_count if usage is not None else None,
+                            output_tokens=completion_count if usage is not None else None,
+                            reasoning_tokens=reasoning_count if usage is not None else None,
+                            provider_cost_available=cost_available,
+                            provider_cost_usd=provider_cost if cost_available else None,
+                        )
+                        stage = "output-validation"
+                        self._inject("output_validation", alias)
+                        outcome = _validate_response(
+                            alias,
+                            task_name,
+                            model_id,
+                            response.content,
+                            selector.selected_message_ids,
+                            source.start_date,
+                            source.last_active_date,
+                            authority.references[alias].output,
+                            task.output_schema,
+                        )
+                        stage = "case-persistence"
+                        self._inject("case_persistence", alias)
+                        journal.append_outcome(case, transport, usage_event, outcome)
+                    except Exception:
+                        journal.append_interruption(case, intent, stage)
+                        raise
+                    break
+                if journal.terminal(case) is None:
+                    raise RuntimeError("candidate case did not reach a terminal journal outcome")
+        try:
+            self._inject("batch_finalization", f"{scope}:{model_id}")
+        except Exception:
+            journal.append_batch_interruption(len(cases))
+            raise
+        return journal.finalize(cases)
+
+    def _inject(self, stage: str, alias: str) -> None:
+        if self.failure_injector is not None:
+            self.failure_injector(stage, alias)
+
+    def _journal(
+        self,
+        candidate: CandidatePackage,
+        scope: Literal["train", "validation"],
+        model_id: str,
+    ) -> CandidateJournalStore:
+        run_root = resolve_config_path(self.config_path, self.config.paths.run_root)
+        return CandidateJournalStore(
+            run_root
+            / "observability"
+            / "candidate-evaluations"
+            / candidate.candidate_id
+            / scope
+            / digest({"model_id": model_id})[:16],
+            run_id=self.config.run_id,
+            config_sha256=self.config_sha256,
+            candidate_id=candidate.candidate_id,
             scope=scope,
             model_id=model_id,
-            outcomes=outcomes,
-            usage=AdapterUsage(
-                task_calls=attempts,
-                retries=retries,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                reasoning_tokens=reasoning_tokens,
-                provider_cost_usd=provider_cost_usd,
-                compute_hours=hours,
-                compute_cost_usd=hours * _compute_hourly_cost(self.config),
-                latency_ms=latency,
-            ),
+            compute_hourly_cost=_compute_hourly_cost(self.config),
         )
+
+    def _expected_cases(
+        self,
+        candidate: CandidatePackage,
+        scope: Literal["train", "validation"],
+        model_id: str,
+        authority: VerifiedAuthority,
+    ) -> list[JournalCase]:
+        manifest = authority.train if scope == "train" else authority.validation
+        inputs = {source.selection_index: source for source in authority.inputs}
+        model = _model(self.config, model_id)
+        limit = (
+            self.config.evaluation_train_conversation_limit
+            if scope == "train"
+            else self.config.evaluation_validation_conversation_limit
+        )
+        cases = []
+        for entry in manifest.ordered_conversations[:limit]:
+            source = inputs[entry.authority_index]
+            for task_name in TASK_ORDER:
+                task = self.tasks.tasks[task_name]
+                messages, schema, _ = case_request_parts(candidate, task_name, task, source)
+                estimated = estimate_case_input_tokens(messages, schema)
+                request = CompletionRequest(
+                    model=model.litellm_model,
+                    messages=messages,
+                    response_schema=schema,
+                    enforce_schema=True,
+                    temperature=task.generation.temperature,
+                    max_tokens=task.generation.max_tokens,
+                    timeout=model.timeout_seconds,
+                    retries=0,
+                    context_window=model.context_window,
+                    estimated_input_tokens=estimated,
+                    reasoning_effort=model.reasoning_effort,
+                    **self.runtimes[model_id],
+                )
+                cases.append(
+                    JournalCase(
+                        position=len(cases),
+                        alias=f"c{source.selection_index:03d}--{task_name}",
+                        task=task_name,
+                        request_sha256=_candidate_request_sha256(request),
+                    )
+                )
+        return cases
 
 
 def build_proposer_client(
@@ -866,38 +1066,40 @@ def _validate_response(
 ) -> CaseOutcome:
     try:
         parsed = json.loads(content)
-        spec = _schema_spec(output_schema)
+    except json.JSONDecodeError:
+        return _invalid_case_outcome(alias, task, model_id, "schema")
+    spec = _schema_spec(output_schema)
+    try:
         final = spec.final_model.model_validate(parsed).model_dump(mode="json")
-        if not set(final.get("evidence_message_ids", [])) <= set(allowed_evidence):
-            raise ValueError("evidence")
-        if task == "conversation-summary" and (
-            final["start_date"] != start_date or final["last_active_date"] != last_active_date
-        ):
-            raise ValueError("date")
-        return CaseOutcome(
-            alias=alias,
-            task=task,
-            model_id=model_id,
-            terminal=True,
-            valid=True,
-            semantic_agreement=_agreement(final, reference),
-            diagnostics=[],
-        )
-    except Exception as exc:
-        category = (
-            "evidence-mismatch"
-            if str(exc) == "evidence"
-            else ("date-mismatch" if str(exc) == "date" else "schema")
-        )
-        return CaseOutcome(
-            alias=alias,
-            task=task,
-            model_id=model_id,
-            terminal=True,
-            valid=False,
-            semantic_agreement=0,
-            diagnostics=[Diagnostic(category=category, schema_path="$")],
-        )
+    except ValidationError:
+        return _invalid_case_outcome(alias, task, model_id, "schema")
+    if not set(final.get("evidence_message_ids", [])) <= set(allowed_evidence):
+        return _invalid_case_outcome(alias, task, model_id, "evidence-mismatch")
+    if task == "conversation-summary" and (
+        final["start_date"] != start_date or final["last_active_date"] != last_active_date
+    ):
+        return _invalid_case_outcome(alias, task, model_id, "date-mismatch")
+    return CaseOutcome(
+        alias=alias,
+        task=task,
+        model_id=model_id,
+        terminal=True,
+        valid=True,
+        semantic_agreement=_agreement(final, reference),
+        diagnostics=[],
+    )
+
+
+def _invalid_case_outcome(alias: str, task: str, model_id: str, category: str) -> CaseOutcome:
+    return CaseOutcome(
+        alias=alias,
+        task=task,
+        model_id=model_id,
+        terminal=True,
+        valid=False,
+        semantic_agreement=0,
+        diagnostics=[Diagnostic(category=category, schema_path="$")],
+    )
 
 
 def _agreement(left: dict[str, Any], right: dict[str, Any]) -> float:
@@ -907,6 +1109,43 @@ def _agreement(left: dict[str, Any], right: dict[str, Any]) -> float:
 
 def _model(config: OptimizationConfig, model_id: str):
     return next(model for model in config.candidate_models if model.id == model_id)
+
+
+def _candidate_request_sha256(request: CompletionRequest) -> str:
+    """Bind resumability to complete request bytes without persisting private text."""
+    return digest(
+        {
+            "model": request.model,
+            "messages": request.messages,
+            "response_schema": request.response_schema,
+            "enforce_schema": request.enforce_schema,
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+            "timeout": request.timeout,
+            "retries": request.retries,
+            "api_base": request.api_base,
+            "context_window": request.context_window,
+            "estimated_input_tokens": request.estimated_input_tokens,
+            "reasoning_effort": request.reasoning_effort,
+            "vertex_location": request.vertex_location,
+        }
+    )
+
+
+def _candidate_finish_reason(value: str) -> str:
+    return (
+        value if value in {"stop", "length", "content_filter", "tool_calls", "unknown"} else "other"
+    )
+
+
+def _candidate_failure_category(exc: LLMError) -> str:
+    return {
+        "connection": "connection",
+        "rate_limit": "rate-limit",
+        "timeout": "timeout",
+        "invalid_json": "format",
+        "dependency": "dependency",
+    }.get(exc.kind, "provider")
 
 
 def _optional_secret(name: str | None, environment: Mapping[str, str] | None = None) -> str | None:
@@ -921,7 +1160,12 @@ def _optional_secret(name: str | None, environment: Mapping[str, str] | None = N
 
 def _provider_cost(usage: Mapping[str, Any]) -> float:
     value = usage.get("cost_usd", 0)
-    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int | float)
+        or not math.isfinite(value)
+        or value < 0
+    ):
         raise TypeError("invalid provider cost field")
     return float(value)
 
