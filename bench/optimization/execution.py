@@ -591,6 +591,8 @@ def _pilot_checkpoint(
     baseline: CandidateResult,
 ) -> PilotCheckpoint:
     results = [_result_by_id(root, value) for value in state.gepa_result_ids]
+    baseline_package = _package_by_id(root, baseline.candidate_id)
+    baseline_prompt_set = tuple(baseline_package.prompts[task].sha256 for task in TASK_ORDER)
     safety = True
     prompt_sets: list[tuple[str, ...]] = []
     for result in results:
@@ -614,6 +616,7 @@ def _pilot_checkpoint(
     )
     distinct_private = (
         bool(results)
+        and all(prompt_set != baseline_prompt_set for prompt_set in prompt_sets)
         and len(prompt_sets) == len(set(prompt_sets))
         and all(result.privacy.eligible for result in results)
     )
@@ -737,8 +740,6 @@ def _propose(
             optimizer_wall_ms=elapsed_ms,
         )
         return ProposedCandidate(None, elapsed_ms, True, measured_usage)
-    if candidate_reservation is not None:
-        ledger.reconcile(candidate_reservation.reservation_id, candidate_reservation.reserved)
     candidate = mutate_package(
         parent,
         proposal.prompts,
@@ -748,6 +749,22 @@ def _propose(
         strategy=proposal.strategy,
         demonstrations=proposal.demonstrations,
     )
+    if optimizer == "gepa" and all(
+        candidate.prompts[task].sha256 == parent.prompts[task].sha256 for task in TASK_ORDER
+    ):
+        if candidate_reservation is not None:
+            ledger.reconcile(candidate_reservation.reservation_id, UsageCounters())
+        TrialStore(root).append(
+            f"proposal-{optimizer}-{ordinal:04d}",
+            "failed",
+            _proposal_accounting(ledger, measured_usage),
+            candidate_id=parent.candidate_id,
+            failure_category="no-distinct-prompt-package",
+            optimizer_wall_ms=elapsed_ms,
+        )
+        return ProposedCandidate(None, elapsed_ms, True, measured_usage)
+    if candidate_reservation is not None:
+        ledger.reconcile(candidate_reservation.reservation_id, candidate_reservation.reserved)
     write_package(root / "candidates" / f"{candidate.candidate_id}.json", candidate)
     return ProposedCandidate(candidate, elapsed_ms, False, measured_usage)
 

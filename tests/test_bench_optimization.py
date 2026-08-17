@@ -537,6 +537,22 @@ class MeasuredBootstrapFailureAdapter(FakeOptimizerAdapter):
         )
 
 
+class UnchangedGepaAdapter(FakeOptimizerAdapter):
+    def reservation(self, optimizer: str) -> AdapterReservation:
+        if optimizer == "gepa":
+            return AdapterReservation(task_calls=3, proposer_calls=1)
+        return super().reservation(optimizer)
+
+    def gepa(self, parent, authority, feedback, ordinal) -> Proposal:
+        del authority, feedback, ordinal
+        self.calls.append("gepa-unchanged")
+        return Proposal(
+            prompts={task: parent.prompts[task].text for task in TASK_ORDER},
+            strategy="synthetic-gepa-rejected-proposal",
+            usage=AdapterUsage(task_calls=3, proposer_calls=1),
+        )
+
+
 class FakeLiteLLMClient:
     def __init__(self, *, provider: str = "synthetic", model: str = "qwen") -> None:
         self.provider = provider
@@ -2115,6 +2131,37 @@ def test_tracked_optimizer_runs_single_candidate_direct_p0_to_gepa(tmp_path: Pat
     assert len(results) == 2
     assert all(set(result.validation_model_valid) == {"qwen"} for result in results)
     assert all(result.accounting.expected_invocations == 8 for result in results)
+
+
+def test_rejected_gepa_proposal_cannot_become_lineage_only_candidate(tmp_path: Path) -> None:
+    config_path = synthetic_workspace(
+        tmp_path, pilot_candidates=1, total_candidates=1, task_invocations=500
+    )
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["candidate_models"] = raw["candidate_models"][:1]
+    raw["bootstrap_enabled"] = False
+    raw["gepa_max_candidate_proposals"] = 1
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+
+    candidate = FakeCandidateAdapter()
+    summary = run_optimization(
+        config_path,
+        ExecutionAdapters(candidate, UnchangedGepaAdapter()),
+        resume=False,
+        identity_probe=clean_identity,
+    )
+
+    root = tmp_path / "private" / "run"
+    assert summary["status"] == "pilot-no-improvement"
+    assert summary["gepa_results"] == 0
+    assert candidate.calls == 2
+    assert len(list((root / "candidates").glob("*.json"))) == 1
+    assert len(list((root / "results").glob("*.json"))) == 1
+    proposal = TrialStore(root).current("proposal-gepa-0001")
+    assert proposal is not None
+    assert proposal.status == "failed"
+    assert proposal.failure_category == "no-distinct-prompt-package"
+    assert len(list((root / "trials").glob("candidate-*"))) == 1
 
 
 def test_bootstrap_post_compile_failure_carries_measured_history_usage(

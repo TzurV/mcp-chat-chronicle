@@ -946,3 +946,65 @@ accounting, context enforcement, and the local persistence failure. No private
 quality or GEPA effectiveness claim is supported. Preserve the new ignored run
 append-only. A fresh private run requires manager acceptance and separate owner
 authorization.
+
+## 22. Fresh Gemini 2.5 Flash-Lite run and lineage-only candidate stop
+
+### Measured fact
+
+After the owner raised the cumulative conservative call ceiling to 120, one
+fresh append-only private run began from accepted commit `08df255`. The verified
+qualification was reused with zero calls. A new ignored authority copy contained
+exactly the same 14 authorized payloads, passed private SHA-256 byte-identity
+checks, and contained no extras.
+
+The tracked supported path persisted one P0 result, made 14 internal candidate
+metric calls and one Gemini 3.5 Flash proposer call, and persisted a second
+eight-position result. Fresh P0 and the second arm each completed 8/8 positions,
+with 4/8 schema/contract-valid outputs, four schema failures, train agreement
+0.2750, validation agreement 0.1125, and overall agreement 0.19375. Both were
+privacy-eligible and fit the 8,192-token boundary at a 3,935-token maximum
+complete request.
+
+Fresh-process verification and a second zero-call replay verified both package
+chains and left all 21 accepted run files byte-stable. Exact prompt comparison
+then showed that all four second-arm prompt payloads equal P0. GEPA had made a
+changed proposal but rejected it on its bounded subsample; the compiled program
+returned to Chronicle was unchanged. The persisted candidate ID differed only
+because its lineage differed.
+
+Chronicle's single-result checkpoint had compared prompt uniqueness only among
+GEPA results and therefore incorrectly marked the lineage-only package distinct.
+The bounded offline repair now rejects a GEPA return whose prompt hashes all
+match its parent, records `no-distinct-prompt-package`, skips evaluation, and
+also compares pilot prompt sets with P0 defensively. A network-free regression
+reproduces the rejected-proposal case.
+
+### Accounting
+
+The fresh run made 31 observed calls: 30 candidate calls and one proposer call,
+with zero retries. Explicit candidate use was 24,226 input, 1,942 output, and
+zero reasoning tokens; proposer accounting was 1,314 input and 2,889 charged
+output/reasoning tokens. Fourteen internal candidate calls lack portable token
+and cost history. Fresh measured cost is therefore US$0.04019012 partial and
+the conservative reservation is US$0.2477968.
+
+Cumulative accounting is 72 observed calls, 109 conservatively charged calls,
+US$0.06636632 partial measured cost, and US$6.0814776 conservative reservation
+against the 120-call and US$35 ceilings. Eleven conservatively charged calls and
+US$28.9185224 of reservation headroom remain.
+
+### Interpretation
+
+P0 persistence, the real proposal boundary, result persistence, fresh package
+verification, and byte-stable zero-call replay work. The second arm is an
+unchanged-P0 reevaluation, not a tuned prompt. Equal metrics do not show that
+GEPA matched P0, and no improvement or no-improvement quality conclusion is
+supported.
+
+### Boundaries and publication status
+
+Fixed-judge, holdout, RunPod, historical-run, local-model, fallback-model,
+semantic-retry, and output-repair activity were all zero. Private values and
+generated text remain ignored. The one authorized fresh run is consumed. This
+is suitable as privacy-safe orchestration evidence with complete denominators,
+but not as tuned-prompt or optimization-quality evidence.

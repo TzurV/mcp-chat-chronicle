@@ -191,3 +191,157 @@ package verification, and replay gates remain incomplete. This is an infrastruct
 result, not a prompt-quality result. Preserve the ignored run append-only and do not resume it or
 start another private run without manager acceptance of the repair and fresh explicit owner
 authorization.
+
+## Authorized fresh-run continuation
+
+### Manager summary
+
+After the manager accepted the persistence repair at `08df255`, the owner raised the cumulative
+conservative call ceiling from 80 to 120 and authorized one fresh append-only run. The US$35 and all
+model, data, region, privacy, retry, judge, holdout, RunPod, and fallback restrictions remained
+unchanged.
+
+The new run successfully persisted a P0 result, made one Gemini 3.5 Flash proposal call, persisted a
+second eight-position evaluation, and passed fresh-process package verification plus byte-stable
+zero-call replay. Verification then found a mandatory distinctness failure: the second package has
+a different lineage-derived candidate identity but its four prompt payloads are identical to P0.
+GEPA proposed changed text, rejected it on its bounded subsample, and returned the unchanged compiled
+program. Chronicle incorrectly treated the lineage-only identity as a distinct prompt candidate and
+evaluated it. Therefore the second arm is an unchanged-P0 reevaluation, not a tuned candidate, and
+the private tuned-prompt lifecycle remains incomplete. No rerun was made.
+
+### Fresh authority and pre-call gates
+
+- Clean start: `main` at manager commit `08df2554a3c23b26b7a75adde2400dde75590734`.
+- A new ignored run root was created; the stopped Gate 2 root remains unchanged and append-only.
+- The same 14 authorized authority payloads were copied from the verified D.1 destination, not from
+  the earlier B3B.1D source. A private SHA-256 inventory proved 14/14 byte identity and zero extra
+  destination payloads.
+- The previously successful qualification was reused without a provider call. Exact configured and
+  actual candidate model, Vertex provider route, `global` region, disabled reasoning, structured
+  output, zero retry, and zero-cache fields matched.
+- Supported preflight passed with two inputs, eight references, four unchanged tasks, one candidate,
+  one proposer position, an 8,192-token context window, and zero holdout configuration.
+- Starting conservative accounting was 53 calls and US$5.8336808. The supported-path reservation
+  was 56 calls and US$0.2477968, projecting 109/120 calls and US$6.0814776/US$35 before execution.
+
+### Provider lifecycle
+
+| Stage | Result | Candidate task calls | Proposer calls | Retries |
+|---|---|---:|---:|---:|
+| Reused qualification | Exact identity accepted; no new request | 0 | 0 | 0 |
+| Fresh P0 | 8/8 terminal; authoritative result persisted | 8 | 0 | 0 |
+| GEPA | One terminal proposer call; changed proposal rejected by GEPA | 14 internal | 1 | 0 |
+| Second evaluation | 8/8 terminal; authoritative package persisted | 8 | 0 | 0 |
+| Verification and replay | Two packages verified; 21 run files byte-stable | 0 | 0 | 0 |
+
+The explicit candidate calls all used actual provider `vertex_ai`, actual model
+`gemini-2.5-flash-lite`, `global`, disabled reasoning, stop finishes, concurrency one, and disabled
+cache. The GEPA bridge recorded one configured `vertex_ai/gemini-3.5-flash` proposer call and 14
+candidate metric calls. Its portable persisted accounting contains proposer tokens and cost, but
+does not separately retain actual provider/model response metadata or candidate tokens/cost from
+DSPy's copied internal LMs. Those fields remain unavailable and are not reconstructed.
+
+### P0 and unchanged-P0 reevaluation
+
+| Metric | P0 | Second arm |
+|---|---:|---:|
+| Terminal positions | 8/8 | 8/8 |
+| Schema/contract-valid and usable | 4/8 | 4/8 |
+| Schema failures | 4 | 4 |
+| Train valid | 2/4 | 2/4 |
+| Validation valid | 2/4 | 2/4 |
+| Train FABLE agreement | 0.2750 | 0.2750 |
+| Validation FABLE agreement | 0.1125 | 0.1125 |
+| Overall FABLE agreement | 0.19375 | 0.19375 |
+| Privacy findings / eligible | 0 / yes | 0 / yes |
+| Maximum complete request | 3,935/8,192 | 3,935/8,192 |
+| Input / output / reasoning tokens | 12,113 / 968 / 0 | 12,113 / 974 / 0 |
+| Candidate latency | 13,953 ms | 7,406 ms |
+| Explicit measured cost | US$0.0015985 | US$0.00129562 |
+
+Validation task validity was identical in both arms: conversation summary 0/1, last activity 0/1,
+title assessment 1/1, and work-mode classification 1/1. The persisted result format does not retain
+the corresponding train per-task matrix, so it is not inferred from outputs.
+
+The two candidate IDs differ, but all four prompt payload hashes match P0. The second arm therefore
+cannot be reported as tuned, paired prompt evidence, or improvement. Its equal metrics only show an
+unchanged-prompt repeat on the same two cases.
+
+### Failure and offline repair
+
+The tracked checkpoint incorrectly reported `distinct_privacy_eligible: true` because with one GEPA
+result it checked uniqueness only among GEPA results and never compared that result's prompt set to
+P0. Candidate identity was different because optimizer lineage changed even though prompt content
+did not.
+
+The bounded generic repair now:
+
+1. compares a GEPA package's four prompt hashes with its parent before persistence;
+2. records `no-distinct-prompt-package`, releases the candidate reservation, and stops without
+   evaluation when all prompt hashes are unchanged; and
+3. defensively requires every pilot result's prompt set to differ from P0 when calculating the
+   distinct/privacy checkpoint.
+
+A network-free regression reproduces a terminal GEPA proposal whose returned prompts equal its
+parent. It proves no tuned candidate/result/evaluation is created and the proposal remains a failed
+`no-distinct-prompt-package` trial. The retained real run is not rewritten.
+
+### Complete cumulative accounting
+
+| Activity | Observed calls | Conservatively charged calls | Measured tokens (in/out or output+reasoning) | Partial measured cost | Conservative reservation |
+|---|---:|---:|---:|---:|---:|
+| Through stopped Gate 2 attempt | 41 | 53 | 16,695 / 3,765 partial | US$0.0261762 | US$5.8336808 |
+| Fresh P0 explicit | 8 | included below | 12,113 / 968 | US$0.0015985 | included below |
+| GEPA candidate metrics | 14 | included below | unavailable | unavailable | included below |
+| Gemini 3.5 Flash proposer | 1 | included below | 1,314 / 2,889 | US$0.037296 | included below |
+| Unchanged-P0 reevaluation | 8 | included below | 12,113 / 974 | US$0.00129562 | included below |
+| Fresh run total | 31 | 56 | 25,540 / 4,831 partial | US$0.04019012 partial | US$0.2477968 |
+| **Cumulative total** | **72** | **109** | **42,235 / 8,596 partial** | **US$0.06636632 partial** | **US$6.0814776** |
+
+All 31 fresh calls completed without infrastructure retry, provider failure, or cache hit. The
+candidate reported zero reasoning tokens. Proposer output accounting conservatively includes any
+reasoning represented by the provider's completion-token structures; a separate reasoning count is
+not persisted. The 14 internal candidate calls lack portable token/cost history, so measured totals
+are explicitly partial and the full reservation remains authoritative. Remaining headroom is 11
+conservatively charged calls and US$28.9185224 of conservative cost.
+
+Explicit candidate provider latency was 21,047 ms; authoritative candidate-result wall time was
+21,359 ms; optimizer wall time was 24,250 ms; and end-to-end lifecycle wall time was 46,188 ms.
+
+### Verification, replay, and boundaries
+
+- Both persisted package/result/trial chains verified from a fresh process with zero provider calls.
+- A second fresh process repeated verification; all 21 accepted run files and both verification
+  results were byte-stable, with zero provider calls.
+- The second package's prompt equality was established by exact prompt payload/hash comparison,
+  without displaying, repairing, or reinterpreting generated text.
+- Fixed-judge calls: 0. Holdout access/calls: 0. RunPod operations: 0. Historical P0/Bootstrap/C1
+  execution or modification: 0. Local/fallback/alternate model calls: 0.
+- The stopped Gate 2 root and earlier B3B.1D private state were not resumed, rewritten, or used as
+  run state. Only the verified D.1 authority subset and qualification evidence were reused.
+- Private inputs, references, outputs, DSPy logs, generated proposal text, credentials, project
+  values, inventories, paths, identifiers, hashes, and provenance remain in ignored storage.
+- There were zero semantic retries and zero output repairs.
+
+### Fresh-run validation
+
+- Focused AI adapter and optimizer matrix: 179/179 passed.
+- Full repository suite: 636 collected, 635 passed, one expected skip.
+- Focused no-distinct-prompt and lifecycle regressions: 6/6 passed; the strengthened exact
+  no-second-evaluation regression also passed independently.
+- Repository-wide Ruff lint: passed; both modified Python files pass Ruff formatting.
+- Poetry validation: passed.
+- Poetry source and wheel builds: passed; `bench` and `chronicle` CLI help passed.
+- Targeted pre-commit passed whitespace, EOF, large-file, merge-conflict, private-key, Ruff, and
+  Ruff-format hooks over every delivery file. `git diff --check` passed.
+- Repository-wide format checking continues to identify nine unrelated pre-existing files; neither
+  modified Python file is among them.
+
+### Continuation decision
+
+The P0 persistence, provider proposal boundary, ordinary result persistence, fresh verification,
+and zero-call replay mechanics are proven. The required distinct tuned prompt and tuned evaluation
+are not proven. The accepted second result is an unchanged-P0 repeat and must not be promoted or
+used to claim that GEPA matched or improved P0. The one authorized fresh run is consumed; stop for
+manager validation of the distinctness repair before any further private provider activity.
