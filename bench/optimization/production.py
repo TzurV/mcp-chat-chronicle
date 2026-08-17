@@ -629,18 +629,7 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                 compute_hours=hours,
                 compute_cost_usd=hours * _compute_hourly_cost(self.config),
             )
-        validation_conversations = self.config.gepa_validation_conversation_limit or 4
-        validation_positions = validation_conversations * len(TASK_ORDER)
-        reflection_positions = 3
-        if self.config.gepa_max_candidate_proposals is not None:
-            logical_positions = validation_positions + (
-                self.config.gepa_max_candidate_proposals
-                * (2 * reflection_positions + validation_positions)
-            )
-        else:
-            logical_positions = self.config.gepa_max_metric_calls_per_candidate + (
-                2 * reflection_positions + validation_positions
-            )
+        logical_positions = self._gepa_metric_call_ceiling()
         task_calls = logical_positions * 2
         proposer_calls = self.config.gepa_max_candidate_proposals or max(
             1, self.config.proposer.max_calls // self.config.budget.pilot_candidates
@@ -654,6 +643,20 @@ class DspyOptimizerAdapter(OptimizerAdapter):
             retries=proposer_calls * self.config.proposer.infrastructure_retries,
             compute_hours=hours,
             compute_cost_usd=hours * _compute_hourly_cost(self.config),
+        )
+
+    def _gepa_metric_call_ceiling(self) -> int:
+        """Align GEPA's stop budget with the already reserved complete proposal lifecycle."""
+        validation_conversations = self.config.gepa_validation_conversation_limit or 4
+        validation_positions = validation_conversations * len(TASK_ORDER)
+        reflection_positions = 3
+        if self.config.gepa_max_candidate_proposals is not None:
+            return validation_positions + (
+                self.config.gepa_max_candidate_proposals
+                * (2 * reflection_positions + validation_positions)
+            )
+        return self.config.gepa_max_metric_calls_per_candidate + (
+            2 * reflection_positions + validation_positions
         )
 
     def _reserved_optimizer_hours(self, task_calls: int, proposer_calls: int) -> float:
@@ -827,7 +830,7 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                     self._metric,
                     self.reflection_lm,
                     seed=self.config.seed + ordinal - 1,
-                    max_metric_calls=self.config.gepa_max_metric_calls_per_candidate,
+                    max_metric_calls=self._gepa_metric_call_ceiling(),
                     max_candidate_proposals=self.config.gepa_max_candidate_proposals,
                     log_dir=state_root / f"gepa-{ordinal:04d}",
                     callbacks=[observer],

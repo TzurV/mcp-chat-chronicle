@@ -565,6 +565,14 @@ def test_fallback_aware_gepa_reservation_is_exact(proposals: int, task_calls: in
     assert reservation.task_calls == task_calls
     assert reservation.proposer_calls == proposals
     assert reservation.retries == proposals
+    assert optimizer._gepa_metric_call_ceiling() == task_calls // 2
+
+
+def test_four_proposal_gepa_compile_ceiling_matches_complete_reserved_lifecycle() -> None:
+    optimizer = object.__new__(DspyOptimizerAdapter)
+    optimizer.config = _score_config().model_copy(update={"gepa_max_candidate_proposals": 4})
+    assert optimizer.config.gepa_max_metric_calls_per_candidate == 20
+    assert optimizer._gepa_metric_call_ceiling() == 104
 
 
 def test_transport_store_rejects_ambiguous_fallback_and_foreign_events(tmp_path: Path) -> None:
