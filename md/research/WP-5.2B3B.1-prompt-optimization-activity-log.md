@@ -1115,3 +1115,73 @@ privacy-safe pre/terminal transport evidence for ordinary candidate evaluation,
 then obtain manager acceptance and separate owner authorization. The evidence
 may support a failure-observability case study, but not a multi-proposal search
 article or model comparison.
+
+## 25. Resumable full P0 and budget-stopped GEPA search
+
+### Engineering evidence
+
+WP-5.2B3B.1D.4.1 added ordinary candidate per-case intent, transport, usage,
+terminal, interruption, and batch journals. Canonical terminal verification
+prevents duplicate calls and reconstructs batches after interruption. Injected
+tests cover failures before transport, after response, and at every adaptation
+or persistence boundary; a synthetic 24/16 resume calls only unfinished
+positions.
+
+Three bounded post-call repair cycles were used. Seven over-context requests
+became typed no-call terminals; result accounting then learned to reconcile
+those terminals; finally, pinned GEPA 0.1.1 JSON checkpoints were routed through
+Chronicle's Windows-safe atomic writer. Recovered Chat-to-JSON parse failures no
+longer mask a later terminal defect. The final tree passes 169 optimizer tests,
+673 repository tests with one expected skip, Ruff, Poetry, CLI/import, and diff
+checks.
+
+### Provider and P0 evidence
+
+One synthetic Gemini 2.5 Flash-Lite canary used 13 input, five output, and zero
+reasoning tokens, with no retry and US$0.0000033 measured cost. The private P0
+completed all 40 terminal positions through the same exact route: 33 transports
+and seven no-call context boundaries. Sixteen outputs were valid—10/24 train
+and 6/16 validation—with mean deterministic agreement 0.116667 and 0.140625.
+Conversation summary and last activity were 0/10 valid; work-mode
+classification and title assessment were each 8/10 valid. Seventeen
+transported outputs were schema-invalid. The 15,256-token maximum complete
+request exceeds the frozen 8,192-token context, so P0 is privacy-eligible but
+not promotion-eligible.
+
+Fresh-process package verification made zero provider calls. A credential-free
+terminal replay returned the same state with no authorization and left all 260
+files byte-identical. Provider-free shortlist export returned zero finalists.
+
+### Proposal and stop evidence
+
+GEPA recorded 28 candidate transports over 18 logical score positions: 18 Chat
+calls and ten explicit JSON fallbacks, all responses, no provider retries. Two
+proposer calls reached bounded reflection but produced no candidate, private
+proposal envelope, or decision. Before the third iteration, GEPA left a
+complete JSON temporary checkpoint and failed Windows replacement. The budget
+retained the full four-proposal reservation and four retry allowances
+fail-closed.
+
+The repaired successor root contains the exact 54-file authority, is bound to
+the repair commit, and passes supported preflight. It made zero provider calls.
+Current cumulative accounting is 173-221 observed calls, 441 conservatively
+charged calls, US$0.09216432 partial measured provider cost, and
+US$7.5983975014 configured/reserved budget accounting. Only 159 calls remain;
+a fresh complete four-proposal operation requires 376 and would project 817
+against the 600 hard ceiling.
+
+### Interpretation and publication status
+
+P0 is retained explicitly as development evidence, not promoted. The normal
+four-proposal target and three-proposal minimum were not met, so the operational
+`pilot-no-improvement` label is not a completed GEPA no-improvement result. No
+fifth proposal was eligible or affordable. Fixed judge, holdout, RunPod, LM
+Studio, alternate model, output repair, and semantic retry activity remained
+zero.
+
+This evidence supports claims about resumability, exact denominators, context
+gating, fail-closed accounting, and optimizer integration failure modes. It
+does not support claims about GEPA effectiveness, a tuned finalist, holdout
+generalization, production quality, or comparative model superiority. The
+source is one private silver development set; private content and provenance
+remain ignored and unpublished.

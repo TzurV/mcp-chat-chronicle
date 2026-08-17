@@ -7,11 +7,11 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | Field | Status |
 | --- | --- |
 | Date | 2026-08-17 |
-| Phase | WP-5.2B3B accepted; D.3 GEPA observability accepted; D.4 stopped during ordinary full-development P0 before GEPA and exposed missing per-case candidate transport persistence |
-| Last accepted delivery | WP-5.2B3B.1D.4 diagnostic stop: frozen 6/4 authority and ADC gates passed, but first P0 train evaluation interrupted with no authoritative batch; zero proposals and zero quality evidence |
+| Phase | WP-5.2B3B accepted; D.4.1 engineering and full P0 complete; multi-proposal GEPA closed at the authorized budget stop after two proposer attempts produced no candidate |
+| Last accepted delivery | WP-5.2B3B.1D.4 remains the manager-accepted delivery; D.4.1 awaits manager review with resumable per-case persistence, authoritative 40-case P0, incomplete GEPA evidence, and a no-call successor root |
 | Current milestone state | M0/M1/M2 core and real-history prototype accepted; the configurable AI-task/evaluation stack and six aligned complete development arms are accepted; WP-4.1 read-only MCP recall is accepted; v0.2.0 is committed and remotely tagged; the primary v0.2.0 LinkedIn progress post and LP-5 MCP-on-Windows article/feed post are owner-reported published; the public GitHub release page remains pending verification |
-| Next action | Implement provider-free ordinary candidate per-case transport journaling and resumable terminal persistence under D.4.1. Preserve the stopped D.4 root and authorize no new provider calls until that repair is committed. |
-| Current branch | `main` after merging the accepted B3B branch |
+| Next action | Manager-review the D.4.1 commit series and mandatory budget stop. Do not make more provider calls, access holdout, or construct the fixed judge under the current authorization. |
+| Current branch | `codex/wp-5.2b3b-d4-autonomous` awaiting manager review; do not merge or push automatically |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
 ## Work Package Ledger
@@ -74,6 +74,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.2B3B.1D.2 | Offline GEPA rejection analysis | Accepted | Analysis authorization supplied in manager continuation message | `md/handoffs/reports/WP-5.2B3B.1D.2-offline-gepa-rejection-analysis.md` | `md/handoffs/reports/WP-5.2B3B.1D.2-validation-review.md` | GEPA correctly rejected a 0-to-0 tie on examples `[0, 2, 1]`; only one example exercised the mutated component. Rejected proposal content and exact feedback were not retained, and four internal calls remain unattributed. The 510 cumulative call estimate is planning evidence, not authorization. |
 | WP-5.2B3B.1D.3 | GEPA observability and graded search signal | Accepted; provider-free | Executor authorization supplied in committed manager continuation | `md/handoffs/reports/WP-5.2B3B.1D.3-gepa-observability-search-signal-completion-report.md` | `md/handoffs/reports/WP-5.2B3B.1D.3-validation-review.md` | Adds pre-decision private proposal envelopes and append-only decisions, explicit Chat-to-JSON fallback transport accounting, and a versioned graded GEPA-only reliability score while preserving strict final promotion and historical v1 identities. Bounded rework restricts fallback and partial scoring to expected exception types. Synthetic tests only; provider/private/holdout/RunPod activity was zero. |
 | WP-5.2B3B.1D.4 | Full-development multi-proposal GEPA search | Diagnostic stop accepted; search not started | Owner authorization supplied in committed executor continuation | `md/handoffs/reports/WP-5.2B3B.1D.4-full-development-multiproposal-gepa-completion-report.md`; article evidence: `md/handoffs/reports/WP-5.2B3B.1D.4-gepa-search-article-evidence-brief.md` | `md/handoffs/reports/WP-5.2B3B.1D.4-validation-review.md` | Exact 10-input/40-reference 6/4 authority, ADC, route, preflight, and budget gates passed. The first P0 train batch interrupted with `ValueError` before per-case persistence, leaving 0-48 actual calls under a retained 48-call reservation. No P0 result, proposal, finalist, judge, or holdout activity exists. |
+| WP-5.2B3B.1D.4.1 | Resumable candidate evaluation and GEPA completion | Awaiting manager review; engineering/P0 complete, GEPA budget-stopped | Owner autonomous execution authorization | `md/handoffs/reports/WP-5.2B3B.1D.4.1-completion-report.md`; article evidence: `md/handoffs/reports/WP-5.2B3B.1D.4.1-article-evidence-brief.md` | Pending | Ordinary evaluation now has append-only per-case intent/transport/usage/terminal journals, exact resume, context-boundary terminals, fresh verification, and byte-stable replay. P0 completed 16/40 valid but fails context fit. Two proposer attempts produced no candidate/envelope; the third repair hardens GEPA Windows checkpoints. Cumulative accounting is 173-221 observed calls, 441 charged calls, US$0.09216432 partial measured cost, and US$7.5983975014 budget-side accounting. A clean successor root made zero calls because a complete operation would exceed 600. |
 | WP-5.2B3B.2 | Local transfer qualification and winner freeze | Planned; gated by B3B.1 shortlist | Pending | Completion report and remote-to-local transfer evidence required | Pending | Rerun P0 and the top three to five immutable optimizer candidates on the local machine. Select one complete package using a predeclared reliability-first rule, or retain P0 explicitly. Keep judging credentials and final scoring local; do not treat RunPod timing as laptop evidence. |
 | WP-5.2B3C | One-shot prompt holdout evaluation | Planned; gated by B3B.2 winner freeze | Pending | Completion and publication evidence brief required | Pending | Run one frozen optimizer-selected package once over 80 holdout cases each for Qwen, Phi, and Gemini; compare with accepted P0 evidence and report generalization, transfer, reliability, failure taxonomy, cost, and chart-ready data without holdout-driven prompt changes. |
 | LP-4.3 | Established prompt optimization potential article | Planned; gated by automatic search and local transfer, preferably B3C | Pending | Analysis brief, article draft, figures, and publication record required | Pending | Compare the controlled manual P0/P1/P2 result with BootstrapFewShot/GEPA search, RunPod cost and speed, remote-to-local transfer, and holdout behavior. Separate prompt, model, context, compute, and judge effects and publish negative results and full denominators. |
@@ -191,12 +192,12 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Keep both WP-5.2B3B.1D.1 roots and the stopped D.4 root append-only. D.2
-   confirms the earlier proposal tied P0 at zero and was correctly rejected.
-2. Implement D.4.1 provider-free ordinary candidate transport journaling and
-   resumable per-case terminal persistence. Diagnose future failures with typed
-   sanitized categories. The consumed D.4 run must not resume.
-3. After a separate committed handoff and explicit owner authorization, decide whether to run broader hosted-candidate search
+1. Keep all D.1, D.4, and D.4.1 ignored roots append-only. D.4.1 P0 is the
+   explicit retained development baseline, not a promoted finalist.
+2. Review the D.4.1 commit series, accounting, and third repair. The current
+   authorization is consumed; make no more provider calls because 159 calls of
+   headroom cannot fund the complete 376-call operation.
+3. After a separately reviewed complete-operation budget and explicit owner authorization, decide whether to run broader hosted-candidate search
    locally and return finalists to the retained RunPod Qwen/Phi environment.
 4. Return a frozen shortlist and validate P0 plus the top three to five
    candidates locally under WP-5.2B3B.2.
