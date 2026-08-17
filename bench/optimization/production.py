@@ -62,10 +62,12 @@ from .models import (
 from .observability import (
     AdapterTransportRecorder,
     AdapterTransportStore,
+    DurableInstructionProposer,
     GEPAProposalObserver,
     PrivateProposalLogFilter,
     ProposalEventStore,
     ProposalPrivacyEvidence,
+    ProposerLifecycleStore,
     explicit_fallback_adapter,
 )
 from .package import CandidatePackage, mutate_package
@@ -770,6 +772,13 @@ class DspyOptimizerAdapter(OptimizerAdapter):
             optimizer_id=self.config.optimizer_id,
             optimizer_identity=identity,
         )
+        lifecycle_store = ProposerLifecycleStore(
+            evidence_root / "proposer-lifecycle",
+            run_id=self.config.run_id,
+            optimizer_id=self.config.optimizer_id,
+            optimizer_identity=identity,
+        )
+        proposal_privacy_scan = self._proposal_privacy_scan(parent, authority, ordinal)
         observer = GEPAProposalObserver(
             proposal_store,
             demonstration_identities=[
@@ -777,7 +786,20 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                 for task in TASK_ORDER
                 for demo in parent.demonstrations[task]
             ],
-            privacy_scan=self._proposal_privacy_scan(parent, authority, ordinal),
+            privacy_scan=proposal_privacy_scan,
+            lifecycle_store=lifecycle_store,
+        )
+        instruction_proposer = DurableInstructionProposer(
+            lifecycle_store,
+            observer,
+            self.reflection_lm,
+            configured_provider=self.config.proposer.provider,
+            configured_model=self.config.proposer.litellm_model,
+            configured_location=(
+                self.config.proposer.resolved_location or self.config.proposer.region
+            ),
+            usage_extractor=_history_entry_usage,
+            privacy_scan=proposal_privacy_scan,
         )
         adapter = explicit_fallback_adapter(transport_store)
         transport_recorder = AdapterTransportRecorder(transport_store, _transport_history_usage)
@@ -809,6 +831,7 @@ class DspyOptimizerAdapter(OptimizerAdapter):
                     max_candidate_proposals=self.config.gepa_max_candidate_proposals,
                     log_dir=state_root / f"gepa-{ordinal:04d}",
                     callbacks=[observer],
+                    instruction_proposer=instruction_proposer,
                     use_merge=True if self.config.version == 1 else self.config.gepa_use_merge,
                 )
             observer.reconcile()

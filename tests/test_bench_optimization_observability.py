@@ -21,10 +21,12 @@ from bench.optimization.models import (
 )
 from bench.optimization.observability import (
     AdapterTransportStore,
+    DurableInstructionProposer,
     GEPAProposalObserver,
     PrivateProposalLogFilter,
     ProposalEventStore,
     ProposalPrivacyEvidence,
+    ProposerLifecycleStore,
     adapter_transport_event,
     explicit_fallback_adapter,
     proposal_decision,
@@ -90,6 +92,213 @@ def _store(tmp_path: Path, *, run_id: str = "synthetic") -> ProposalEventStore:
         optimizer_id="synthetic",
         optimizer_identity=SHA,
     )
+
+
+class _SyntheticProposerLM:
+    def __init__(self, text: str = "```changed private prompt```") -> None:
+        self.text = text
+        self.calls = 0
+        self.history: list[dict[str, object]] = []
+
+    def __call__(self, prompt):
+        assert prompt
+        self.calls += 1
+        self.history.append(
+            {
+                "model": "vertex_ai/synthetic",
+                "response_model": "synthetic",
+                "usage": {"prompt_tokens": 7, "completion_tokens": 3},
+            }
+        )
+        return [self.text]
+
+
+def _lifecycle(tmp_path: Path) -> ProposerLifecycleStore:
+    return ProposerLifecycleStore(
+        tmp_path / "private" / "proposer-lifecycle",
+        run_id="synthetic",
+        optimizer_id="synthetic",
+        optimizer_identity=SHA,
+    )
+
+
+def _observer(tmp_path: Path, lifecycle: ProposerLifecycleStore) -> GEPAProposalObserver:
+    observer = GEPAProposalObserver(
+        _store(tmp_path),
+        demonstration_identities=[],
+        privacy_scan=lambda prompts: _privacy(),
+        lifecycle_store=lifecycle,
+    )
+    observer.on_minibatch_sampled({"iteration": 1, "minibatch_ids": [0, 2, 1]})
+    observer.on_evaluation_end({"iteration": 1, "candidate_idx": 0, "scores": [0.0, 0.0, 0.0]})
+    observer.on_proposal_start(
+        {
+            "iteration": 1,
+            "parent_candidate": {f"task_{index}": f"parent {index}" for index in range(4)},
+            "components": ["task_0"],
+            "reflective_dataset": {"task_0": [{"feedback": "schema at $.summary; expected=array"}]},
+        }
+    )
+    return observer
+
+
+def _durable_proposer(
+    lifecycle: ProposerLifecycleStore,
+    observer: GEPAProposalObserver,
+    lm: _SyntheticProposerLM,
+    fault_hook=None,
+) -> DurableInstructionProposer:
+    return DurableInstructionProposer(
+        lifecycle,
+        observer,
+        lm,
+        configured_provider="Google Vertex AI",
+        configured_model="vertex_ai/synthetic",
+        configured_location="global",
+        usage_extractor=lambda entry: (7, 3, 0),
+        privacy_scan=lambda prompts: _privacy(),
+        fault_hook=fault_hook,
+    )
+
+
+def _proposer_inputs():
+    return (
+        {f"task_{index}": f"parent {index}" for index in range(4)},
+        {"task_0": [{"feedback": "schema at $.summary; expected=array"}]},
+        ["task_0"],
+    )
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "after-intent",
+        "before-transport",
+        "after-response",
+        "before-proposal-persistence",
+        "after-proposal-persistence",
+    ],
+)
+def test_proposer_lifecycle_resumes_each_persistence_boundary_without_duplicate_call(
+    tmp_path: Path, boundary: str
+) -> None:
+    lifecycle = _lifecycle(tmp_path)
+    observer = _observer(tmp_path, lifecycle)
+    lm = _SyntheticProposerLM()
+    triggered = False
+
+    def interrupt(name: str) -> None:
+        nonlocal triggered
+        if name == boundary and not triggered:
+            triggered = True
+            raise RuntimeError(f"interrupted {name}")
+
+    proposer = _durable_proposer(lifecycle, observer, lm, interrupt)
+    with pytest.raises(RuntimeError, match="interrupted"):
+        proposer(*_proposer_inputs())
+    result = _durable_proposer(lifecycle, observer, lm)(*_proposer_inputs())
+    assert result == {"task_0": "changed private prompt"}
+    assert lm.calls == 1
+    events = lifecycle.verify()
+    assert set(events["intents"]) == {1}
+    assert set(events["responses"]) == {1}
+    assert events["generated"][1].proposal_text == "changed private prompt"
+
+
+def test_proposer_response_and_rejected_proposal_survive_restart_privately(
+    tmp_path: Path,
+) -> None:
+    lifecycle = _lifecycle(tmp_path)
+    first = _observer(tmp_path, lifecycle)
+    lm = _SyntheticProposerLM()
+    assert _durable_proposer(lifecycle, first, lm)(*_proposer_inputs())
+    first.on_proposal_end(
+        {"iteration": 1, "new_instructions": {"task_0": "changed private prompt"}}
+    )
+    first.on_evaluation_end({"iteration": 1, "candidate_idx": None, "scores": [0.0, 0.0, 0.0]})
+    first.on_candidate_rejected({"iteration": 1})
+    assert first.reconcile()[1][1].decision == "rejected"
+
+    restarted = _observer(tmp_path, lifecycle)
+    assert _durable_proposer(lifecycle, restarted, lm)(*_proposer_inputs()) == {
+        "task_0": "changed private prompt"
+    }
+    assert lm.calls == 1
+    assert lifecycle.verify()["terminals"][1].category == "rejected"
+
+
+def test_interruption_during_decision_linkage_replays_without_provider_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lifecycle = _lifecycle(tmp_path)
+    first = _observer(tmp_path, lifecycle)
+    lm = _SyntheticProposerLM()
+    assert _durable_proposer(lifecycle, first, lm)(*_proposer_inputs())
+    first.on_proposal_end(
+        {"iteration": 1, "new_instructions": {"task_0": "changed private prompt"}}
+    )
+    first.on_evaluation_end({"iteration": 1, "candidate_idx": None, "scores": [0.0, 0.0, 0.0]})
+    real_terminal = lifecycle.terminal
+    failed = False
+
+    def interrupt_terminal(**values):
+        nonlocal failed
+        if not failed:
+            failed = True
+            raise OSError("synthetic decision persistence interruption")
+        return real_terminal(**values)
+
+    monkeypatch.setattr(lifecycle, "terminal", interrupt_terminal)
+    with pytest.raises(RuntimeError, match="decision evidence"):
+        first.on_candidate_rejected({"iteration": 1})
+    monkeypatch.setattr(lifecycle, "terminal", real_terminal)
+
+    restarted = _observer(tmp_path, lifecycle)
+    assert _durable_proposer(lifecycle, restarted, lm)(*_proposer_inputs())
+    restarted.on_proposal_end(
+        {"iteration": 1, "new_instructions": {"task_0": "changed private prompt"}}
+    )
+    restarted.on_evaluation_end({"iteration": 1, "candidate_idx": None, "scores": [0.0, 0.0, 0.0]})
+    restarted.on_candidate_rejected({"iteration": 1})
+    assert lifecycle.verify()["terminals"][1].category == "rejected"
+    assert lm.calls == 1
+
+
+def test_no_generated_proposal_is_a_terminal_auditable_position(tmp_path: Path) -> None:
+    lifecycle = _lifecycle(tmp_path)
+    observer = _observer(tmp_path, lifecycle)
+    lm = _SyntheticProposerLM("")
+    with pytest.raises(RuntimeError, match="no generated proposal"):
+        _durable_proposer(lifecycle, observer, lm)(*_proposer_inputs())
+    events = lifecycle.verify()
+    assert events["terminals"][1].category == "no-generated-proposal"
+    assert events["responses"][1].raw_response_text == ""
+    assert events["generated"] == {}
+
+
+def test_lifecycle_atomic_write_recovers_windows_sharing_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+
+    lifecycle = _lifecycle(tmp_path)
+    real_replace = os.replace
+    calls = 0
+
+    def sharing_once(source, destination):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            error = PermissionError("synthetic sharing violation")
+            error.winerror = 32
+            raise error
+        return real_replace(source, destination)
+
+    monkeypatch.setattr("bench.io.os.replace", sharing_once)
+    observer = _observer(tmp_path, lifecycle)
+    lm = _SyntheticProposerLM()
+    assert _durable_proposer(lifecycle, observer, lm)(*_proposer_inputs())
+    assert calls >= 2
 
 
 def test_predecision_envelope_precedes_decision_and_rejected_text_is_retained(

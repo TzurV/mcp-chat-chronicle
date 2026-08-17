@@ -430,6 +430,7 @@ def compile_gepa(
     log_dir: Path,
     max_candidate_proposals: int | None = None,
     callbacks: list[Any] | None = None,
+    instruction_proposer: Any | None = None,
     use_merge: bool = True,
 ) -> Any:
     verify_compatibility()
@@ -447,6 +448,7 @@ def compile_gepa(
         metric=metric,
         max_metric_calls=max_metric_calls,
         reflection_lm=reflection_lm,
+        instruction_proposer=instruction_proposer,
         candidate_selection_strategy="pareto",
         component_selector=TraceAlignedReflectionComponentSelector(program),
         add_format_failure_as_feedback=GEPA_ADD_FORMAT_FAILURE_AS_FEEDBACK,
