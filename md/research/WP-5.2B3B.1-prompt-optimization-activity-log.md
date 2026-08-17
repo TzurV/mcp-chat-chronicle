@@ -1061,3 +1061,57 @@ cost is US$1.4867808/US$1.9209856/US$2.3551904, and cumulative conservative cost
 would be US$7.5682584/US$8.0024632/US$8.4366680. A future handoff could therefore
 consider a 540-call cumulative ceiling while retaining the US$35 ceiling, but
 these figures are planning evidence only and grant no provider-call authority.
+
+## 24. Full-development private search stopped during P0
+
+### Measured operational fact
+
+On 2026-08-17, WP-5.2B3B.1D.4 began from clean accepted commit `e9a5069` under
+an explicitly authorized 540-call and US$35 cumulative ceiling. A new ignored
+authority copy contained exactly ten development inputs, forty FABLE
+references, the frozen six-train/four-validation split, the accepted task
+catalog, and the development manifest. A private 54-pair SHA-256 inventory
+proved byte identity and zero destination extras. Supported preflight verified
+the full 40-position development scope, zero holdout, the single Gemini 2.5
+Flash-Lite 8K candidate, Gemini 3.5 Flash proposer, and pinned DSPy/GEPA
+contracts.
+
+Same-process Windows ADC checks passed without logging credentials, account,
+project, path, or token values. The prior candidate route qualification was
+reused with zero qualification calls. Chronicle's tracked optimizer then
+entered the first P0 train evaluation and stopped after 24,649 ms with one
+interrupted trial categorized as `ValueError`. No train batch, validation
+batch, P0 result, GEPA proposal, tuned candidate, finalist, or promotion
+decision was persisted.
+
+The ordinary candidate-evaluation path did not persist a pre-transport event,
+and the privacy-safe CLI intentionally suppressed provider-controlled detail.
+The retained evidence therefore bounds D.4 candidate transports at zero to 48,
+including zero to 24 retries, and cannot safely distinguish a pre-call
+validation failure from a failure at any position in the unpersisted train
+batch. The full first train-batch reservation remains charged: 48 candidate
+attempts, including 24 retry
+allowances, 0.4 compute hours, and US$0.1801232. Proposer, judge, holdout,
+RunPod, local-model, fallback-model, semantic-retry, and output-repair activity
+were all zero.
+
+### Cumulative accounting
+
+Before D.4, accounting stood at 72 observed calls, 109 conservatively charged
+calls, US$0.06636632 partial measured cost, and US$6.0814776 conservative
+reservation. After the stopped batch it is 72–120 observed calls, 157 charged
+calls, the same known partial measured cost because D.4 usage was unavailable,
+and US$6.2616008 conservative reservation. Remaining headroom is 383 charged
+calls and US$28.7383992. The unused full-search reservation is not counted as
+consumed.
+
+### Interpretation and publication status
+
+This is a route/application observability stop, not a prompt-quality result.
+It does not show GEPA improvement, equivalence, or no-improvement because GEPA
+never began and no complete P0 exists. Preserve the ignored root append-only.
+Before another private run, add provider-free regression coverage and
+privacy-safe pre/terminal transport evidence for ordinary candidate evaluation,
+then obtain manager acceptance and separate owner authorization. The evidence
+may support a failure-observability case study, but not a multi-proposal search
+article or model comparison.
