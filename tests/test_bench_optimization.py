@@ -2281,6 +2281,16 @@ def test_candidate_accounting_accepts_fractional_provider_cost_and_rejects_bad_u
             CandidateAccounting(**{**payload, "usage": usage})
     with pytest.raises(ValidationError):
         CandidateAccounting(**{**payload, "usage": {"provider_cost_usd": True}})
+    no_call_context = CandidateAccounting(
+        **{
+            **payload,
+            "task_invocations": 0,
+            "failures": {"context-boundary": 1},
+        }
+    )
+    assert no_call_context.terminal_invocations == 1
+    with pytest.raises(ValidationError, match="task invocation accounting is incomplete"):
+        CandidateAccounting(**{**payload, "task_invocations": 0, "failures": {}})
 
 
 def test_post_evaluation_persistence_failure_records_interrupted_trial(

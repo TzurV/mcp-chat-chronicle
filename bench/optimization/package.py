@@ -114,7 +114,10 @@ class CandidateAccounting(StrictModel):
     def terminal(self) -> CandidateAccounting:
         if self.terminal_invocations != self.expected_invocations:
             raise ValueError("candidate result has non-terminal invocation accounting")
-        if self.task_invocations < self.expected_invocations:
+        context_boundaries = self.failures.get("context-boundary", 0)
+        if context_boundaries > self.expected_invocations:
+            raise ValueError("candidate context-boundary accounting exceeds expected invocations")
+        if self.task_invocations + context_boundaries < self.expected_invocations:
             raise ValueError("candidate task invocation accounting is incomplete")
         return self
 

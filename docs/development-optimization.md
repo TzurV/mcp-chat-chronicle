@@ -182,7 +182,9 @@ ordinary evaluator persists it immediately as a terminal `context-boundary` outc
 transport. GEPA represents the same position with the existing `provider_invalid = 0.0` score and a
 sanitized context diagnostic, preserves its component trace for reflection, and makes no candidate
 transport. Result context-fit evidence remains false, so such a candidate cannot pass strict final
-promotion merely because all logical positions are terminal.
+promotion merely because all logical positions are terminal. Result accounting reconciles transport
+invocations plus typed no-call context boundaries against the complete logical-position count; it
+does not fabricate a model call for a request that was prohibited before submission.
 
 Version 2 optimizer configurations must declare `gepa-reliability-v1`. This optimization-only scalar
 orders provider-invalid/empty output at `0.0`, invalid JSON at `0.1`, schema-invalid output at `0.3`,
