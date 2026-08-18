@@ -1185,3 +1185,163 @@ does not support claims about GEPA effectiveness, a tuned finalist, holdout
 generalization, production quality, or comparative model superiority. The
 source is one private silver development set; private content and provenance
 remain ignored and unpublished.
+
+## 26. Durable proposer evidence and one strictly rejected position
+
+### Engineering evidence
+
+WP-5.2B3B.1D.4.2 adds an application-owned proposer lifecycle independent of
+DSPy's final candidate store. Private append-only records now retain pre-call
+intent, canonical request identity, selected component/example identities,
+transport start, route and availability metadata, raw response, parsed
+instruction, and a terminal decision link. Provider-free interruption tests
+cover every required persistence boundary, exact replay, decision recovery,
+empty-output terminalization, and Windows sharing-violation recovery.
+
+Checkpoint `7d3af24` passed the optimizer and complete repository matrices.
+After real execution exposed a separate budget mismatch, checkpoint `96154c6`
+made GEPA's metric-call stop use the same 104 logical positions already assumed
+by the four-proposal reservation. Models, prompts, references, selectors,
+context, scoring, and promotion rules did not change.
+
+### P0 and proposal evidence
+
+Fresh P0 completed 40/40 terminals through Gemini 2.5 Flash-Lite: 33 calls,
+seven context no-calls, 16 valid outputs, and 17 schema failures. Train was
+10/24 valid with mean deterministic agreement 0.108333; validation was 6/16
+valid with mean agreement 0.125000. The maximum complete request remained
+15,256 tokens, so P0 is not promotion-eligible.
+
+GEPA completed one auditable position. Gemini 3.5 Flash proposed a distinct,
+privacy-clean last-activity instruction. Across sampled examples, parent scores
+`[0.0, 0.3, 0.3]` became `[0.0, 0.1, 0.3]`; strict score sum fell from 0.6 to
+0.4 and the proposal was rejected. Candidate scoring used 30 transports over
+17 logical positions: 17 Chat and 13 JSON fallback calls, all responses, with
+no provider retry. No candidate package or GEPA result was created. Positions
+2–4 are missing and must not be described as prompt-quality evidence.
+
+### Accounting and mandatory stop
+
+D.4.2 added 64 observed and charged calls. Partial measured provider cost is
+US$0.0126504; candidate-GEPA and proposer invoice cost is unavailable.
+Budget-side incremental accounting is US$0.0383801275. Cumulative totals are
+237–285 observed calls, 505 charged calls, US$0.10481472 partial measured cost,
+and US$7.6367776289 configured/reserved accounting.
+
+The repair-bound successor is fresh, contains the exact 54-file authority,
+passes preflight/dry-run, and made zero calls. A complete successor needs 376
+charged calls and US$1.4414656 configured reservation, projecting 881 calls and
+US$9.0782432289. Cost fits US$35, but calls exceed the 850 ceiling by 31.
+Execution therefore stopped before provider or judge construction.
+
+### Interpretation and publication status
+
+P0 packaging/verification and provider-free replay succeeded with zero calls;
+all 207 run files were byte-stable. There is no finalist and fixed-judge and
+holdout activity remain zero. The operational no-improvement label is not a
+four-proposal result. Evidence supports observability, strict-rejection,
+fallback-accounting, and experiment-budget claims only. Resumption requires a
+new cumulative optimizer ceiling of at least 881 calls; the existing US$35
+cost ceiling remains sufficient.
+
+## 27. Fresh four-position continuation and no-finalist result
+
+### Continued authority and clean execution
+
+Manager continuation accepted checkpoints `7d3af24` and `96154c6`, raised the
+cumulative optimizer ceiling from 850 to 950 calls, and retained the US$35
+configured/reserved cost ceiling. The prior P0 and rejected proposal remained
+immutable diagnostic evidence and were not counted among the fresh positions.
+The prepared successor was bound to `96154c6`, started from a clean worktree,
+contained the same 54 authority files, and passed the existing preflight and
+dry-run gates. ADC was refreshed in the execution process. Reused exact route
+qualification added zero calls.
+
+The fresh optimizer exited successfully after 206.785 seconds. No additional
+generic repair cycle was consumed; one remains consumed and two remain unused.
+Models, prompts, 8K context, split, references, selectors, scoring, promotion,
+privacy, and disclosure boundaries remained frozen.
+
+### P0 and four proposal positions
+
+Fresh P0 completed 40/40 terminals with 33 transports, seven context no-calls,
+16 valid outputs, 17 schema failures, zero retries, 105,624 input tokens, 5,236
+output tokens, 39,969 ms latency, and US$0.0126568 provider cost. Train validity
+was 10/24 with mean FABLE agreement 0.108333; validation validity was 6/16 with
+mean agreement 0.128125. The maximum complete request was 15,256/8,192 tokens,
+so P0 remained a comparator rather than a promotion candidate.
+
+All four fresh proposer positions have durable intent, transport, response,
+generated-envelope, privacy, decision, and terminal evidence:
+
+| Position | Component | Score sum before -> after | GEPA decision |
+| ---: | --- | ---: | --- |
+| 1 | Last activity | 0.6 -> 0.6 | Strict rejection |
+| 2 | Title assessment | 0.5 -> 0.4 | Strict rejection |
+| 3 | Conversation summary | 0.5 -> 0.7 | Accepted |
+| 4 | Last activity | 0.6 -> 0.4 | Strict rejection |
+
+The proposer made four calls with 33,761 input, 5,113 visible output, and 3,550
+reasoning tokens; total proposer latency was 32,969 ms and configured-rate cost
+was US$0.1217919. GEPA scoring used 45 logical positions but 72 transports: 45
+Chat and 27 explicit JSON fallbacks, 224,327 input tokens, 12,240 output tokens,
+and 75,935 ms latency. All adapter transports ended in responses with retry
+ordinal zero. Portable adapter provider cost and per-proposal transport
+attribution are unavailable.
+
+### Candidate qualification
+
+Position 3 produced the only candidate package. It changed only
+conversation-summary, from 569 bytes / 143 estimated tokens to 1,013 bytes /
+254 tokens. The candidate completed 40/40 terminals with 33 calls and the same
+seven context no-calls, 16 valid outputs, and 17 schema failures as P0. Train
+agreement remained 0.108333. Validation agreement fell to 0.112500, with zero
+valid conversation-summary and last-activity outputs. Its maximum complete
+request increased to 15,381 tokens. Privacy findings and retries were zero.
+
+Mechanical evaluation of `operations.py::_eligible` shows that the candidate
+passed six of seven conjuncts: GEPA lineage; validation total-valid 6 >= 6;
+per-model validity 6 >= the allowed threshold 5; all four per-task counts at
+least P0 minus one; privacy eligibility; and 40 terminal invocations = 40
+expected. Only `prompt_fits_context` failed. Matching P0 at 16/40 valid is
+therefore a gate pass, not a reliability failure. Lower validation FABLE
+agreement is ranking/descriptive evidence, not an `_eligible` condition. The
+15,381/8,192 context failure alone made the candidate ineligible. P0 was
+retained. The fixed judge was not resolved, constructed, or called. Judge and
+holdout calls remained zero.
+
+Aggregate-only re-evaluation of the seven no-call envelopes used retained
+private metadata and the frozen estimator. Request excess ranged from 241 to
+7,189 tokens. Packaged task-prompt contributions were 171–254 tokens per case;
+the complete-request estimator calculated 230–351 removable tokens if the
+entire system prompt were emptied. That theoretical upper bound could bring
+only 1/7 cases under 8K. The other six would remain 6,770–6,839 tokens over.
+No case value, identity, text, or path is published, and this calculation does
+not authorize a prompt change.
+
+### Final accounting and replay
+
+The fresh completed root used 142 observed and charged calls: 66 ordinary
+candidate transports, 72 GEPA adapter transports, and four proposer calls.
+Cumulative charged accounting is 647/950. Fresh known provider cost is
+US$0.1454048 partial because adapter cost is unavailable. The fresh budget
+ledger reconciled US$0.0234121383 compute and US$0.1217919 proposer cost,
+bringing cumulative budget-side accounting to US$7.7819816672/US$35.
+
+The complete pre-call reservation was 376 calls. An append-only correction
+records that its combined cost reservation was US$1.9214656: US$1.4414656
+compute plus the separately enforced US$0.48 proposer ceiling. The projected
+cumulative value was US$9.5582432289, so authorization was sufficient.
+
+The owner reports an account billing snapshot of £0.18 total due in GBP on
+2026-08-30. Exact scope, billing lag, taxes, and attribution to D.4.2 are not
+independently proven. The snapshot is not currency-converted or reconciled
+directly to measured/reserved US-dollar figures.
+
+P0 packaging and verification, shortlist export, and inspection replay were
+provider-free. Repeated packages and shortlist exports were byte-identical;
+the 418-file, 337,685-byte run tree retained the same private aggregate digest.
+All eight historical roots also remained byte-identical. This supports a
+complete four-position no-finalist conclusion under the frozen development
+contract, but not deployability, comparative-model, transfer, or holdout
+generalization claims.

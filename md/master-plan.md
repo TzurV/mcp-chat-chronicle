@@ -2,7 +2,7 @@
 
 **Repo:** first public source release under `mcp-chat-chronicle`; later rename/PyPI candidate `worktrail-ai` · **One-liner:** *A local-first activity and context ledger across AI tools — populated by source-specific importers and extractors, normalized into one SQLite/FTS journal, optionally enriched by a local SLM and recallable from MCP clients.*
 
-**Status:** Chat Chronicle v0.2.0, the real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and published LP-4.1/LP-4.2/LP-5 material are accepted · WP-5.2B3A accepted common 8K · WP-5.2B3B accepted unchanged P0 after both manually authored variants reduced pooled local reliability · WP-5.2B3B.1 completed its frozen P0 and negative BootstrapFewShot comparator · B3B.1D.4.1 accepted resumable per-case candidate evidence and an authoritative 16/40 hosted P0, but its GEPA search remained incomplete after two proposer calls produced no inspectable proposal and the 600-call ceiling could not fund a clean successor · B3B.1D.4.2 is next: retain the same frozen 8K development contract, add terminal proposer-call evidence, and run four bounded GEPA proposal positions under an 850-call optimizer ceiling and unchanged US$35 ceiling · fixed judging is conditional on a distinct qualified finalist and the twenty-conversation holdout remains closed · Chrome Gemini Nano, Edge Aion, and Phi Silica remain research/planning only · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", plus configurable AI tasks, measured model evaluation, controlled context/prompt studies, remote hardware comparison, and automatic prompt optimization)**, **amended by `md/change-order-01.md`** · **Last updated:** 2026-08-17
+**Status:** Chat Chronicle v0.2.0, the real-history archive, multi-provider ingest/search, configurable AI tasks, read-only MCP recall, six complete development-model arms, WP-5.2C1 remote hardware/context evidence, and published LP-4.1/LP-4.2/LP-5 material are accepted · WP-5.2B3A accepted common 8K · WP-5.2B3B accepted unchanged P0 after both manually authored variants reduced pooled local reliability · WP-5.2B3B.1 completed its frozen P0 and negative BootstrapFewShot comparator · B3B.1D.4.2 completed a fully observable four-position hosted GEPA search: three proposals were rejected, one minibatch-improving proposal was evaluated, and no finalist qualified · P0 remains the development comparator, not a promoted package · six of seven frozen context failures cannot be solved by removing the task prompt, so more prompt search under the same 8K/input contract is paused pending an input-selection/context decision · fixed judging and the twenty-conversation holdout remain closed · Chrome Gemini Nano, Edge Aion, and Phi Silica remain research/planning only · **Plan v3.8 ("Plan A+ — Batch-first, Pluggable Collectors", plus configurable AI tasks, measured model evaluation, controlled context/prompt studies, remote hardware comparison, and automatic prompt optimization)**, **amended by `md/change-order-01.md`** · **Last updated:** 2026-08-18
 **This document is the single source of truth when read with the approved amendment `md/change-order-01.md`.** Work packages (WP-x.y) are written to be handed off verbatim to sub-code-agents in VS Code. LinkedIn posts (LP-x) map to milestones.
 
 **Release update (2026-07-28):** v0.2.0 release content is committed on
@@ -796,8 +796,9 @@ incomplete. Cumulative optimizer accounting is 441 conservatively charged
 calls and US$7.5983975014 configured/reserved cost. Treat this as accepted
 engineering and baseline evidence, not as GEPA no-improvement evidence.
 
-**WP-5.2B3B.1D.4.2 Four-proposal hosted GEPA search.** *(planned next; handoff:
-`md/handoffs/WP-5.2B3B.1D.4.2-four-proposal-hosted-gepa-search.md`)*
+**WP-5.2B3B.1D.4.2 Four-proposal hosted GEPA search.** *(accepted 2026-08-18;
+handoff: `md/handoffs/WP-5.2B3B.1D.4.2-four-proposal-hosted-gepa-search.md`;
+report: `md/handoffs/reports/WP-5.2B3B.1D.4.2-completion-report.md`)*
 *Objective:* From the accepted resumable implementation, run one clean,
 fully observable four-position GEPA search using Gemini 2.5 Flash-Lite as the
 8K candidate and Gemini 3.5 Flash as proposer over the unchanged frozen 6/4
@@ -811,12 +812,17 @@ optimizer cumulative ceiling is 850 charged calls and US$35. Use the fixed
 judge only after a distinct candidate passes deterministic, privacy, context,
 and provenance gates; keep judge accounting separate. Do not access holdout,
 RunPod, LM Studio, local candidates, alternate providers, or new references.
-*AC:* Four logical proposal positions are terminal and auditable; generated
-proposal text is retained privately before optimizer acceptance or rejection;
-P0 and every evaluated candidate are complete, verifiable, and replayable with
-zero calls; accounting reconciles observed transports, fallbacks, retries,
-reservations, tokens, latency, and cost; a qualified finalist is judged against
-P0 or an explicit no-finalist result is recorded; no holdout content is opened.
+*Accepted outcome:* Fresh P0 and all four logical proposal positions are
+terminal and auditable. Decisions were reject, reject, accept, reject. The one
+evaluated candidate passed six of seven frozen finalist conditions and matched
+P0 at 16/40 valid, but failed context fit at 15,381 versus 8,192 tokens and
+lowered validation FABLE agreement from 0.128125 to 0.112500. Only one of seven
+no-call envelopes could theoretically fit by removing the complete task
+prompt; the other six remain 6,770–6,839 tokens over 8K. P0 is retained, no
+finalist exists, and fixed-judge and holdout activity remained zero. The fresh
+run used 142 observed/charged calls with zero retries. The owner reports a
+£0.18 GBP account bill due 2026-08-30; scope and D.4.2 attribution are not
+independently proven and remain separate from measured/reserved USD ledgers.
 
 **WP-5.2B3B.2 Local transfer qualification and winner freeze.** *(planned;
 gated by B3B.1 shortlist)*

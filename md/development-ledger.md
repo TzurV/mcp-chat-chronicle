@@ -6,12 +6,12 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 
 | Field | Status |
 | --- | --- |
-| Date | 2026-08-17 |
-| Phase | WP-5.2B3B accepted; D.4.1 engineering and full P0 accepted; four-proposal GEPA remains incomplete |
-| Last accepted delivery | WP-5.2B3B.1D.4.1: resumable candidate journaling, authoritative 40-case P0, hardened Windows checkpoints, and an honest mandatory budget stop |
+| Date | 2026-08-18 |
+| Phase | WP-5.2B3B accepted; D.4.2 four-position hosted GEPA search complete with no qualified finalist |
+| Last accepted delivery | WP-5.2B3B.1D.4.2: durable proposer evidence, four terminal proposal positions, one evaluated candidate, and explicit P0 retention |
 | Current milestone state | M0/M1/M2 core and real-history prototype accepted; the configurable AI-task/evaluation stack and six aligned complete development arms are accepted; WP-4.1 read-only MCP recall is accepted; v0.2.0 is committed and remotely tagged; the primary v0.2.0 LinkedIn progress post and LP-5 MCP-on-Windows article/feed post are owner-reported published; the public GitHub release page remains pending verification |
-| Next action | Execute WP-5.2B3B.1D.4.2 on a dedicated branch: terminal proposer observability, four bounded GEPA proposal positions, and conditional finalist judging under the approved budgets. |
-| Current branch | `main`; D.4.1 was fast-forwarded from `codex/wp-5.2b3b-d4-autonomous` |
+| Next action | Discuss input-selection/context feasibility before any further prompt search. Keep B3B.2, fixed judge, and holdout closed because D.4.2 produced no qualified finalist. |
+| Current branch | `main` after manager fast-forward; executor branch `codex/wp-5.2b3b-d4.2-gepa-search` retained |
 | Last known commit | See `git log -1 --oneline` for the current repository head |
 
 ## Work Package Ledger
@@ -75,7 +75,7 @@ This ledger records PM-level progress against `md/master-plan.md` and the approv
 | WP-5.2B3B.1D.3 | GEPA observability and graded search signal | Accepted; provider-free | Executor authorization supplied in committed manager continuation | `md/handoffs/reports/WP-5.2B3B.1D.3-gepa-observability-search-signal-completion-report.md` | `md/handoffs/reports/WP-5.2B3B.1D.3-validation-review.md` | Adds pre-decision private proposal envelopes and append-only decisions, explicit Chat-to-JSON fallback transport accounting, and a versioned graded GEPA-only reliability score while preserving strict final promotion and historical v1 identities. Bounded rework restricts fallback and partial scoring to expected exception types. Synthetic tests only; provider/private/holdout/RunPod activity was zero. |
 | WP-5.2B3B.1D.4 | Full-development multi-proposal GEPA search | Diagnostic stop accepted; search not started | Owner authorization supplied in committed executor continuation | `md/handoffs/reports/WP-5.2B3B.1D.4-full-development-multiproposal-gepa-completion-report.md`; article evidence: `md/handoffs/reports/WP-5.2B3B.1D.4-gepa-search-article-evidence-brief.md` | `md/handoffs/reports/WP-5.2B3B.1D.4-validation-review.md` | Exact 10-input/40-reference 6/4 authority, ADC, route, preflight, and budget gates passed. The first P0 train batch interrupted with `ValueError` before per-case persistence, leaving 0-48 actual calls under a retained 48-call reservation. No P0 result, proposal, finalist, judge, or holdout activity exists. |
 | WP-5.2B3B.1D.4.1 | Resumable candidate evaluation and complete P0 | Accepted engineering/baseline evidence; GEPA incomplete | Owner autonomous execution authorization | `md/handoffs/reports/WP-5.2B3B.1D.4.1-completion-report.md`; article evidence: `md/handoffs/reports/WP-5.2B3B.1D.4.1-article-evidence-brief.md` | Manager validation accepted 2026-08-17 | Ordinary evaluation now has append-only per-case intent/transport/usage/terminal journals, exact resume, context-boundary terminals, fresh verification, and byte-stable replay. P0 completed 16/40 valid but fails context fit. Two proposer calls produced no candidate/envelope; the third repair hardens GEPA Windows checkpoints. Cumulative accounting is 173-221 observed calls, 441 charged calls, US$0.09216432 partial measured cost, and US$7.5983975014 budget-side accounting. This is not GEPA no-improvement evidence. |
-| WP-5.2B3B.1D.4.2 | Four-proposal hosted GEPA search | Planned next; authorized in manager handoff | `md/handoffs/WP-5.2B3B.1D.4.2-four-proposal-hosted-gepa-search.md` | Completion report and article evidence brief required | Pending | Use the accepted journal/checkpoint repairs, add terminal proposer-attempt observability, and run four logical GEPA positions with Gemini 2.5 Flash-Lite candidate and Gemini 3.5 Flash proposer. Optimizer cumulative ceiling: 850 calls and US$35. Fixed judging is conditional on a distinct qualified finalist; holdout remains closed. |
+| WP-5.2B3B.1D.4.2 | Four-proposal hosted GEPA search | Accepted; negative no-finalist result | `md/handoffs/WP-5.2B3B.1D.4.2-four-proposal-hosted-gepa-search.md` plus manager continuation to 950 calls | `md/handoffs/reports/WP-5.2B3B.1D.4.2-completion-report.md`; article evidence: `md/handoffs/reports/WP-5.2B3B.1D.4.2-article-evidence-brief.md` | `md/handoffs/reports/WP-5.2B3B.1D.4.2-validation-review.md` | Fresh P0 plus exactly four proposal positions completed. Strict decisions were reject, reject, accept, reject. The evaluated conversation-summary candidate passed six of seven frozen eligibility conditions: unchanged 16/40 validity passes the total/per-model/per-task comparisons, while lower validation FABLE agreement is ranking evidence rather than an eligibility failure. The decisive failure was 15,381/8,192 context fit. P0 is retained; zero finalist, judge, and holdout calls. Fresh accounting was 142 observed/charged calls with zero retries; cumulative charged calls are 647/950. Owner-reported billing snapshot: £0.18 GBP due 2026-08-30, with scope, lag, taxes, and D.4.2 attribution unproven. Checkpoints `7d3af24` and `96154c6` are manager-accepted. |
 | WP-5.2B3B.2 | Local transfer qualification and winner freeze | Planned; gated by B3B.1 shortlist | Pending | Completion report and remote-to-local transfer evidence required | Pending | Rerun P0 and the top three to five immutable optimizer candidates on the local machine. Select one complete package using a predeclared reliability-first rule, or retain P0 explicitly. Keep judging credentials and final scoring local; do not treat RunPod timing as laptop evidence. |
 | WP-5.2B3C | One-shot prompt holdout evaluation | Planned; gated by B3B.2 winner freeze | Pending | Completion and publication evidence brief required | Pending | Run one frozen optimizer-selected package once over 80 holdout cases each for Qwen, Phi, and Gemini; compare with accepted P0 evidence and report generalization, transfer, reliability, failure taxonomy, cost, and chart-ready data without holdout-driven prompt changes. |
 | LP-4.3 | Established prompt optimization potential article | Planned; gated by automatic search and local transfer, preferably B3C | Pending | Analysis brief, article draft, figures, and publication record required | Pending | Compare the controlled manual P0/P1/P2 result with BootstrapFewShot/GEPA search, RunPod cost and speed, remote-to-local transfer, and holdout behavior. Separate prompt, model, context, compute, and judge effects and publish negative results and full denominators. |
@@ -193,22 +193,20 @@ If Poetry reports another project environment, the executor must stop and fix th
 
 ## Next Action
 
-1. Keep all D.1, D.4, and D.4.1 ignored roots append-only. D.4.1 P0 is the
-   explicit retained development baseline, not a promoted finalist.
-2. Execute D.4.2 from a clean dedicated branch. Prove terminal proposer-call
-   observability provider-free, then run exactly four logical proposal positions
-   under cumulative optimizer ceilings of 850 calls and US$35.
-3. If and only if a distinct candidate passes deterministic qualification,
-   compare it with P0 through the fixed judge under separate judge accounting.
-   Otherwise record an explicit no-finalist result. Keep holdout closed.
-4. Return a frozen shortlist and validate P0 plus the top three to five
-   candidates locally under WP-5.2B3B.2.
-5. Freeze one complete winner, or explicitly retain P0, before any holdout
-   access.
-6. Run WP-5.2B3C once on the untouched twenty-conversation holdout and do not
-   revise prompts afterward.
-7. Close REL-0.2.0 separately by publishing and verifying the GitHub release
+1. Keep all D.1, D.4, D.4.1, and D.4.2 ignored roots append-only. D.4.2 P0 is
+   the explicit retained development comparator, not a promoted finalist.
+2. Retain the accepted D.4.2 four-position negative result, its two checkpoints,
+   corrected reservation accounting, and zero-call byte-stable replay. Retain
+   P0 explicitly; do not promote the GEPA candidate.
+3. Keep fixed-judge and holdout activity at zero because no D.4.2 candidate
+   passed deterministic qualification.
+4. Do not start WP-5.2B3B.2 under its current top-three-to-five gate: D.4.2
+   produced zero qualified candidates. Obtain a manager decision on a P0-only
+   transfer or a separately scoped search continuation.
+5. Keep the twenty-conversation holdout closed until a complete winner is
+   frozen or P0 is explicitly authorized as the retained package.
+6. Close REL-0.2.0 separately by publishing and verifying the GitHub release
    page for the existing `v0.2.0` tag; no rebuild or retag is required.
-8. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
-9. Continue treating the 120 FABLE-reference cases as private silver
+7. Build V2-1 retrieval evaluation before embeddings or hybrid retrieval.
+8. Continue treating the 120 FABLE-reference cases as private silver
    development data, not an untouched final evaluation set.
